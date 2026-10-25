@@ -12,18 +12,22 @@ Janiverse uses extension slots and styles. Your characters, chats, connections, 
 
 Compiled bundles are included in `dist/`; you do not need to build them yourself. Use Lumiverse's extension update control for later versions.
 
+Preview updates are published on **staging**. In the installed extension's controls, choose **Branch → staging**, then update/reload as Lumiverse prompts. Branch selection is a normal Lumiverse feature for GitHub-installed extensions. A manually copied folder without its own Git metadata cannot pull updates or switch branches; install from the repository to use those controls.
+
 Upgrading from **Janitor Bridge**? Janiverse keeps the `janitor_bridge` identifier so existing installation settings and saved styles remain compatible.
 
 ## Features
 
 - **Home:** card portraits, Creator's Notes, search, favorites, sorting, and pagination. Cards open a card detail view, with chat creation offered separately. Favorite saves to Lumiverse's normal favorites. Creator credits link to JanitorAI when a public profile is recorded; missing credits are shown as unknown. Full notes and images remain separate from definition fields under Character details.
+- **Create a Character:** General and Definition sections, with a live card preview, portrait upload, title, chat name, public bio/Creator's Note, personality, initial and alternate messages, scenario, example dialogs, tags, and creator credit. It saves a normal Lumiverse character and portrait; opening the form does not create a card or start a chat.
 - **My Chats:** recent conversations, portraits, search, sorting, and expandable character groups. Continue opens the selected native chat; Start new chat creates a normal Lumiverse conversation.
 - **Settings:** one scrolling page for Provider, API configurations, optional Global prompt, and Generation settings. Provider choices and base URLs come from Lumiverse's catalog, including OpenRouter and NanoGPT. Specialized provider setup opens Lumiverse's native connection editor. The preset banner links to Illarin and the Discord presets channel, with a separate server invite.
 - **Chat Memory:** edit the current conversation's native Author's Note. Its memory banner opens native Summary or Memory Cortex setup without running generation.
 - **Customize:** text preview, fonts, colors, background upload, opacity, blur, and text streaming. Uploaded backgrounds use Lumiverse's wallpaper library and the active chat's wallpaper setting.
-- **Composer:** native message input, a persona picker, and optional draft enhancement, writing, and summary assistance.
-- **Home banner:** start with guided card and chat imports, then explore Summary and Memory Cortex, Lorebooks, group chats, voice and dictation, extension management, and **Shameless ads by Lunch**. Each idea has its own action; the import button appears only on the import idea. Optional “How to try it” steps stay collapsed. Lunch’s author-curated list in `src/lunch-picks.ts` features [Choir](https://github.com/patatasbravasch-arch/Choir), [LumiBooks](https://github.com/AMousePad/LumiBooks), [Cue — Living Novel](https://github.com/japolino/cue-living-novel), and [Pocket](https://github.com/kittyafterdark/Pocket), with short descriptions and public repository links. Viewing recommendations does not install extensions. Browsing ideas never runs generation, records audio, or changes setup.
-- **SoundCloud:** cards with supported track attachments offer **Play in chat** and **Open externally**. The official embedded player loads only when clicked, with autoplay off. Close player, leaving the chat, switching cards, or disabling Janiverse unloads it. External opening stays available without loading a player inside Lumiverse.
+- **Composer:** native message input, a persona picker, optional writing and summary assistance, and **Enhance my draft** through [Hone](https://github.com/AMousePad/Hone).
+- **Home banner:** a consistent-size banner starts with guided card and chat imports, then introduces Summary and Memory Cortex, Lorebooks, group chats, voice and dictation, extension management, and **Shameless ads by Lunch**. Each idea has its own action; the import button appears only on the import idea. **Full tutorial** opens an optional, separate guide so instructions do not expand the banner. The group-chat walkthrough includes actual Lumiverse screenshots made with fictional demo cards, covering cast selection, greeting, group settings, and the finished conversation. Close the guide to return to the same idea. Reading a tutorial never runs generation, records audio, or changes setup; its named setup shortcuts open native controls only when chosen.
+- **Lunch’s picks:** **See Lunch’s picks** opens Lunch’s curated recommendations in their own window. The source-maintained list in `src/lunch-picks.ts` features [Choir](https://github.com/patatasbravasch-arch/Choir), [LumiBooks](https://github.com/AMousePad/LumiBooks), [Cue — Living Novel](https://github.com/japolino/cue-living-novel), and [Pocket](https://github.com/kittyafterdark/Pocket), with short descriptions and public repository links. **Open Extensions** takes you to Lumiverse’s extension manager; viewing recommendations does not install anything.
+- **SoundCloud:** cards with supported track attachments offer a compact music bar with **Play in chat** and **Open externally**. Play opens the standard official player in a popover, with autoplay off. Closing it, clicking outside it, pressing Escape, leaving the chat, switching cards, or disabling Janiverse unloads the player. The exact SoundCloud Mini embed is limited to Artist Pro subscribers and individual tracks, as described in [SoundCloud’s Mini player documentation](https://help.soundcloud.com/hc/en-us/articles/115003449027-The-Mini-embedded-player). External opening stays available without loading a player inside Lumiverse.
 - **Lumiverse tools:** reveal the native controls for advanced work.
 
 ## Cards and old chats
@@ -66,13 +70,15 @@ Responsive checks in a desktop browser do not replace testing on physical iOS an
 | Generation | Save/select API profiles and run provider operations you choose. |
 | Presets | Read/save native presets and bindings. |
 | Personas | Use the composer persona picker. |
-| Characters | Import selected files or public links through Lumiverse's native parser. |
+| Characters | Create cards and portraits, or import selected files or public links through Lumiverse's native parser. |
 
 Opening settings does not start generation, fetch models, test connections, or silently approve permissions. Card files stay local until **Import**; link sources are contacted during import. Source availability and native import settings still apply. The card queue does not sign into sites or retrieve private cards.
 
 Embedded SoundCloud playback needs the Lumiverse host to allow `https://w.soundcloud.com` in its frame policy. If the host blocks it, Janiverse explains this and keeps **Open externally** available. Janiverse never edits that policy automatically. Loading the embedded player contacts SoundCloud; it uses no SoundCloud SDK or background polling in Janiverse.
 
-Writing assistance uses the selected native API and assembled chat context when requested. Suggestions need review before replacing an unsent draft. Summaries open as Chat Memory drafts and require **Save**. Cancelling or changing chats cancels pending work; an in-flight provider request may already have reached that provider.
+**Enhance my draft** opens a handoff to Hone. It checks whether Hone is installed, explains setup when needed, and offers its repository, setup guide, and available controls. Hone keeps its own model, pipeline, and preset settings. Opening this handoff does not run generation or replace your draft; use Hone’s own message-box button when ready and review its result.
+
+**Write something for me** and **Summarize this chat** use the selected native API and assembled chat context when requested. Suggestions need review before replacing an unsent draft. Summaries open as Chat Memory drafts and require **Save**. Cancelling or changing chats cancels pending work; an in-flight provider request may already have reached that provider.
 
 ## Development
 
@@ -84,7 +90,7 @@ bun run build
 bun test tests
 ```
 
-`bun run test` builds and tests together. Development dependencies are only for tests; published bundles have no runtime package dependencies. Synthetic fixtures cover native-setting preservation, import permissions and failures, navigation, cleanup, composer behavior, and SoundCloud URL validation. No account exports or API keys are included.
+`bun run test` builds and tests together. Development dependencies are only for tests; published bundles have no runtime package dependencies. Synthetic fixtures cover native-setting preservation, character creation, import permissions and failures, optional tutorials and modal cleanup, navigation, composer behavior, Hone handoff, and SoundCloud URL validation. Tutorial screenshots are bundled local assets. No account exports or API keys are included.
 
 ## Remove
 
