@@ -18,6 +18,10 @@ export const lunchPicks: readonly LunchPick[] = [
     name: 'Pocket', url: 'https://github.com/kittyafterdark/Pocket',
     note: 'Add an in-world phone for messages, contacts, photos, notes, and other roleplay tools.',
   },
+  {
+    name: 'Prism', url: 'https://github.com/kittyafterdark/Prism',
+    note: 'Color character dialogue and optional thoughts with per-speaker palettes, gradients, and manual attribution corrections.',
+  },
 ];
 
 export function createLunchPicks(picks: readonly LunchPick[] = lunchPicks): HTMLElement {

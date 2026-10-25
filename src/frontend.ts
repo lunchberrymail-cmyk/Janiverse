@@ -283,6 +283,7 @@ export function setup(ctx: SpindleFrontendContext) {
   const recent = el('div', 'jb-recent'); recentSection.append(recentHeading, recent); home.append(recentSection);
   const heading = el('div', 'jb-browse-heading'); const title = el('div');
   const browseTitle = el('h2', '', 'All Characters'); title.append(el('div', 'jb-eyebrow', 'CHARACTERS'), browseTitle);
+  title.append(el('p', 'jb-browse-help', 'Your saved character cards, including cards you haven’t chatted with yet.'));
   heading.append(title);
   const tools = el('div', 'jb-tools'); const filters = el('div', 'jb-filters'); filters.setAttribute('role', 'group'); filters.setAttribute('aria-label', 'Filter characters');
   const allButton = button('All characters', () => chooseFilter('all'), 'jb-filter jb-selected');
@@ -294,6 +295,9 @@ export function setup(ctx: SpindleFrontendContext) {
   for (const [value, text] of [['created', 'Newest added'], ['name', 'Name A–Z']]) { const option = el('option', '', text); option.value = value; sort.append(option); }
   masthead.append(searchLabel, create, more); heading.append(sort); tools.append(filters); home.append(tools, heading);
   const grid = el('div', 'jb-grid'); const count = el('p', 'jb-count');
+  let cardCleanups: Array<() => void> = [];
+  function disposeCards() { const previous = cardCleanups; cardCleanups = []; previous.forEach(cleanup => cleanup()); }
+  cleanups.push(disposeCards);
   const paging = el('div', 'jb-paging'); const pageLabel = el('span');
   const previous = button('← Previous', () => { offset = Math.max(0, offset - pageSize); void loadCharacters(); });
   const next = button('Next →', () => { offset += pageSize; void loadCharacters(); }); paging.append(previous, pageLabel, next);
@@ -329,17 +333,23 @@ export function setup(ctx: SpindleFrontendContext) {
     return text ? text.slice(0, 230) + (text.length > 230 ? '…' : '') : 'No creator’s note.';
   }
   function renderCards(characters: Character[], generation = request) {
-    grid.replaceChildren();
+    disposeCards(); grid.replaceChildren();
     const pending: Array<{ character: Character; node: HTMLElement; creator: HTMLElement }> = [];
     for (const character of characters) {
       const card = el('article', 'jb-card'); card.dataset.characterId = character.id; card.setAttribute('aria-label', character.name);
       card.addEventListener('click', event => { if (!(event.target as Element).closest?.('button,a,input,select,textarea,summary')) preview(character); });
-      const portrait = button('', () => preview(character), 'jb-portrait jb-card-open'); portrait.setAttribute('aria-label', `View ${character.name}`);
+      const portrait = button('', () => preview(character), 'jb-portrait jb-card-open'); portrait.setAttribute('aria-label', `Read Creator’s Notes for ${character.name}`);
       if (character.image_id) { const img = el('img'); img.src = `/api/v1/images/${encodeURIComponent(character.image_id)}?size=lg`; img.alt = ''; img.loading = 'lazy'; img.addEventListener('error', () => img.remove()); portrait.append(img); }
       portrait.append(el('span', 'jb-avatar-fallback', character.name.slice(0, 1).toUpperCase()));
-      if (favorites().includes(character.id)) portrait.append(el('span', 'jb-favorite', '♥'));
-      portrait.append(el('span', 'jb-card-cta', 'View character →'));
+      portrait.append(el('span', 'jb-card-cta', 'Read Creator’s Notes →'));
       const cardTitle = el('h3', 'jb-card-name'); cardTitle.append(button(character.name, () => preview(character), 'jb-card-title'));
+      const media = el('div', 'jb-card-media');
+      const cardStatus = el('p', 'jb-card-status'); cardStatus.setAttribute('role', 'status');
+      const favorite = favoriteControl(character.id, {
+        isCurrent: () => generation === request && view === 'browse' && card.isConnected,
+        onDispose: cleanup => { cardCleanups.push(cleanup); },
+      }, cardStatus, character.name);
+      favorite.classList.add('jb-card-favorite'); media.append(portrait, favorite);
       const info = el('div', 'jb-card-info'); const creator = el('p', 'jb-creator'); info.append(creator);
       const cached = notePreviews.get(character.id);
       const freshCache = cached?.revision === character.updated_at ? cached : undefined;
@@ -350,12 +360,12 @@ export function setup(ctx: SpindleFrontendContext) {
       else if (freshCache) note.textContent = freshCache.text;
       else note.textContent = 'Loading creator’s note…';
       if (!freshCache && (typeof character.creator_notes !== 'string' || !creatorAttribution(character)?.profileUrl)) pending.push({ character, node: note, creator });
-      info.append(note);
+      info.append(note, cardStatus);
       const tags = el('div', 'jb-tags'); for (const tag of (character.tags || []).slice(0, 4)) tags.append(el('span', '', tag)); info.append(tags);
-      card.append(cardTitle, portrait, info); grid.append(card);
+      card.append(cardTitle, media, info); grid.append(card);
     }
     if (!characters.length) {
-      const empty = el('div', 'jb-empty'); empty.append(el('h3', '', 'No characters found'), el('p', '', filter === 'favorites' ? 'Characters you favorite in Lumiverse appear here.' : search.value ? 'Try another name, creator, or description.' : 'Add a character to start your first conversation.'), button('Open character library', () => { void invoke({ kind: 'drawer_tab', id: 'characters' }); })); grid.append(empty);
+      const empty = el('div', 'jb-empty'); empty.append(el('h3', '', 'No character cards found'), el('p', '', filter === 'favorites' ? 'Character cards you favorite in Lumiverse appear here.' : search.value ? 'Try another name, creator, or description.' : 'Create or import a character card to add it to your library.'), button('Open character library', () => { void invoke({ kind: 'drawer_tab', id: 'characters' }); })); grid.append(empty);
     }
     // Summary DTOs can omit notes and creator provenance. Read only this page,
     // with one bounded pool, and cache both until a revision/library change.
@@ -392,12 +402,12 @@ export function setup(ctx: SpindleFrontendContext) {
         total = typeof result.total === 'number' ? result.total : characters.length; renderCards(characters);
       }
       if (disposed || generation !== request) return;
-      count.textContent = `${total} character${total === 1 ? '' : 's'}${filter === 'favorites' ? ' in favorites' : ' in your library'}`;
-      pageLabel.textContent = total ? `${offset + 1}–${Math.min(offset + pageSize, total)} of ${total}` : '0 characters';
+      count.textContent = `${total} ${filter === 'favorites' ? 'favorite' : 'saved'} character card${total === 1 ? '' : 's'}`;
+      pageLabel.textContent = total ? `${offset + 1}–${Math.min(offset + pageSize, total)} of ${total}` : '0 character cards';
       paging.hidden = total <= pageSize; previous.disabled = offset === 0; next.disabled = offset + pageSize >= total;
     } catch (error) {
       if (disposed || generation !== request || (error as Error).name === 'AbortError') return;
-      grid.replaceChildren(); status.replaceChildren(document.createTextNode('Could not load characters. '), button('Retry', () => { void loadCharacters(); })); count.textContent = ''; paging.hidden = true;
+      disposeCards(); grid.replaceChildren(); status.replaceChildren(document.createTextNode('Could not load character cards. '), button('Retry', () => { void loadCharacters(); })); count.textContent = ''; paging.hidden = true;
     } finally { if (!disposed && generation === request) grid.setAttribute('aria-busy', 'false'); }
   }
   let recentRequest = 0;
@@ -421,13 +431,14 @@ export function setup(ctx: SpindleFrontendContext) {
       }
     } catch { if (!disposed && generation === recentRequest) recentSection.hidden = true; }
   }
-  function favoriteControl(characterId: string, owner: SpindleModalHandle, localStatus: HTMLElement) {
+  function favoriteControl(characterId: string, owner: { isCurrent: () => boolean; onDispose: (cleanup: () => void) => void }, localStatus: HTMLElement, cardName?: string) {
     const toggle = button('Favorite', () => { void save(); });
     const abort = new AbortController(); let closed = false, busy = false;
-    const current = () => !disposed && !closed && modal === owner;
+    const current = () => !disposed && !closed && owner.isCurrent();
     function render() {
-      const added = favorites().includes(characterId); toggle.textContent = added ? 'Favorited' : 'Favorite';
+      const added = favorites().includes(characterId); toggle.textContent = cardName ? added ? '♥' : '♡' : added ? 'Favorited' : 'Favorite';
       toggle.setAttribute('aria-pressed', String(added)); toggle.title = added ? 'Remove from favorites' : 'Add to favorites'; toggle.disabled = busy;
+      if (cardName) toggle.setAttribute('aria-label', added ? `Remove ${cardName} from favorites` : `Favorite ${cardName}`);
     }
     async function save() {
       if (!current() || busy) return;
@@ -460,50 +471,40 @@ export function setup(ctx: SpindleFrontendContext) {
       finally { release(); busy = false; if (current()) render(); }
     }
     const stop = ctx.state?.subscribe('characters.favorites', render);
-    owner.onDismiss(() => { closed = true; abort.abort(); stop?.(); });
+    owner.onDispose(() => { closed = true; abort.abort(); stop?.(); });
     render(); return toggle;
   }
   function openProfile(characterId: string, name = 'Character profile') {
     modal?.dismiss(); modal = ctx.ui.showModal({ title: name, width: 720, maxHeight: 800 });
     const current = modal; current.root.classList.add('jb-preview', 'jb-profile-window');
     const actions = el('div', 'jb-preview-actions'); const localStatus = el('p', 'jb-status'); localStatus.setAttribute('role', 'status');
-    const chat = button('Chat with this character', () => {
+    const canStartChat = ctx.host.surfaces?.list(['entity_action']).some(s => s.id === 'character_chat' && s.invocable !== false) ?? false;
+    const chat = button('Start new chat', () => {
+      if (!canStartChat || chat.disabled) return;
       chat.disabled = true;
-      void invoke({ kind: 'entity_action', id: 'character_chat' }, { characterId, mode: 'latest' }).then(ok => {
+      void invoke({ kind: 'entity_action', id: 'character_chat' }, { characterId, mode: 'new' }).then(ok => {
+        if (disposed || modal !== current) return;
         chat.disabled = false; if (ok) current.dismiss(); else localStatus.textContent = 'Enable the extension’s Chats permission in Extensions to start chats here.';
       });
-    }, 'jb-button jb-primary');
-    chat.disabled = !ctx.host.surfaces?.list(['entity_action']).some(s => s.id === 'character_chat' && s.invocable !== false);
-    const edit = button('Edit character', () => {
+    });
+    chat.disabled = !canStartChat;
+    if (!canStartChat) localStatus.textContent = 'Starting a chat needs the extension’s Chats permission. You can still read and favorite this card.';
+    const edit = button('Edit card', () => {
       edit.disabled = true;
       void invoke({ kind: 'modal', id: 'character_editor' }, { id: characterId }).then(ok => {
+        if (disposed || modal !== current) return;
         edit.disabled = false; if (ok) current.dismiss(); else localStatus.textContent = 'Could not open the character editor. Your profile is still available here.';
       });
     });
     edit.disabled = !ctx.host.surfaces?.list(['modal']).some(s => s.id === 'character_editor' && s.invocable !== false);
-    actions.append(chat, favoriteControl(characterId, current, localStatus), edit, button('Close', () => current.dismiss()));
-    const body = el('div'); current.root.append(actions, localStatus, body);
+    actions.append(favoriteControl(characterId, { isCurrent: () => modal === current, onDispose: cleanup => { current.onDismiss(cleanup); } }, localStatus), edit, button('Close', () => current.dismiss()));
+    const body = el('div', 'jb-preview-body'); const chatActions = el('div', 'jb-profile-chat-actions'); chatActions.append(chat);
+    current.root.append(body, actions, localStatus, chatActions);
     const cleanup = mountCharacterProfile(ctx, body, characterId);
     current.onDismiss(() => { cleanup(); if (modal === current) modal = undefined; });
   }
   function preview(character: Character) {
-    modal?.dismiss(); modal = ctx.ui.showModal({ title: character.name, width: 620, maxHeight: 760 });
-    const current = modal; current.root.classList.add('jb-preview');
-    const actions = el('div', 'jb-preview-actions'); const previewStatus = el('p', 'jb-status'); previewStatus.setAttribute('role', 'status');
-    const canStartChat = ctx.host.surfaces?.list(['entity_action']).some(s => s.id === 'character_chat' && s.invocable !== false) ?? false;
-    function openChat(mode: 'latest' | 'new') {
-      if (!canStartChat || chat.disabled) return;
-      chat.disabled = true;
-      void invoke({ kind: 'entity_action', id: 'character_chat' }, { characterId: character.id, mode }).then(ok => {
-        chat.disabled = false; if (ok) current.dismiss(); else previewStatus.textContent = 'Enable the extension’s Chats permission in Extensions to start chats here.';
-      });
-    }
-    const chat = button('Chat with this character', () => openChat('latest'), 'jb-button jb-primary');
-    if (!canStartChat) { chat.disabled = true; previewStatus.textContent = 'Chatting here needs the extension’s Chats permission. You can still read the card and its Creator’s Notes.'; }
-    actions.append(chat, button('Read Creator’s Notes', () => openProfile(character.id, character.name)), favoriteControl(character.id, current, previewStatus), button('Close', () => current.dismiss()));
-    const body = el('div', 'jb-preview-body'); current.root.append(actions, previewStatus, body);
-    const cleanup = mountCharacterProfile(ctx, body, character.id, { notesPreview: true });
-    current.onDismiss(() => { cleanup(); if (modal === current) modal = undefined; });
+    openProfile(character.id, character.name);
   }
   search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { offset = 0; void loadCharacters(); }, 200); });
   sort.addEventListener('change', () => { offset = 0; void loadCharacters(); });

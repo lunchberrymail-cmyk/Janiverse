@@ -1,4 +1,4 @@
-/* Remote resources load only when the user chooses the in-chat player. */
+/* One stable row; the official playback engine loads only after an explicit Play click. */
 .jb-soundcloud { position: relative; width: 100%; min-width: 0; margin: 5px 0 9px; color: #c9c9cd; font-family: inherit; font-size: 11px; line-height: 20px; }
 .jb-soundcloud, .jb-soundcloud * { box-sizing: border-box; }
 .jb-soundcloud[hidden], .jb-soundcloud [hidden] { display: none !important; }
@@ -9,10 +9,8 @@
 .jb-soundcloud .jb-soundcloud-play, .jb-soundcloud .jb-soundcloud-close { flex: 0 0 auto; border: 1px solid #5c4b72; border-radius: 4px; padding: 0 6px; background: #33283f; color: #ded5eb; font: inherit; font-size: 10px; line-height: 20px; cursor: pointer; white-space: nowrap; }
 .jb-soundcloud .jb-soundcloud-play:hover, .jb-soundcloud .jb-soundcloud-close:hover { background: #493956; }
 .jb-soundcloud .jb-soundcloud-play:disabled { color: #929097; background: #26242a; border-color: #454049; cursor: default; }
-.jb-soundcloud .jb-soundcloud-player { position: absolute; top: calc(100% + 5px); right: 0; z-index: 160; width: min(100%, 520px); max-width: calc(100vw - 24px); padding: 4px; border: 1px solid #62516d; border-radius: 7px; overflow: hidden; background: #080808; box-shadow: 0 8px 28px #0007; }
-.jb-soundcloud .jb-soundcloud-frame { display: block; width: 100%; height: 166px; border: 0; }
-.jb-soundcloud .jb-soundcloud-status { margin: 4px 2px 0; color: #bdb5c5; font-size: 10px; line-height: 1.4; }
+.jb-soundcloud .jb-soundcloud-engine { display: none !important; }
+.jb-soundcloud .jb-soundcloud-status { flex: 1 1 auto; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #bdb5c5; font-size: 10px; line-height: 20px; }
 .jb-soundcloud :is(a, button):focus-visible { outline: 2px solid #b9a0da; outline-offset: 2px; }
 @media (max-width: 480px) { .jb-soundcloud .jb-soundcloud-bar { gap: 6px; } }
 @media (max-width: 600px), (pointer: coarse) { .jb-soundcloud :is(.jb-soundcloud-play, .jb-soundcloud-close, .jb-soundcloud-open) { display: inline-flex; align-items: center; min-height: 44px; padding-inline: 10px; font-size: 12px; } }
-@media (max-height: 300px) { .jb-soundcloud .jb-soundcloud-player { position: fixed; top: 8px; right: 12px; width: calc(100vw - 24px); } }

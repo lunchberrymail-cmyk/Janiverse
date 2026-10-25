@@ -1,33 +1,45 @@
-.jb-feature-tutorial{box-sizing:border-box;min-width:0;color:#e8e4ed;font:14px/1.65 Arial,Helvetica,sans-serif;overflow-wrap:anywhere}
+.jb-feature-tutorial{box-sizing:border-box;min-width:0;color:#e8e4ed;font:14px/1.5 Arial,Helvetica,sans-serif;overflow-wrap:anywhere}
 .jb-feature-tutorial *{box-sizing:border-box}
-.jb-tutorial-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin:0 0 14px}
-.jb-tutorial-header h2{margin:0;font:500 clamp(24px,3vw,32px)/1.2 Georgia,'Times New Roman',serif;color:#f5ecfa}
-.jb-tutorial-intro{margin:0 0 20px;color:#c9c1d5;max-width:820px}
-.jb-tutorial-before{padding:15px 18px;margin:0 0 20px;border:1px solid #a47ac15c;border-radius:10px;background:#74508d18}
-.jb-tutorial-before h3{margin:0 0 6px;font-size:15px;color:#efdcfa}
-.jb-tutorial-before p{margin:0}
-.jb-tutorial-steps{list-style:none;padding:0;margin:0;display:grid;gap:18px}
-.jb-tutorial-step{min-width:0;padding:20px;border:1px solid #a698b139;border-radius:11px;background:#ffffff04}
-.jb-tutorial-step>h3{margin:0 0 12px;font:600 19px/1.3 Arial,Helvetica,sans-serif;color:#f1e5f9}
-.jb-tutorial-step p{margin:0 0 12px}
-.jb-tutorial-step p:last-child{margin-bottom:0}
-.jb-tutorial-step ul{padding-left:21px;margin:0 0 14px;color:#cbc4d6}
-.jb-tutorial-step ul li+li{margin-top:8px}
-.jb-tutorial-example{max-width:100%;overflow-x:auto;margin:12px 0 16px;padding:13px 15px;border:1px solid #b19bc33b;border-radius:7px;background:#1d1b24;color:#dfd0ed;white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.6 Consolas,monospace}
-.jb-feature-tutorial button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;max-width:100%;padding:9px 14px;border:1px solid #a78abd75;border-radius:7px;background:#3c3448;color:#e6d5f0;font:600 13px/1.35 Arial,Helvetica,sans-serif;cursor:pointer;white-space:normal;text-align:center}
+.jb-tutorial-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 9px}
+.jb-tutorial-header h2{margin:0;font:500 clamp(23px,3vw,30px)/1.2 Georgia,'Times New Roman',serif;color:#f5ecfa}
+.jb-tutorial-intro{margin:0 0 16px;color:#bfb6cd;font-size:13px}
+.jb-tutorial-scene{min-width:0;padding:16px;border:1px solid #a698b13b;border-radius:10px;background:#ffffff04}
+.jb-tutorial-scene-title{margin:0 0 12px;font-size:19px;line-height:1.3;color:#f1e5f9}
+.jb-tutorial-instruction{margin:14px 0 7px;font-size:16px;font-weight:600;line-height:1.5;color:#f7eaff}
+.jb-tutorial-result{margin:0;color:#c7bdcf;font-size:13px}
+.jb-tutorial-figure{min-width:0;margin:0;padding:8px;border:1px solid #a698b12e;border-radius:8px;background:#1e1b25;text-align:center}
+.jb-tutorial-image-box{max-width:100%;max-height:46vh;overflow:auto;overscroll-behavior:contain;border-radius:4px}
+.jb-tutorial-shot{position:relative;display:table;width:fit-content;max-width:100%;margin:auto;line-height:0}
+.jb-tutorial-shot img{display:block;max-width:100%;max-height:42vh;width:auto;height:auto;margin:auto}
+.jb-tutorial-image-expanded .jb-tutorial-shot{max-width:none;margin:0}
+.jb-tutorial-image-expanded img{max-width:none;max-height:none;margin:0}
+.jb-tutorial-highlight{position:absolute;z-index:1;border:3px solid #f0b6ff;border-radius:5px;box-shadow:0 0 0 2px #201428cc,0 0 18px #cf7df699;pointer-events:none}
+.jb-tutorial-pointer{position:absolute;z-index:2;width:19px;height:25px;pointer-events:none;filter:drop-shadow(1px 2px 2px #000);transform:translate(-2px,-2px) rotate(-24deg);transform-origin:0 0}
+.jb-tutorial-pointer:before{content:'';display:block;border-top:22px solid #fff;border-right:15px solid transparent}
+.jb-tutorial-pointer:after{content:'';position:absolute;left:6px;top:12px;width:5px;height:14px;background:#fff;transform:rotate(-25deg)}
+.jb-tutorial-playing .jb-tutorial-highlight{animation:jb-tutorial-emphasis 1.3s ease-in-out infinite alternate}
+@keyframes jb-tutorial-emphasis{to{box-shadow:0 0 0 3px #201428cc,0 0 24px #e0a2ffc9}}
+.jb-tutorial-figure figcaption{margin:7px 0 3px;color:#aaa0b8;font-size:11px;line-height:1.4}
+.jb-tutorial-image-error{margin:12px;color:#cfbddc;font-size:13px;line-height:1.5}
+.jb-feature-tutorial button{display:inline-flex;align-items:center;justify-content:center;min-height:42px;max-width:100%;padding:9px 13px;border:1px solid #a78abd75;border-radius:7px;background:#3c3448;color:#e6d5f0;font:600 13px/1.3 Arial,Helvetica,sans-serif;cursor:pointer;white-space:normal;text-align:center}
 .jb-feature-tutorial button:hover{background:#51405f}
-.jb-feature-tutorial button:disabled{opacity:.55;cursor:wait}
-.jb-feature-tutorial :is(button,[tabindex]):focus-visible{outline:2px solid #e3b7fa;outline-offset:3px}
-.jb-tutorial-close{flex-shrink:0}
-.jb-tutorial-back{margin-top:22px}
-.jb-tutorial-status{margin:10px 0 0!important;color:#edc9fa;font-size:13px}
+.jb-feature-tutorial button:disabled{opacity:.5;cursor:default}
+.jb-feature-tutorial :is(button,summary,[tabindex]):focus-visible{outline:2px solid #e3b7fa;outline-offset:3px}
+.jb-tutorial-image-toggle{min-height:30px!important;padding:5px 10px!important;border:0!important;background:transparent!important;font-size:11px!important}
+.jb-tutorial-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}
+.jb-tutorial-actions:has(button[hidden]){margin-top:0}
+.jb-tutorial-status{margin:0!important;flex:1;min-width:180px;color:#edc9fa;font-size:12px}
 .jb-tutorial-status:empty{display:none}
-.jb-tutorial-figure{min-width:0;margin:16px 0;padding:10px;border:1px solid #a698b13b;border-radius:9px;background:#1e1b25}
-.jb-tutorial-image-box{max-width:100%;max-height:70vh;overflow:auto;overscroll-behavior:contain;border-radius:5px}
-.jb-tutorial-image-box img{display:block;width:auto;max-width:100%;height:auto;margin:auto}
-.jb-tutorial-image-expanded img{max-width:none;margin:0}
-.jb-tutorial-figure figcaption{margin:9px 0;color:#bfb3cd;font-size:12px;line-height:1.5}
-.jb-tutorial-image-toggle{min-height:40px!important;background:transparent!important}
-.jb-tutorial-image-error{font-size:13px;color:#cfbddc}
+.jb-tutorial-controls{display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0}
+.jb-tutorial-progress{min-width:50px;color:#c9bad5;text-align:center;font-size:13px;font-variant-numeric:tabular-nums}
+.jb-feature-tutorial .jb-tutorial-next{background:#86629f;color:#fff}
+.jb-tutorial-play{margin-left:auto;background:transparent!important}
+.jb-tutorial-before,.jb-tutorial-help{margin:9px 0;border:1px solid #a698b130;border-radius:7px;padding:10px 13px;font-size:12px;color:#c4bacf}
+.jb-tutorial-before summary,.jb-tutorial-help summary{cursor:pointer;font-weight:600;color:#d8c7e5}
+.jb-tutorial-before ul,.jb-tutorial-help ul{margin:10px 0 0;padding-left:18px;max-width:850px}
+.jb-tutorial-before li+li,.jb-tutorial-help li+li{margin-top:9px}
+.jb-tutorial-setup{margin-top:10px}
+.jb-feature-tutorial .jb-tutorial-back{border:0;background:transparent;margin-top:3px;padding-left:0;color:#bba5cd;font-weight:400}
 .jb-feature-tutorial [hidden]{display:none!important}
-@media(max-width:600px){.jb-feature-tutorial{font-size:14px}.jb-tutorial-header{flex-direction:column;gap:10px}.jb-tutorial-step{padding:16px 13px}.jb-tutorial-step>h3{font-size:18px}.jb-tutorial-before{padding:13px}.jb-tutorial-figure{padding:7px}.jb-tutorial-close,.jb-tutorial-back{width:100%}.jb-tutorial-image-toggle{min-height:44px!important}}
+@media(prefers-reduced-motion:reduce){.jb-feature-tutorial *{animation:none!important;transition:none!important}}
+@media(max-width:600px){.jb-tutorial-header{align-items:flex-start;gap:9px}.jb-tutorial-header h2{font-size:23px}.jb-tutorial-close{font-size:11px!important;padding:8px!important;min-height:40px!important}.jb-tutorial-scene{padding:11px}.jb-tutorial-scene-title{font-size:17px}.jb-tutorial-figure{padding:5px}.jb-tutorial-instruction{font-size:14px}.jb-tutorial-image-box{max-height:40vh}.jb-tutorial-shot img{max-height:36vh}.jb-tutorial-controls{gap:8px;flex-wrap:wrap}.jb-feature-tutorial button{min-height:44px}.jb-tutorial-play{margin-left:0}.jb-tutorial-highlight{border-width:2px}.jb-tutorial-pointer{transform:scale(.8) translate(-2px,-2px) rotate(-24deg)}}
