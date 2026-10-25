@@ -16,6 +16,7 @@ afterEach(() => { banner.destroy(); dom.window.close(); globalThis.document = ol
 
 test('introduces one optional feature and opens it directly without changing configuration', async () => {
   expect(banner.root.querySelector('h2')!.textContent).toBe('Import your old chats and cards.');
+  expect((banner.root.querySelector('.jb-lunch-picks') as HTMLElement).hidden).toBe(true);
   expect(find('Import chats and cards')).toBeUndefined();
   expect(find('Explore Memory Cortex').hidden).toBe(true);
   expect(invoked).toEqual([]);
@@ -41,7 +42,19 @@ test('introduces one optional feature and opens it directly without changing con
   find('Next idea').click(); expect(banner.root.querySelector('h2')!.textContent).toBe('Add something new when you want it.');
   find('Manage extensions').click(); await flush();
   expect(invoked[5]).toEqual({ kind: 'drawer_tab', id: 'spindle' });
+  find('Next idea').click(); expect(banner.root.querySelector('h2')!.textContent).toBe('Shameless ads by Lunch');
+  expect(banner.root.querySelector('.jb-discover-progress')!.textContent).toBe('Lunch’s picks · 7 of 7');
+  expect(banner.root.querySelector<HTMLDetailsElement>('.jb-discover-guide')!.hidden).toBe(true);
+  const picks = banner.root.querySelector<HTMLElement>('.jb-lunch-picks')!;
+  expect(picks.hidden).toBe(false);
+  expect([...picks.querySelectorAll('a')].map(link => link.href)).toEqual([
+    'https://github.com/patatasbravasch-arch/Choir', 'https://github.com/AMousePad/LumiBooks',
+    'https://github.com/japolino/cue-living-novel', 'https://github.com/kittyafterdark/Pocket',
+  ]);
+  find('Open Extensions').click(); await flush();
+  expect(invoked[6]).toEqual({ kind: 'drawer_tab', id: 'spindle' });
   find('Next idea').click(); expect(banner.root.querySelector('h2')!.textContent).toBe('Import your old chats and cards.');
+  expect(picks.hidden).toBe(true);
 });
 
 test('feature help stays optional, opens no tool, and resets between ideas', async () => {
@@ -66,7 +79,7 @@ test('feature help stays optional, opens no tool, and resets between ideas', asy
 test('banner opens the import review window without importing or requesting access', async () => {
   const oldImportButton = find('Start guided import');
   oldImportButton.click(); await flush(); expect(imports).toBe(1); expect(invoked).toEqual([]);
-  for (let idea = 0; idea < 5; idea++) {
+  for (let idea = 0; idea < 6; idea++) {
     find('Next idea').click(); expect(find('Import chats and cards')).toBeUndefined();
   }
   find('Next idea').click();
