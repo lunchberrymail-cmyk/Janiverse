@@ -26,6 +26,7 @@ html[data-janitor-bridge-view=chats] .jb-home-masthead>.jb-search{display:none}
 .jb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px}.jb-grid[aria-busy=true]{opacity:.6}
 .jb-card{display:flex;flex-direction:column;min-width:0;padding:0;color:#eee8f3;background:linear-gradient(145deg,#412445,#2d1d3f);border:1px solid #a875ad;border-radius:8px;text-align:left;overflow:hidden;font:inherit;cursor:pointer;transition:border-color .15s,box-shadow .15s}.jb-card:hover{border-color:#e0b4e7;box-shadow:0 0 0 1px #c99cd866}
 .jb-card h3{font-size:12px;font-weight:500;line-height:1.4;margin:0;padding:8px 7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e7aae6}
+.jb-card h3.jb-card-name{padding:0}.jb-card-title,.jb-card-open{display:block;min-width:0;border:0;border-radius:0;color:inherit;font:inherit;cursor:pointer;text-align:left}.jb-card-title{width:100%;padding:8px 7px;background:transparent;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.jb-card-open{padding:0}.jb-creator a,.jb-profile-creator a{color:inherit;text-decoration:none}.jb-creator a:hover,.jb-profile-creator a:hover{text-decoration:underline;text-underline-offset:3px}.jb-creator a:focus-visible,.jb-profile-creator a:focus-visible{outline:2px solid #c7a0df;outline-offset:3px}
 .jb-portrait{position:relative;width:100%;aspect-ratio:1/1.12;background:linear-gradient(145deg,#63506f,#302538);isolation:isolate}.jb-portrait img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1}.jb-avatar-fallback{position:absolute;inset:0;display:grid;place-content:center;font-size:50px;color:#d3b5e1}.jb-favorite{position:absolute;z-index:2;right:8px;top:7px;color:#edc3ec;background:#44215eaa;border-radius:5px;padding:4px 7px}.jb-card-cta{position:absolute;z-index:2;bottom:0;left:0;right:0;padding:18px 8px 7px;background:linear-gradient(transparent,#21142eb0);color:#e8d6f4;font-size:9px}
 .jb-card-info{display:flex;flex:1;flex-direction:column;padding:6px 7px 10px}.jb-creator{margin:2px 0 7px;color:#e4b0db;font-size:10px;font-weight:650;text-align:center}.jb-description{margin:0 0 9px;padding:7px;background:#55515a80;border-radius:7px;color:#ded9e3;font-size:10px;line-height:1.6;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;min-height:62px}.jb-tags{display:flex;flex-wrap:wrap;justify-content:center;gap:4px;margin-top:auto;max-height:45px;overflow:hidden}.jb-tags span{color:#e2d6eb;border:1px solid #ac94b480;border-radius:8px;padding:2px 6px;font-size:9px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .jb-button{font:inherit;font-size:13px;font-weight:600;padding:9px 15px;border:1px solid #79717f;border-radius:6px;background:#414248;color:#edebf1;cursor:pointer}.jb-button:hover{filter:brightness(1.12)}.jb-button:disabled{opacity:.45;cursor:default}.jb-primary{background:#9062aa;border-color:#ad85c5;color:#fff}.jb-paging{display:flex;align-items:center;justify-content:center;gap:16px;color:#bbb8c5;font-size:12px;margin-top:25px}
@@ -46,3 +47,19 @@ html[data-janitor-bridge-view=chats] .jb-home-masthead>.jb-search{display:none}
 @media(max-width:600px){.jb-home-masthead{flex-wrap:wrap;gap:10px}.jb-home-masthead>.jb-search{order:3;flex-basis:100%;margin:0}.jb-create-link{margin-left:auto}.jb-more{margin-left:0}.jb-recent-card{flex-basis:310px}.jb-recent-body img,.jb-recent-avatar{width:105px;min-width:105px}.jb-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.jb-browse-heading h2{font-size:21px}.jb-filters{max-width:100%}.jb-filter{font-size:12px;padding:7px 11px}.jb-sort{max-width:140px}.jb-chat-header{padding:5px 0 8px}.jb-chat-right{gap:9px}.jb-api-status{max-width:170px;font-size:10px}.jb-memory-button{font-size:10px}.jb-chat-title{font-size:14px}.jb-memory{padding:15px}.jb-memory textarea{min-height:200px}}
 @media(max-width:360px){.jb-api-status{max-width:115px}.jb-chat-right{gap:6px}}
 @media(prefers-reduced-motion:reduce){.jb-card{transition:none}}
+/* Menus follow the host's keyboard-aware, UI-scale-aware visible viewport. */
+.jb-more-menu{max-width:calc(var(--app-scaled-viewport-width,100vw) - 24px);max-height:clamp(44px,calc(var(--app-scaled-viewport-height,100dvh) - 180px),640px);overflow-y:auto;overscroll-behavior:contain}
+.jb-chat-menu .jb-more-menu{max-height:clamp(44px,calc(var(--app-scaled-viewport-height,100dvh) - 88px),640px)}
+@media(max-width:600px),(pointer:coarse){
+  :is(.jb-home,.jb-home-masthead,.jb-preview) :is(button,summary),.jb-chat-header :is(button,summary){min-height:44px}
+  .jb-home-masthead>.jb-more>summary,.jb-chat-menu>summary{display:grid;place-items:center;min-width:44px}
+  .jb-chat-right{gap:6px;flex:1 1 auto}
+  .jb-api-status{min-width:0;max-width:170px;font-size:12px;flex:0 1 auto}
+  .jb-memory-button{font-size:12px;flex:0 0 auto}
+  .jb-back{flex:0 0 auto;padding-inline:4px}
+  .jb-chat-title{min-height:44px}
+  :is(.jb-home,.jb-home-masthead) :is(input,select,textarea){min-height:44px;font-size:16px}
+  .jb-browse-heading{flex-wrap:wrap}
+  .jb-recent-card{flex-basis:min(310px,100%)}
+}
+@media(max-width:360px){.jb-chat-header .jb-api-status{max-width:110px}.jb-chat-header .jb-chat-bar{gap:6px}.jb-chat-header .jb-chat-right{gap:4px}}

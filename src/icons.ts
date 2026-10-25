@@ -1,5 +1,8 @@
-type IconName = 'settings' | 'memory' | 'customize' | 'new-chat' | 'all-chats' | 'prompt' | 'persona' | 'tools' | 'menu' | 'import' | 'arrow' | 'embeddings' | 'extension' | 'camera';
+type IconName = 'settings' | 'memory' | 'customize' | 'new-chat' | 'all-chats' | 'prompt' | 'persona' | 'tools' | 'menu' | 'import' | 'arrow' | 'embeddings' | 'extension' | 'camera' | 'lorebook' | 'group' | 'voice';
 const paths: Record<IconName, string[]> = {
+  lorebook: ['M12 5v16M12 5C9 3 5 3 2 4v15c3-1 7-1 10 2 3-3 7-3 10-2V4c-3-1-7-1-10 1Z', 'M5 8h4M5 12h4M15 8h4M15 12h4'],
+  group: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M22 21v-2a4 4 0 0 0-3-3.87', 'M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM16 3.13a4 4 0 0 1 0 7.75'],
+  voice: ['M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z', 'M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8'],
   camera: ['M14.5 4h-5L8 7H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z', 'M16 13a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z'],
   embeddings: ['M10 5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm10 5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm-9 9a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z', 'm9.7 6.4 4.6 2.2M7.2 8l.6 8m7.4-3.7-5 4.4'],
   extension: ['M8 3H4v6h2a3 3 0 1 1 0 6H4v6h6v-2a3 3 0 1 1 6 0v2h5v-6h-2a3 3 0 1 1 0-6h2V3h-6v2a3 3 0 1 1-6 0V3Z'],

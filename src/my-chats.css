@@ -143,7 +143,7 @@
   .jb-my-chats .jb-mc-resume-preview { font-size: 16px; }
 }
 @media (max-width: 900px) {
-  .jb-my-chats { grid-template-columns: minmax(0, 1fr); gap: 25px; }
+  .jb-my-chats { zoom: 1; grid-template-columns: minmax(0, 1fr); gap: 25px; }
   .jb-my-chats .jb-mc-sidebar { position: static; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
   .jb-my-chats .jb-mc-sidebar h1 { margin: 0; font-size: 36px; }
   .jb-my-chats .jb-mc-all-nav { max-width: 280px; }
@@ -184,6 +184,15 @@
   .jb-my-chats .jb-mc-character-avatar, .jb-my-chats .jb-mc-character-avatar img { width: 88px; height: 88px; }
   .jb-my-chats .jb-mc-character-name { font-size: 16px; }
   .jb-my-chats .jb-mc-conversations-heading { align-items: flex-start; flex-wrap: wrap; margin-inline: 2px; }
+}
+@media (max-width: 600px), (pointer: coarse) {
+  .jb-my-chats .jb-mc-search input,
+  .jb-my-chats .jb-mc-sort select,
+  .jb-my-chats .jb-mc-conversations-heading select { min-height: 44px; font-size: 16px; }
+  .jb-my-chats :is(.jb-mc-character-actions button, .jb-mc-pagination button) { min-height: 44px; }
+  .jb-my-chats .jb-mc-controls { flex-wrap: wrap; }
+  .jb-my-chats .jb-mc-search { flex-basis: 180px; }
+  .jb-my-chats .jb-mc-sort { flex: 1 1 130px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .jb-my-chats .jb-mc-resume-card { transition: none; }

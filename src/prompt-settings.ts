@@ -4,8 +4,15 @@ import { createNativePresetResolution, type Binding, type Scope } from './native
 type Json = Record<string, unknown>;
 type Preset = { id: string; name: string; provider: string; engine: string; parameters: Json; prompts: Json; metadata: Json; prompt_order: Json[]; cache_revision: number };
 type Loaded = { scope: Scope; preset: Preset; binding: Binding | null; blockId: string | null; sourceId: string | null };
+type PromptMode = 'custom' | 'preset';
+type PresetChoice = { id: string; name: string; provider: string };
+type PromptBase = { preset: Preset; binding: Binding | null; blockId: string | null; defaultsSourceId?: string };
+type EditorHandle = Pick<SpindleModalHandle, 'root' | 'dismiss' | 'onDismiss'>;
+export type PromptSettingsOptions = { openConnection?: () => void; openPresetManager?: () => void; openIllarinSettings?: () => void };
 const owner = 'janitor_bridge';
 const markerKey = '_janitor_bridge';
+const defaultSlug = 'lumiverse-builtin-default-loom';
+const defaultPromptId = '019e62a4-7dba-7001-a422-10836ade35dd';
 const samplerFields = [
   { key: 'temperature', title: 'Temperature', min: 0, max: 2, step: .01, hint: 'Blank uses 1.0. Native value 0 leaves temperature out of the request.' },
   { key: 'maxTokens', title: 'Max new tokens', min: 1, max: 128000, step: 1, hint: 'Maximum response length. Blank uses the native 16,384 token default.' },
@@ -24,15 +31,8 @@ function string(value: unknown) { return typeof value === 'string' && value.trim
 function block(name: string, marker: string | null = null): Json {
   return { id: crypto.randomUUID(), name, content: '', role: 'system', enabled: true, position: 'pre_history', depth: 0, marker, isLocked: !!marker, color: null, injectionTrigger: [], characterTagTrigger: [], group: null, categoryMode: null };
 }
-function newPreset(): Preset {
-  return {
-    id: '', name: 'Janiverse', provider: 'loom', engine: 'classic', cache_revision: 0,
-    parameters: { samplerOverrides: { enabled: true, maxTokens: null, contextSize: null, temperature: null, topP: null, minP: null, topK: null, frequencyPenalty: null, presencePenalty: null, repetitionPenalty: null, streaming: true }, customBody: { enabled: false, rawJson: '{}' } },
-    prompts: { completionSettings: { assistantPrefill: '', reasoningPrefill: '', assistantImpersonation: '', continuePrefill: false, continuePostfix: ' ', namesBehavior: 0, squashSystemMessages: false, useSystemPrompt: true, enableWebSearch: false, sendInlineMedia: true, enableFunctionCalling: true, includeUsage: false }, advancedSettings: { seed: -1, customStopStrings: [], collapseMessages: false, trimIncompleteWords: false } },
-    metadata: { source: null, isDefault: false, schemaVersion: 1, modelProfiles: {}, lastProfileKey: null, promptVariables: {} },
-    prompt_order: [block('System Prompt'), { ...block('Character System Prompt'), content: '{{system}}', isLocked: true }, block('World Info (Before)', 'world_info_before'), block('Character Description', 'char_description'), block('Character Personality', 'char_personality'), block('Scenario', 'scenario'), block('Your Persona', 'persona_description'), block('World Info (After)', 'world_info_after'), block('Example Messages', 'dialogue_examples'), block('Chat History', 'chat_history')],
-  };
-}
+function isNativeDefault(preset: Preset) { return preset.provider === 'loom' && preset.metadata._lumiverse_preset_slug === defaultSlug && rec(preset.metadata[markerKey]).owner !== owner; }
+function validPreset(preset: Preset | null): preset is Preset { return !!preset && Array.isArray(preset.prompt_order) && !!preset.parameters && !!preset.prompts && !!preset.metadata; }
 function editablePrompt(preset: Preset): string | null {
   const ownedId = string(rec(preset.metadata[markerKey]).blockId);
   if (ownedId && preset.prompt_order.some(b => b.id === ownedId && !b.sealed)) return ownedId;
@@ -42,21 +42,35 @@ function editablePrompt(preset: Preset): string | null {
 }
 
 /** A small editor for real native Loom presets and native scope bindings. */
-export function createPromptSettings(ctx: SpindleFrontendContext, options: { openConnection?: () => void } = {}) {
+export function createPromptSettings(ctx: SpindleFrontendContext, options: PromptSettingsOptions = {}) {
   let disposed = false;
-  let active: { modal: SpindleModalHandle; abort: AbortController; closed: boolean } | undefined;
+  let active: { modal: EditorHandle; abort: AbortController; closed: boolean } | undefined;
   let ids = 0;
   function open(initial: 'prompt' | 'generation' = 'prompt') {
     if (disposed) return;
     active?.modal.dismiss();
     const modal = ctx.ui.showModal({ title: 'API Settings', width: 720, maxHeight: 880 });
+    render(modal, initial, false);
+  }
+  function mount(target: HTMLElement) {
+    if (disposed) return { destroy() {}, refresh() {} };
+    active?.modal.dismiss();
+    const root = node('section', 'jb-prompt-settings-inline'); root.setAttribute('aria-label', 'Prompt and generation settings'); target.append(root);
+    const listeners = new Set<() => void>(); let closed = false;
+    const dismiss = () => { if (closed) return; closed = true; for (const listener of [...listeners]) listener(); listeners.clear(); root.remove(); };
+    const editor = render({ root, dismiss, onDismiss(listener) { if (!closed) listeners.add(listener); return () => listeners.delete(listener); } }, 'prompt', true);
+    return { destroy: dismiss, refresh: editor.refresh };
+  }
+  function render(modal: EditorHandle, initial: 'prompt' | 'generation', inline: boolean) {
     const session = { modal, abort: new AbortController(), closed: false }; active = session;
     const current = () => !disposed && active === session && !session.closed;
     modal.onDismiss(() => { session.closed = true; session.abort.abort(); if (active === session) active = undefined; });
     modal.root.classList.add('jb-settings');
     const suffix = `jb-prompt-${++ids}`;
-    let loaded: Loaded | undefined, saving = false, selected = initial;
+    let loaded: Loaded | undefined, saving = false, loading = false, selected = initial, loadVersion = 0;
     let promptDirty = false, prefillDirty = false, samplersDirty = false;
+    let promptMode: PromptMode = 'custom', sourceDirty = false, sourceLoading = false, sourceVersion = 0;
+    let staged: PromptBase | undefined, choices: PresetChoice[] = [], unresolvedScope: Scope | undefined;
     const heading = node('h2', '', 'Instructions');
     const intro = node('p', 'jb-settings-intro', 'Set how your character responds.');
     const tabs = node('div', 'jb-settings-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', 'API Settings');
@@ -69,55 +83,107 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: { ope
       const item = button(label, () => show(tab), 'jb-settings-tab'); item.setAttribute('role', 'tab'); item.id = `${suffix}-tab-${tab}`; item.setAttribute('aria-controls', `${suffix}-${tab}`); tabButtons.push({ button: item, tab }); tabs.append(item);
     }
     function show(tab: 'prompt' | 'generation') {
-      selected = tab; promptPanel.hidden = tab !== 'prompt'; generationPanel.hidden = tab !== 'generation';
+      selected = tab; promptPanel.hidden = !inline && tab !== 'prompt'; generationPanel.hidden = !inline && tab !== 'generation';
       heading.textContent = tab === 'prompt' ? 'Instructions' : 'Generation settings';
       intro.textContent = tab === 'prompt' ? 'Set how your character responds.' : 'Adjust reply length and creativity.';
       for (const item of tabButtons) { item.button.setAttribute('aria-selected', String(item.tab === tab)); item.button.tabIndex = item.tab === tab ? 0 : -1; }
     }
-    for (const [panel, tab] of [[promptPanel, 'prompt'], [generationPanel, 'generation']] as const) { panel.setAttribute('role', 'tabpanel'); panel.setAttribute('aria-labelledby', `${suffix}-tab-${tab}`); }
+    if (!inline) for (const [panel, tab] of [[promptPanel, 'prompt'], [generationPanel, 'generation']] as const) { panel.setAttribute('role', 'tabpanel'); panel.setAttribute('aria-labelledby', `${suffix}-tab-${tab}`); }
     tabs.addEventListener('keydown', event => {
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
       const index = tabButtons.findIndex(t => t.button === document.activeElement); if (index < 0) return;
       event.preventDefault(); const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabButtons.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabButtons.length) % tabButtons.length;
       show(tabButtons[next].tab); tabButtons[next].button.focus();
     });
-    const scopeInfo = node('p', 'jb-settings-config', 'Loading saved settings…');
-    function field(title: string, control: HTMLInputElement | HTMLTextAreaElement, hint: string) {
+    const scopeInfo = node('p', 'jb-settings-config jb-settings-scope', 'Loading saved settings…');
+    function field(title: string, control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, hint: string) {
       const label = node('label', 'jb-settings-field'); const text = node('span', 'jb-settings-label', title); const help = node('small', 'jb-settings-help', hint);
       control.id = `${suffix}-${control.name}`; help.id = `${control.id}-help`; control.setAttribute('aria-describedby', help.id); label.htmlFor = control.id; label.append(text, control, help); return label;
     }
-    const prompt = node('textarea', 'jb-settings-textarea jb-settings-prompt'); prompt.name = 'global-prompt'; prompt.rows = 9; prompt.placeholder = 'How should the character write and behave?';
-    const promptHelp = 'Instructions that guide your character’s writing and behavior. Your character details and conversation are already included.';
+    const prompt = node('textarea', 'jb-settings-textarea jb-settings-prompt'); prompt.name = 'global-prompt'; prompt.rows = 14; prompt.placeholder = 'Write or paste your full prompt here…';
+    const promptHelp = 'Write a short instruction or paste a long prompt. Your character details and conversation stay in the native preset.';
     const prefill = node('textarea', 'jb-settings-textarea jb-settings-prefill'); prefill.name = 'assistant-prefill'; prefill.rows = 3; prefill.placeholder = 'Optional beginning of the assistant’s reply';
     prompt.addEventListener('input', () => { promptDirty = true; }); prefill.addEventListener('input', () => { prefillDirty = true; });
-    promptPanel.append(field('Global prompt', prompt, promptHelp), field('Assistant prefill', prefill, 'Optional text to begin each reply.'));
-    const nativeInfo = node('p', 'jb-settings-help', 'Your character, persona, and chat memory stay included.'); promptPanel.append(nativeInfo);
-    const rawLabel = node('label', 'jb-settings-checkbox'); const raw = node('input'); raw.type = 'checkbox'; raw.name = 'enable-chat-preset'; rawLabel.append(raw, node('span', '', 'Use a native preset for this raw test chat')); rawLabel.hidden = true;
-    promptPanel.append(rawLabel);
-    const enabledLabel = node('label', 'jb-settings-checkbox'); const enabled = node('input'); enabled.type = 'checkbox'; enabled.name = 'sampler-overrides'; enabled.addEventListener('change', () => { samplersDirty = true; }); enabledLabel.append(enabled, node('span', '', 'Use these generation controls')); generationPanel.append(enabledLabel);
-    const grid = node('div', 'jb-settings-grid'); const inputs = new Map<string, HTMLInputElement>();
+    const promptDisclosure = inline ? node('details', 'jb-settings-card jb-settings-global-prompt') : undefined;
+    const promptCard = promptDisclosure ?? node('section', 'jb-settings-card');
+    if (promptDisclosure) { const summary = node('summary', '', 'Global prompt'); summary.append(node('small', 'jb-settings-help', 'Optional')); promptDisclosure.append(summary); }
+    const sourceChoice = node('select', 'jb-settings-select jb-settings-prompt-source'); sourceChoice.name = 'prompt-source';
+    for (const [value, title] of [['custom', 'Custom prompt · Default base'], ['preset', 'Saved preset']] as const) { const option = node('option', '', title); option.value = value; sourceChoice.append(option); }
+    const presetChoice = node('select', 'jb-settings-select jb-settings-preset-select'); presetChoice.name = 'prompt-preset';
+    const presetField = field('Saved preset', presetChoice, 'Choose an imported or saved Loom preset. Save settings applies a separate copy to this scope.');
+    presetField.hidden = true;
+    const sourceHelp = node('p', 'jb-settings-help jb-settings-prompt-source-help'); sourceHelp.setAttribute('aria-live', 'polite');
+    const sourceControls = node('div', 'jb-settings-prompt-source-controls'); sourceControls.append(field('Prompt source', sourceChoice, 'Use one text prompt, or keep a complete Lumiverse preset.'), presetField, sourceHelp);
+    const promptField = field('Global prompt', prompt, promptHelp); promptCard.append(sourceControls, promptField);
+    const manager = options.openPresetManager ? button('Manage / import presets', () => { if (!saving && !loading && !sourceLoading) options.openPresetManager?.(); }) : undefined;
+    if (manager) sourceControls.append(manager);
+    const promptGuide = node('details', 'jb-settings-details jb-settings-prompt-help');
+    promptGuide.append(node('summary', '', 'How prompts and presets work'), node('p', 'jb-settings-help', 'Custom prompt starts from Lumiverse’s built-in Default preset. Paste your instructions in the large box; the character, persona, and conversation keep their normal places.'), node('p', 'jb-settings-help', 'A native preset can contain several prompts, choices, variables, and generation settings. This box edits one safe prompt block or adds separate instructions; it does not flatten the preset.'), node('p', 'jb-settings-help', 'For a preset JSON from Discord, use Manage / import presets, then the Loom menu’s Import Loom JSON or Import Legacy JSON option. For Illarin, connect this Lumiverse instance in Illarin settings, then send the preset from Illarin. Choose the imported preset here afterward.'), node('p', 'jb-settings-help', 'Choosing a source only prepares a draft. Save settings creates or updates its scoped copy. Your original presets and Lumiverse’s global preset selection are kept.'));
+    const examples = node('details', 'jb-settings-details jb-settings-prompt-examples'); examples.append(node('summary', '', 'Prompt examples · Optional'), node('p', 'jb-settings-help', 'Append an example to your current text, then edit it to suit your story.'));
+    const illarin = options.openIllarinSettings ? button('Connect Illarin', () => { if (!saving && !loading && !sourceLoading) options.openIllarinSettings?.(); }) : undefined;
+    if (illarin) promptGuide.append(illarin);
+    const exampleButtons: HTMLButtonElement[] = [];
+    for (const [title, text] of [['Append writing style example', 'Write vivid, character-focused replies. Use dialogue and concrete actions, and leave room for my response.'], ['Append roleplay boundaries example', 'Write only for {{char}} and supporting characters. Let {{user}} decide their own words, thoughts, and actions.']] as const) {
+      const example = button(title, () => { if (prompt.disabled) return; prompt.value = [prompt.value, text].filter(Boolean).join('\n\n'); promptDirty = true; if (promptDisclosure) promptDisclosure.open = true; message('Example appended to your draft. Review it before saving.'); prompt.focus(); }); exampleButtons.push(example); examples.append(example);
+    }
+    promptGuide.append(examples); promptCard.append(promptGuide);
+    const replyPrefix = node('details', 'jb-settings-details jb-settings-prefill-options');
+    replyPrefix.append(node('summary', '', 'Reply prefix · Optional'), field('Assistant prefill', prefill, 'Text to begin each reply. Leave empty to let the character start naturally.'));
+    if (inline) promptCard.append(replyPrefix);
+    promptPanel.append(promptCard); if (!inline) promptPanel.append(replyPrefix);
+    const nativeInfo = node('p', 'jb-settings-help', 'Your character, persona, and chat memory stay included.'); promptCard.append(nativeInfo);
+    const rawLabel = node('label', 'jb-settings-checkbox jb-settings-toggle-row'); const raw = node('input'); raw.type = 'checkbox'; raw.name = 'enable-chat-preset'; rawLabel.append(raw, node('span', '', 'Use a native preset for this raw test chat')); rawLabel.hidden = true;
+    const enabledLabel = node('label', 'jb-settings-checkbox jb-settings-toggle-row'); const enabled = node('input'); enabled.type = 'checkbox'; enabled.name = 'sampler-overrides'; enabled.addEventListener('change', () => { samplersDirty = true; });
+    const enabledCopy = node('span', '', 'Use these generation controls'); enabledCopy.append(node('small', 'jb-settings-help', 'Turn on to use the values below for new replies.')); enabledLabel.append(enabled, enabledCopy);
+    const generationCard = node('section', 'jb-settings-card'); if (inline) generationCard.append(node('h2', '', 'Generation settings')); generationCard.append(enabledLabel);
+    const grid = node('div', 'jb-settings-grid'); const inputs = new Map<string, HTMLInputElement>(); const sliders = new Map<string, HTMLInputElement>();
     const advancedGeneration = node('details', 'jb-settings-advanced jb-settings-generation-advanced');
     const advancedGrid = node('div', 'jb-settings-grid');
     advancedGeneration.append(node('summary', '', 'Advanced generation controls'), advancedGrid);
     const basicHints: Record<string, string> = { temperature: 'Lower is steadier; higher adds variety.', maxTokens: 'How long a reply can be.', contextSize: 'How much conversation the model can use.' };
     for (const item of samplerFields) {
       const input = node('input', 'jb-settings-input'); input.type = 'number'; input.name = item.key; input.min = String(item.min); input.max = String(item.max); input.step = String(item.step); input.placeholder = 'Default'; input.title = item.hint; input.addEventListener('input', () => { samplersDirty = true; input.removeAttribute('aria-invalid'); }); inputs.set(item.key, input);
-      (basicHints[item.key] ? grid : advancedGrid).append(field(item.title, input, basicHints[item.key] || item.hint));
+      const label = field(item.title, input, basicHints[item.key] || item.hint);
+      let wrapper: HTMLElement = label;
+      if (inline && basicHints[item.key]) {
+        const slider = node('input', 'jb-settings-range'); slider.type = 'range'; slider.name = `${item.key}-slider`; slider.min = String(item.min); slider.step = String(item.step); slider.setAttribute('aria-label', `${item.title} slider`); slider.setAttribute('aria-describedby', `${input.id}-help`);
+        const control = node('span', 'jb-settings-slider-control'); control.append(slider, input); sliders.set(item.key, slider);
+        const title = node('label', 'jb-settings-label', item.title); title.htmlFor = input.id;
+        wrapper = node('div', 'jb-settings-field jb-settings-slider-field'); wrapper.append(title, control, label.querySelector('small')!);
+        slider.addEventListener('input', () => { input.value = slider.value; samplersDirty = true; input.removeAttribute('aria-invalid'); syncSlider(item.key); });
+        input.addEventListener('input', () => syncSlider(item.key));
+      }
+      (basicHints[item.key] ? grid : advancedGrid).append(wrapper);
     }
     advancedGeneration.append(node('p', 'jb-settings-help', 'Blank temperature uses 1.0; 0 omits it from the request. Blank max new tokens uses 16,384. Blank context size uses the model’s context. Providers support different controls. Existing advanced options, model profiles, and custom request body remain intact; a custom body can override these values.'));
-    generationPanel.append(grid, advancedGeneration);
-    const advanced = node('details', 'jb-settings-advanced');
+    generationCard.append(grid); generationPanel.append(generationCard, advancedGeneration);
+    const advanced = node('details', 'jb-settings-advanced jb-settings-details');
     const presetInfo = node('p', 'jb-settings-help');
-    advanced.append(node('summary', '', 'Advanced'), presetInfo, node('p', 'jb-settings-help', 'The first save makes a separate native Loom preset, leaving the source intact. Later saves edit that copy. Existing prompt blocks, model profiles, and custom request body are preserved. This chat uses a chat binding; an API configuration uses a connection binding. Chat, persona, and character bindings take priority over an API configuration. No universal default is replaced. If no preset was selected, this API configuration receives the new preset as its fallback.'), node('p', 'jb-settings-help', 'Assistant prefill follows your connection’s existing reply prefix. Continue uses the message being continued instead.'));
+    advanced.append(node('summary', '', 'How these settings are saved'), presetInfo, node('p', 'jb-settings-help', 'The first save makes a separate native Loom preset, leaving the source intact. Later saves edit that copy. Existing prompt blocks, model profiles, and custom request body are preserved. This chat uses a chat binding; an API configuration uses a connection binding. Chat, persona, and character bindings take priority over an API configuration. No universal default is replaced. If no preset was selected, this API configuration receives the new preset as its fallback.'), node('p', 'jb-settings-help', 'Assistant prefill follows your connection’s existing reply prefix. Continue uses the message being continued instead.'));
     const status = node('p', 'jb-settings-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
     const requestButton = button('Enable permissions', () => { void enablePermissions(); }); requestButton.hidden = true;
     const reloadButton = button('Reload saved settings', () => { void load(); }, 'jb-settings-cancel');
     const cancel = button('Close', () => modal.dismiss(), 'jb-settings-cancel'); const save = button('Save settings', () => { void saveSettings(); }, 'jb-settings-save');
-    const actions = node('div', 'jb-settings-actions'); actions.append(requestButton, reloadButton, cancel, save);
-    modal.root.append(tabs, heading, intro, scopeInfo, promptPanel, generationPanel, advanced, status, actions); show(selected);
-    const editable = [prompt, prefill, enabled, raw, ...inputs.values()];
-    function lock(value: boolean) { editable.forEach(input => input.disabled = value); save.disabled = value; reloadButton.disabled = saving; }
+    const actions = node('div', 'jb-settings-actions'); actions.append(node('small', 'jb-settings-help', 'Changes apply to new replies.'), requestButton);
+    if (inline) advanced.append(reloadButton); else actions.append(reloadButton, cancel);
+    actions.append(save);
+    if (!inline) modal.root.append(tabs, heading, intro);
+    modal.root.append(scopeInfo, rawLabel, promptPanel, generationPanel, advanced, status, actions); show(selected);
+    if (inline) actions.prepend(status);
+    const editable = [prompt, prefill, enabled, raw, sourceChoice, presetChoice, ...exampleButtons, ...inputs.values(), ...sliders.values(), ...(manager ? [manager] : []), ...(illarin ? [illarin] : [])];
+    function syncSlider(key: string) {
+      const slider = sliders.get(key), item = samplerFields.find(field => field.key === key); if (!slider || !item) return;
+      const value = inputs.get(key)!.value.trim() === '' ? null : Number(inputs.get(key)!.value);
+      const usualMax = key === 'maxTokens' ? 16384 : key === 'contextSize' ? 131072 : item.max;
+      slider.max = String(Math.min(item.max, Math.max(usualMax, Number(slider.max) || usualMax, value !== null && Number.isFinite(value) ? value : usualMax)));
+      // Range inputs clamp their displayed value. Never copy that value back
+      // while loading or typing: the number field retains the native value.
+      slider.value = String(value ?? (key === 'temperature' ? 1 : key === 'maxTokens' ? 16384 : 131072));
+      slider.setAttribute('aria-valuetext', value === null ? 'Default' : String(value));
+    }
+    function lock(value: boolean) { editable.forEach(input => input.disabled = value); presetChoice.disabled = value || promptMode !== 'preset'; if (manager) manager.disabled = saving || loading || sourceLoading; if (illarin) illarin.disabled = saving || loading || sourceLoading; save.disabled = value; reloadButton.disabled = saving || sourceLoading; modal.root.setAttribute('aria-busy', String(saving || sourceLoading)); }
     function message(text: string, tone = '') { status.textContent = text; status.dataset.tone = tone; }
+    modal.root.addEventListener('input', () => { if (status.dataset.tone === 'success') message(''); });
     function requiredPermissions() { return loaded?.scope.kind === 'chat' || (!!ctx.getActiveChat().chatId && location.pathname.startsWith('/chat/')) ? ['presets', 'chats', 'generation'] : ['presets', 'generation']; }
     async function permissions() {
       const granted = await ctx.permissions.getGranted(); if (!current()) return false;
@@ -141,34 +207,120 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: { ope
       if (!response.ok) { const error = new Error(response.status === 409 ? 'conflict' : `request-${response.status}`); throw error; }
       return await response.json() as T;
     }
+    async function loadChoices() {
+      const rows: PresetChoice[] = []; let offset = 0;
+      while (current()) {
+        const page = await api<Json>(`/presets/registry?provider=loom&limit=100&offset=${offset}`);
+        if (!Array.isArray(page?.data) || typeof page.total !== 'number') throw new Error('invalid-registry');
+        for (const value of page.data) { const row = rec(value); if (typeof row.id === 'string' && typeof row.name === 'string' && row.provider === 'loom') rows.push({ id: row.id, name: row.name, provider: row.provider }); }
+        offset += page.data.length;
+        if (offset >= page.total) { choices = rows; return; }
+        if (!page.data.length) throw new Error('incomplete-registry');
+      }
+    }
+    async function getDefault(): Promise<Preset> {
+      // Registry rows omit metadata, and the native Default may be renamed.
+      // Inspect every full-record page so a copied slug cannot select a wrong base.
+      let offset = 0; const found: Preset[] = [];
+      while (current()) {
+        const page = await api<Json>(`/presets?limit=100&offset=${offset}`);
+        if (!Array.isArray(page?.data) || typeof page.total !== 'number') throw new Error('invalid-presets');
+        for (const candidate of page.data) if (validPreset(candidate as Preset) && isNativeDefault(candidate as Preset)) found.push(candidate as Preset);
+        offset += page.data.length;
+        if (offset >= page.total) break;
+        if (!page.data.length) throw new Error('incomplete-presets');
+      }
+      if (found.length !== 1) throw new Error(found.length ? 'ambiguous-default' : 'missing-default');
+      if (!found[0].prompt_order.length) throw new Error('invalid-default-layout');
+      return found[0];
+    }
+    function sourceBlock(preset: Preset, binding: Binding | null, mode: PromptMode) {
+      const projection: Preset = { ...preset, prompt_order: preset.prompt_order.map(b => ({ ...b, ...(Object.hasOwn(binding?.block_states ?? {}, String(b.id)) ? { enabled: binding!.block_states[String(b.id)] } : {}) })) };
+      if (mode === 'custom' && isNativeDefault(preset)) {
+        const main = projection.prompt_order.find(b => b.id === defaultPromptId && !b.sealed && !b.marker && !b.isLocked && b.enabled !== false);
+        if (main) return String(main.id);
+      }
+      return editablePrompt(projection);
+    }
+    function renderSource(base: PromptBase, preserveDraft = false) {
+      sourceChoice.value = promptMode; presetField.hidden = promptMode !== 'preset';
+      const visible = new Map(choices.map(choice => [choice.id, choice])); visible.set(base.preset.id, base.preset);
+      presetChoice.replaceChildren(...[...visible.values()].map(choice => { const option = node('option', '', choice.name); option.value = choice.id; return option; })); presetChoice.value = base.preset.id;
+      sourceHelp.textContent = promptMode === 'custom' ? 'Your own prompt, using Lumiverse’s native Default layout. The original Default preset stays intact.' : `Using the complete “${base.preset.name}” preset. Its other prompts, options, and variables are preserved.`;
+      promptField.querySelector('.jb-settings-label')!.textContent = promptMode === 'preset' && !base.blockId ? 'Additional instructions' : 'Global prompt';
+      if (!preserveDraft || !promptDirty) { const target = base.preset.prompt_order.find(b => b.id === base.blockId); prompt.value = typeof target?.content === 'string' ? target.content : ''; }
+      if (!preserveDraft || !prefillDirty) prefill.value = typeof rec(base.preset.prompts.completionSettings).assistantPrefill === 'string' ? String(rec(base.preset.prompts.completionSettings).assistantPrefill) : '';
+      replyPrefix.open = !!prefill.value;
+      if (!preserveDraft || !samplersDirty) {
+        const sampler = rec(base.preset.parameters.samplerOverrides); enabled.checked = sampler.enabled === true;
+        for (const item of samplerFields) { const input = inputs.get(item.key)!; input.value = typeof sampler[item.key] === 'number' ? String(sampler[item.key]) : ''; syncSlider(item.key); }
+      }
+    }
+    async function chooseSource(mode: PromptMode, presetId: string) {
+      if ((!loaded && !unresolvedScope) || saving || sourceLoading) return;
+      const version = ++sourceVersion; sourceLoading = true; lock(true);
+      try {
+        const preset = mode === 'custom' ? await getDefault() : await api<Preset>(`/presets/${encodeURIComponent(presetId)}`);
+        if (!validPreset(preset) || preset.provider !== 'loom') throw new Error('invalid-preset');
+        const binding = preset.id === loaded?.sourceId ? loaded.binding : await api<Binding>(`/preset-profiles/defaults?preset_id=${encodeURIComponent(preset.id)}`, 'GET', undefined, true);
+        if (!current() || version !== sourceVersion) return;
+        promptMode = mode; staged = { preset, binding, blockId: sourceBlock(preset, binding, mode), ...(preset.id !== loaded?.sourceId ? { defaultsSourceId: preset.id } : {}) }; sourceDirty = true;
+        if (!loaded) loaded = { scope: unresolvedScope!, preset, binding: null, blockId: staged.blockId, sourceId: null };
+        renderSource(staged, true);
+        message(`Prompt source prepared. Save settings to use it.${promptDirty || prefillDirty || samplersDirty ? ' Your unsaved text and generation edits were kept.' : ''}`, 'warning');
+      } catch (error) {
+        if (current() && version === sourceVersion) { sourceChoice.value = promptMode; presetChoice.value = (staged?.preset ?? loaded?.preset)?.id || choices[0]?.id || ''; message((error as Error).message === 'missing-default' ? 'Lumiverse’s built-in Default preset is unavailable. Choose a native preset instead.' : (error as Error).message === 'ambiguous-default' ? 'More than one preset carries Lumiverse’s Default identity. Choose a specific native preset instead.' : 'Could not load that prompt source. Your current draft is still here.', 'error'); }
+      } finally { if (current() && version === sourceVersion) { sourceLoading = false; lock(!loaded); } }
+    }
+    sourceChoice.addEventListener('change', () => { void chooseSource(sourceChoice.value === 'custom' ? 'custom' : 'preset', presetChoice.value); });
+    presetChoice.addEventListener('change', () => { void chooseSource('preset', presetChoice.value); });
     const { getScope, effective } = createNativePresetResolution(ctx, api);
     async function load() {
-      lock(true); loaded = undefined; message('');
+      const version = ++loadVersion; const loadCurrent = () => current() && version === loadVersion;
+      loading = true; let chooseFallback = false;
+      lock(true); loaded = undefined; unresolvedScope = undefined; staged = undefined; sourceDirty = false; message('');
       try {
-        if (!await permissions()) return;
+        if (!await permissions() || !loadCurrent()) return;
         const scope = await getScope(); const resolved = scope.raw ? { preset_id: null, binding: null } : await effective(scope);
-        let preset = resolved.preset_id ? await api<Preset>(`/presets/${encodeURIComponent(resolved.preset_id)}`) : newPreset();
-        if (!current() || !preset) return;
-        if (!Array.isArray(preset.prompt_order) || !preset.parameters || !preset.prompts || !preset.metadata) throw new Error('invalid-preset');
+        if (!loadCurrent()) return;
+        unresolvedScope = scope;
+        scopeInfo.textContent = `Applies to: ${scope.label}`; rawLabel.hidden = !scope.raw; raw.checked = false;
+        try { await loadChoices(); } catch { choices = []; }
+        if (!loadCurrent()) return;
+        let preset = resolved.preset_id ? await api<Preset>(`/presets/${encodeURIComponent(resolved.preset_id)}`) : await getDefault();
+        if (!loadCurrent() || !preset) return;
+        if (!validPreset(preset) || preset.provider !== 'loom') throw new Error('invalid-preset');
         // An empty hierarchy uses legacy/raw assembly. Adding just one text block
-        // would drop that fallback's history; convert the copy to a complete native layout.
-        if (!preset.prompt_order.length) preset = { ...preset, prompt_order: newPreset().prompt_order };
-        const projection = { ...preset, prompt_order: preset.prompt_order.map(b => ({ ...b, ...(Object.hasOwn(resolved.binding?.block_states ?? {}, String(b.id)) ? { enabled: resolved.binding!.block_states[String(b.id)] } : {}) })) };
-        loaded = { scope, preset, binding: resolved.binding, blockId: editablePrompt(projection), sourceId: resolved.preset_id };
-        const target = preset.prompt_order.find(b => b.id === loaded?.blockId); prompt.value = typeof target?.content === 'string' ? target.content : '';
-        prefill.value = typeof rec(preset.prompts.completionSettings).assistantPrefill === 'string' ? String(rec(preset.prompts.completionSettings).assistantPrefill) : '';
-        const sampler = rec(preset.parameters.samplerOverrides); enabled.checked = sampler.enabled === true;
-        for (const item of samplerFields) { const input = inputs.get(item.key)!; input.value = typeof sampler[item.key] === 'number' ? String(sampler[item.key]) : ''; }
+        // would drop that fallback's history; use the real native Default layout.
+        if (!preset.prompt_order.length) preset = { ...preset, prompt_order: copy((await getDefault()).prompt_order) };
+        if (!loadCurrent()) return;
+        const owned = rec(preset.metadata[markerKey]);
+        promptMode = isNativeDefault(preset) || owned.owner === owner && owned.promptMode === 'custom' ? 'custom' : 'preset';
+        loaded = { scope, preset, binding: resolved.binding, blockId: sourceBlock(preset, resolved.binding, promptMode), sourceId: resolved.preset_id };
+        nativeInfo.textContent = 'Your character, persona, and chat memory stay included.';
+        renderSource(loaded);
         scopeInfo.textContent = `Applies to: ${scope.label}`; presetInfo.textContent = `Native preset: ${preset.id ? preset.name : 'Created on first save'}`;
         rawLabel.hidden = !scope.raw; raw.checked = false; promptDirty = prefillDirty = samplersDirty = false; lock(false);
         if (scope.raw) message('This temporary test chat bypasses presets. Tick “Use a native preset” to apply these settings.', 'warning');
-        else if (!loaded.blockId) message('Additional instructions. Your existing instructions are kept.');
+        else if (!loaded.blockId) {
+          nativeInfo.textContent = 'These instructions are added to your existing preset. Your character, persona, and chat memory stay included.';
+          message('Additional instructions. Your existing instructions are kept.');
+        }
       } catch (error) {
-        if (current()) message((error as Error).message === 'no-connection' ? 'Add or select an API configuration in the Connection tab first.' : 'Could not load native settings. Try reloading saved settings.', 'error');
+        if (loadCurrent()) {
+          const why = (error as Error).message;
+          if (unresolvedScope && choices.length && ['missing-default', 'ambiguous-default'].includes(why)) {
+            presetChoice.replaceChildren(...choices.map(choice => { const option = node('option', '', choice.name); option.value = choice.id; return option; })); chooseFallback = true;
+          }
+          if (manager) manager.disabled = false;
+          message(why === 'no-connection' ? inline ? 'Add or select an API configuration above, then reload saved settings.' : 'Add or select an API configuration in the Connection tab first.' : why === 'missing-default' ? 'Lumiverse’s built-in Default preset is unavailable. Choose a native preset instead.' : why === 'ambiguous-default' ? 'More than one preset carries Lumiverse’s Default identity. Choose a specific native preset instead.' : 'Could not load native settings. Try reloading saved settings.', 'error');
+        }
+      } finally {
+        if (loadCurrent()) { loading = false; lock(!loaded); if (chooseFallback) sourceChoice.disabled = false; }
       }
     }
     async function saveSettings() {
-      if (!loaded || saving) return;
+      if (!loaded || saving || sourceLoading) return;
       if (loaded.scope.raw && !raw.checked) { message('Tick “Use a native preset” to apply settings to this raw test chat.', 'warning'); raw.focus(); return; }
       const values: Json = {};
       for (const item of samplerFields) {
@@ -182,30 +334,40 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: { ope
         const visibleChatId = location.pathname.startsWith('/chat/') ? ctx.getActiveChat().chatId : null;
         if ((loaded.scope.kind === 'chat' && visibleChatId !== loaded.scope.id) || (loaded.scope.kind === 'connection' && visibleChatId)) throw new Error('scope-changed');
         const scopeNow = await getScope();
-        if (scopeNow.kind !== loaded.scope.kind || scopeNow.id !== loaded.scope.id || scopeNow.connectionId !== loaded.scope.connectionId) throw new Error('scope-changed');
+        if (scopeNow.kind !== loaded.scope.kind || scopeNow.id !== loaded.scope.id || scopeNow.connectionId !== loaded.scope.connectionId || scopeNow.raw !== loaded.scope.raw || scopeNow.temporary !== loaded.scope.temporary) throw new Error('scope-changed');
         if (!loaded.scope.raw) {
           const effectiveNow = await effective(loaded.scope);
           if (effectiveNow.preset_id !== loaded.sourceId || JSON.stringify(effectiveNow.binding) !== JSON.stringify(loaded.binding)) throw new Error('conflict');
         }
-        let preset = loaded.preset;
+        const base = staged ?? loaded; const sourceBinding = base.binding;
+        if (staged?.defaultsSourceId) {
+          const latestDefaults = await api<Binding>(`/preset-profiles/defaults?preset_id=${encodeURIComponent(staged.defaultsSourceId)}`, 'GET', undefined, true);
+          if (JSON.stringify(latestDefaults) !== JSON.stringify(staged.binding)) throw new Error('conflict');
+        }
+        if (staged && loaded.preset.id && loaded.preset.id !== staged.preset.id) {
+          const original = await api<Preset>(`/presets/${encodeURIComponent(loaded.preset.id)}`);
+          if (!original || original.cache_revision !== loaded.preset.cache_revision) throw new Error('conflict');
+        }
+        let preset = base.preset;
         if (preset.id) {
           const fresh = await api<Preset>(`/presets/${encodeURIComponent(preset.id)}`);
           if (!fresh || fresh.cache_revision !== preset.cache_revision) throw new Error('conflict');
           preset = fresh;
         }
         const next = copy(preset); const owned = rec(next.metadata[markerKey]);
-        if (!next.prompt_order.length) next.prompt_order = copy(loaded.preset.prompt_order);
+        if (!next.prompt_order.length) next.prompt_order = copy(base.preset.prompt_order);
         // Binding state remains authoritative on every Save, including later
         // edits after the native editor changed a checkbox in this copy.
-        next.prompt_order = next.prompt_order.map(b => ({ ...b, ...(Object.hasOwn(loaded!.binding?.block_states ?? {}, String(b.id)) ? { enabled: loaded!.binding!.block_states[String(b.id)] } : {}) }));
+        next.prompt_order = next.prompt_order.map(b => ({ ...b, ...(Object.hasOwn(sourceBinding?.block_states ?? {}, String(b.id)) ? { enabled: sourceBinding!.block_states[String(b.id)] } : {}) }));
         const scopeKey = `${loaded.scope.kind}:${loaded.scope.id}`;
         const reuse = owned.owner === owner && owned.scope === scopeKey;
         if (!reuse) {
           next.id = ''; next.name = `Janiverse · ${loaded.scope.kind === 'chat' ? 'Chat' : 'API'} · ${preset.name}`;
           // Preserve every native block/property and effective profile state, including variables.
-          next.metadata = { ...next.metadata, isDefault: false };
+          const { _lumiverse_preset_slug: builtinIdentity, ...metadata } = next.metadata;
+          next.metadata = { ...metadata, _lumiverse_install_source: 'local', isDefault: false };
         }
-        let promptId = loaded.blockId;
+        let promptId = base.blockId;
         if (!promptId && (promptDirty || prompt.value)) {
           const section = { ...block('Janiverse'), marker: 'category', categoryMode: 'checkbox', isLocked: false };
           const added: Json = { ...block('Global prompt'), content: prompt.value };
@@ -216,15 +378,22 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: { ope
         }
         if (prefillDirty) next.prompts = { ...next.prompts, completionSettings: { ...rec(next.prompts.completionSettings), assistantPrefill: prefill.value } };
         if (samplersDirty) next.parameters = { ...next.parameters, samplerOverrides: { ...rec(next.parameters.samplerOverrides), ...values, enabled: enabled.checked } };
-        next.metadata = { ...next.metadata, [markerKey]: { ...owned, owner, scope: scopeKey, sourcePresetId: reuse ? owned.sourcePresetId : loaded.sourceId, blockId: promptId } };
+        next.metadata = { ...next.metadata, [markerKey]: { ...owned, owner, scope: scopeKey, sourcePresetId: reuse ? owned.sourcePresetId : base.preset.id || loaded.sourceId, blockId: promptId, promptMode } };
         const body = { name: next.name, provider: next.provider, engine: next.engine, parameters: next.parameters, prompts: next.prompts, metadata: next.metadata, prompt_order: next.prompt_order };
+        const beforeWrite = await getScope();
+        if (beforeWrite.kind !== loaded.scope.kind || beforeWrite.id !== loaded.scope.id || beforeWrite.connectionId !== loaded.scope.connectionId || beforeWrite.raw !== loaded.scope.raw || beforeWrite.temporary !== loaded.scope.temporary) throw new Error('scope-changed');
+        if (!loaded.scope.raw) {
+          const effectiveNow = await effective(loaded.scope);
+          if (effectiveNow.preset_id !== loaded.sourceId || JSON.stringify(effectiveNow.binding) !== JSON.stringify(loaded.binding)) throw new Error('conflict');
+        }
         const saved = next.id ? await api<Preset>(`/presets/${encodeURIComponent(next.id)}`, 'PUT', { ...body, expected_cache_revision: preset.cache_revision }) : await api<Preset>('/presets', 'POST', body);
         if (!saved || !current()) return;
         // Keep the new row for retry if the subsequent binding request fails.
         loaded.preset = saved; loaded.blockId = promptId;
+        if (staged) staged = { ...staged, preset: saved, binding: sourceBinding, blockId: promptId };
         if (!await permissions() || !current()) return;
         const states = Object.fromEntries(saved.prompt_order.filter(b => typeof b.id === 'string').map(b => [String(b.id), b.enabled === true]));
-        const bindingBody = { preset_id: saved.id, block_states: states, ...(loaded.binding?.prompt_variables ? { prompt_variables: loaded.binding.prompt_variables } : {}) };
+        const bindingBody = { preset_id: saved.id, block_states: states, ...(sourceBinding?.prompt_variables ? { prompt_variables: sourceBinding.prompt_variables } : {}) };
         const binding = await api<Binding>(`/preset-profiles/${loaded.scope.kind}/${encodeURIComponent(loaded.scope.id)}`, 'PUT', bindingBody);
         if (!current()) return;
         loaded.binding = binding; loaded.sourceId = saved.id;
@@ -237,7 +406,7 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: { ope
         const resolved = await effective(loaded.scope);
         if (!current()) return;
         if (resolved.preset_id !== saved.id) throw new Error('binding-not-active');
-        promptDirty = prefillDirty = samplersDirty = false; scopeInfo.textContent = `Applies to: ${loaded.scope.label}`; presetInfo.textContent = `Native preset: ${saved.name}`;
+        promptDirty = prefillDirty = samplersDirty = sourceDirty = false; staged = undefined; renderSource(loaded); scopeInfo.textContent = `Applies to: ${loaded.scope.label}`; presetInfo.textContent = `Native preset: ${saved.name}`;
         message(loaded.scope.kind === 'chat' ? 'Saved for this conversation.' : 'Saved for this API configuration. Chats with their own instructions keep them.', 'success');
       } catch (error) {
         if (!current()) return;
@@ -246,8 +415,18 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: { ope
         message(why === 'conflict' ? 'The native preset changed while you were editing. Your draft is still here. Reload saved settings before trying again.' : why === 'scope-changed' ? 'The active chat or API configuration changed. Reload saved settings before saving.' : why === 'binding-not-active' ? 'The preset was saved, but its native binding could not be verified. Reload saved settings before using it.' : 'Could not finish saving native settings. Your draft is still here; try again.', 'error');
       } finally { saving = false; if (current()) lock(!loaded); }
     }
+    function refresh() {
+      if (!current() || saving || sourceLoading) return;
+      if (promptDirty || prefillDirty || samplersDirty || sourceDirty) {
+        advanced.open = true;
+        message('API configuration changed. Your unsaved prompt and generation settings are still here. Reload saved settings below before saving to the selected API configuration.', 'warning');
+        return;
+      }
+      void load();
+    }
     lock(true); void load();
+    return { refresh };
   }
   function destroy() { disposed = true; active?.modal.dismiss(); active = undefined; }
-  return { open, destroy };
+  return { open, mount, destroy };
 }

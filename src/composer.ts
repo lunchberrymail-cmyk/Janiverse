@@ -115,7 +115,13 @@ export function createComposer(ctx: SpindleFrontendContext, actions: ComposerAct
     assistMenu.hidden = which !== 'assist'; personaMenu.hidden = which !== 'persona';
     assist.setAttribute('aria-expanded', String(which === 'assist')); picker.setAttribute('aria-expanded', String(which === 'persona'));
     sync();
-    if (which === 'persona') { search.value = ''; void loadPersonas(); search.focus(); }
+    if (which === 'persona') {
+      search.value = ''; void loadPersonas();
+      // A phone user can browse personas without opening the soft keyboard.
+      // Search remains a normal tappable input; desktop keyboard flow is unchanged.
+      const coarsePointer = document.defaultView?.matchMedia?.('(pointer: coarse)').matches === true;
+      if (coarsePointer) picker.focus(); else search.focus();
+    }
     else actionButtons.find(action => !action.button.disabled)?.button.focus();
   }
   async function runAction(callback: (() => void | Promise<void>) | undefined, needsDraft: boolean) {

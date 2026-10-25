@@ -2,6 +2,7 @@ import type { SpindleFrontendContext, SpindleModalHandle } from 'lumiverse-spind
 
 type NoteRole = 'system' | 'user' | 'assistant';
 type MemorySession = { modal: SpindleModalHandle; abort: AbortController; closed: boolean };
+type MemoryOptions = { mountPromo?: (target: HTMLElement) => { destroy(): void } | undefined };
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
   const node = document.createElement(tag);
@@ -15,7 +16,7 @@ function record(value: unknown): Record<string, unknown> {
 }
 
 /** Edits the native per-chat Author's Note through the atomic metadata endpoint. */
-export function createChatMemory(ctx: SpindleFrontendContext) {
+export function createChatMemory(ctx: SpindleFrontendContext, options: MemoryOptions = {}) {
   let disposed = false;
   let active: MemorySession | undefined;
   let nextId = 0;
@@ -27,18 +28,27 @@ export function createChatMemory(ctx: SpindleFrontendContext) {
     const session: MemorySession = { modal, abort: new AbortController(), closed: false };
     active = session;
     const current = () => !disposed && !session.closed && active === session;
-    modal.root.classList.add('jb-memory');
+    let promo: { destroy(): void } | undefined;
+    modal.root.classList.add('jb-memory', 'jb-settings');
     modal.onDismiss(() => {
+      if (session.closed) return;
       session.closed = true;
       session.abort.abort();
+      promo?.destroy();
       if (active === session) active = undefined;
     });
 
+    if (options.mountPromo) {
+      const promoSlot = element('div', 'jb-memory-promo-slot'); modal.root.append(promoSlot);
+      try { promo = options.mountPromo(promoSlot); }
+      catch { promoSlot.remove(); }
+    }
+
     const suffix = `jb-memory-${++nextId}`;
-    const heading = element('h2', 'jb-memory-heading', 'Summary of this chat');
-    const help = element('p', 'jb-memory-help', draft === undefined
-      ? 'Keep important facts, relationships, and events here. Saved to this conversation’s Author’s Note.'
-      : 'Review this suggested summary. Save when you want to use it as this chat’s memory.');
+    const heading = element('h2', 'jb-memory-heading', 'Chat Memory');
+    const help = element('p', 'jb-memory-help jb-settings-intro', draft === undefined
+      ? 'Keep important facts, relationships, and events for this conversation.'
+      : 'Review this suggested summary before saving it to this conversation.');
     help.id = `${suffix}-help`;
     const label = element('label', 'jb-memory-label', 'Summary of this chat');
     const text = element('textarea', 'jb-memory-textarea');
@@ -53,7 +63,7 @@ export function createChatMemory(ctx: SpindleFrontendContext) {
     const tokens = element('span', 'jb-memory-tokens', 'Approx. 0 tokens');
     meta.append(tokens);
 
-    const advanced = element('details', 'jb-memory-advanced');
+    const advanced = element('details', 'jb-memory-advanced jb-settings-details');
     const advancedFields = element('div', 'jb-memory-advanced-fields');
     const depthField = element('label', 'jb-memory-field', 'Insertion depth');
     const depth = element('input');
@@ -76,19 +86,21 @@ export function createChatMemory(ctx: SpindleFrontendContext) {
     }
     roleField.append(role);
     advancedFields.append(depthField, roleField);
-    advanced.append(element('summary', '', 'Advanced'), advancedFields,
-      element('p', 'jb-memory-caveat', 'Uses Lumiverse’s Author’s Note. Raw/no-block prompt modes may omit it.'));
+    advanced.append(element('summary', '', 'Memory options'), advancedFields,
+      element('p', 'jb-memory-caveat', 'Saved to this conversation’s Author’s Note in Lumiverse. Raw/no-block prompt modes may omit it.'));
 
-    const status = element('p', 'jb-memory-status', 'Loading chat memory…');
+    const status = element('p', 'jb-memory-status jb-settings-status', 'Loading chat memory…');
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
-    const actions = element('div', 'jb-memory-actions');
-    const cancel = element('button', 'jb-button', 'Cancel'); cancel.type = 'button';
-    const save = element('button', 'jb-button jb-primary', 'Save'); save.type = 'button'; save.disabled = true;
+    const message = (value: string, tone = '') => { status.textContent = value; status.dataset.tone = tone; };
+    const actions = element('div', 'jb-memory-actions jb-settings-actions');
+    const cancel = element('button', 'jb-button jb-settings-cancel', 'Cancel'); cancel.type = 'button';
+    const save = element('button', 'jb-button jb-primary jb-settings-save', 'Save'); save.type = 'button'; save.disabled = true;
     const retry = element('button', 'jb-button', 'Retry'); retry.type = 'button'; retry.hidden = true;
     cancel.addEventListener('click', () => modal.dismiss());
-    actions.append(retry, cancel, save);
-    modal.root.append(heading, help, label, text, meta, advanced, status, actions);
+    actions.append(element('small', 'jb-settings-help', 'Leave empty to clear this chat’s memory.'), retry, cancel, save);
+    const content = element('section', 'jb-settings-card jb-memory-card'); content.append(label, text, meta);
+    modal.root.append(heading, help, content, advanced, status, actions);
 
     let originalNote: Record<string, unknown> = {};
     let loaded = false;
@@ -97,13 +109,14 @@ export function createChatMemory(ctx: SpindleFrontendContext) {
     text.addEventListener('input', countTokens);
     const setEditable = (enabled: boolean) => {
       text.disabled = !enabled; depth.disabled = !enabled; role.disabled = !enabled; save.disabled = !enabled;
+      modal.root.setAttribute('aria-busy', String(saving));
     };
     async function load() {
       if (!current()) return;
       loaded = false;
       setEditable(false);
       retry.hidden = true;
-      status.textContent = 'Loading chat memory…';
+      message('Loading chat memory…');
       try {
         const response = await fetch(`/api/v1/chats/${encodeURIComponent(chatId)}?messages=false`, {
           credentials: 'same-origin', signal: session.abort.signal,
@@ -119,11 +132,11 @@ export function createChatMemory(ctx: SpindleFrontendContext) {
         loaded = true;
         setEditable(true);
         countTokens();
-        status.textContent = '';
+        message('');
         text.focus();
       } catch {
         if (!current()) return;
-        status.textContent = 'Could not load chat memory. Try again.';
+        message('Could not load chat memory. Try again.', 'error');
         retry.hidden = false;
       }
     }
@@ -134,19 +147,19 @@ export function createChatMemory(ctx: SpindleFrontendContext) {
       const numericDepth = depth.valueAsNumber;
       if (!Number.isInteger(numericDepth) || numericDepth < 0 || numericDepth > 9999) {
         advanced.open = true;
-        status.textContent = 'Choose an insertion depth from 0 to 9999.';
+        message('Choose an insertion depth from 0 to 9999.', 'error');
         depth.focus();
         return;
       }
       const note = text.value.trim() ? { ...originalNote, content: text.value, depth: numericDepth, role: role.value as NoteRole } : null;
       saving = true;
       setEditable(false);
-      status.textContent = 'Saving chat memory…';
+      message('Saving chat memory…');
       try {
         const granted = await ctx.permissions.getGranted();
         if (!current()) return;
         if (!granted.includes('chats')) {
-          status.textContent = 'Enable Janiverse’s Chats permission in Extensions to save chat memory.';
+          message('Enable Janiverse’s Chats permission in Extensions to save chat memory.', 'warning');
           return;
         }
         const response = await fetch(`/api/v1/chats/${encodeURIComponent(chatId)}/metadata`, {
@@ -157,7 +170,7 @@ export function createChatMemory(ctx: SpindleFrontendContext) {
         if (!response.ok) throw new Error('save');
         if (current()) modal.dismiss();
       } catch {
-        if (current()) status.textContent = 'Could not save chat memory. Your changes are still here; try again.';
+        if (current()) message('Could not save chat memory. Your changes are still here; try again.', 'error');
       } finally {
         saving = false;
         if (current()) setEditable(true);

@@ -150,6 +150,7 @@ export function createCustomize(ctx: SpindleFrontendContext, navigation: Navigat
       finally { if (current()) { busy = writing = false; update(); } }
     }
     fillAppearance(defaultAppearance); preview(); void load(); dismiss.focus();
+    return panel;
   }
-  return { open, destroy() { disposed = true; close?.(); } };
+  return { open, close() { close?.(); }, destroy() { disposed = true; close?.(); } };
 }

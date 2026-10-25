@@ -1,6 +1,7 @@
 import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
 
 const PLAYER_ORIGIN = 'https://w.soundcloud.com';
+const BLOCKED_MESSAGE = 'In-chat playback is blocked by this Lumiverse copy. You can open the track externally.';
 const TRACK_ID = /^[1-9]\d{0,19}$/;
 const SLUG = /^[a-z\d_-]+$/i;
 const NON_TRACK_NAMES = new Set(['sets', 'tracks', 'albums', 'reposts', 'likes', 'popular-tracks', 'followers', 'following', 'comments']);
@@ -62,35 +63,110 @@ export function soundCloudWidgetUrl(track: unknown): string | null {
   return url.href;
 }
 
-/** Lightweight soundtrack link: no embedded player, SDK, remote fetch, or autoplay. */
+/** Read the enforcing HTML policies without changing them. The browser also enforces response headers. */
+export function soundCloudFrameAllowed(doc: Document = document): boolean {
+  const player = new URL('/player/', PLAYER_ORIGIN);
+  const matches = (source: string) => {
+    if (source === '*') return true;
+    if (source === "'self'") return new URL(doc.baseURI).origin === PLAYER_ORIGIN;
+    if (source === 'https:') return true;
+    if (!source.startsWith('https://')) return false;
+    try {
+      const url = new URL(source);
+      const host = url.hostname.startsWith('*.') ? player.hostname.endsWith(url.hostname.slice(1)) : url.hostname === player.hostname;
+      const path = url.pathname === '/' || (url.pathname.endsWith('/') ? player.pathname.startsWith(url.pathname) : player.pathname === url.pathname);
+      return host && url.port === player.port && path && !url.username && !url.password && !url.search && !url.hash;
+    } catch { return false; }
+  };
+  for (const meta of doc.querySelectorAll<HTMLMetaElement>('meta[http-equiv]')) {
+    if (meta.httpEquiv.toLowerCase() !== 'content-security-policy') continue;
+    const directives = new Map<string, string[]>();
+    for (const directive of meta.content.split(';')) {
+      const [name, ...sources] = directive.trim().split(/\s+/);
+      if (name && !directives.has(name.toLowerCase())) directives.set(name.toLowerCase(), sources);
+    }
+    const sources = directives.get('frame-src') ?? directives.get('child-src') ?? directives.get('default-src');
+    if (sources && !sources.some(matches)) return false;
+  }
+  return true;
+}
+
+let playerId = 0;
+
+/** The official player loads only after a click, and owns no SDK, polling, or autoplay. */
 export function createSoundCloud(ctx: SpindleFrontendContext) {
   let disposed = false, request = 0;
+  let source: { chatId: string; characterId: string; track: string; url: string; name: string } | undefined;
+  let frame: HTMLIFrameElement | undefined, headerBlocked = false;
   const cleanups: Array<() => void> = [];
   const root = el('section', 'jb-soundcloud'); root.hidden = true; root.setAttribute('aria-label', 'Character soundtrack');
   const bar = el('div', 'jb-soundcloud-bar');
   const label = el('span', 'jb-soundcloud-label', 'SoundCloud track');
-  const open = el('a', 'jb-soundcloud-open', 'Open on SoundCloud'); open.target = '_blank'; open.rel = 'noopener noreferrer'; open.referrerPolicy = 'no-referrer';
-  bar.append(label, open); root.append(bar);
+  const play = el('button', 'jb-soundcloud-play', 'Play in chat'); play.type = 'button'; play.setAttribute('aria-expanded', 'false');
+  const open = el('a', 'jb-soundcloud-open', 'Open externally'); open.target = '_blank'; open.rel = 'noopener noreferrer'; open.referrerPolicy = 'no-referrer';
+  const close = el('button', 'jb-soundcloud-close', 'Close player'); close.type = 'button'; close.hidden = true;
+  const content = el('div', 'jb-soundcloud-player'); content.id = `jb-soundcloud-player-${++playerId}`; content.hidden = true; play.setAttribute('aria-controls', content.id);
+  const status = el('p', 'jb-soundcloud-status'); status.hidden = true; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+  bar.append(label, play, open, close); root.append(bar, content, status);
 
+  function message(text: string) { status.textContent = text; status.hidden = !text; }
+  function closePlayer(focus = false) {
+    frame?.remove(); frame = undefined; content.replaceChildren(); content.hidden = true;
+    close.hidden = true; play.hidden = false; play.setAttribute('aria-expanded', 'false');
+    if (focus && !play.disabled) play.focus();
+  }
+  function updatePolicy() {
+    const allowed = !headerBlocked && soundCloudFrameAllowed(); play.disabled = !allowed;
+    play.title = allowed ? 'Load SoundCloud’s official player. Audio will not start automatically.' : 'This Lumiverse copy currently blocks SoundCloud’s embedded player.';
+    if (!allowed) { closePlayer(); message(BLOCKED_MESSAGE); }
+    else if (status.textContent === BLOCKED_MESSAGE) message('');
+    return allowed;
+  }
   function clear() {
-    root.hidden = true;
-    root.removeAttribute('title'); open.removeAttribute('href');
+    closePlayer(); source = undefined; headerBlocked = false; root.hidden = true;
+    root.removeAttribute('title'); open.removeAttribute('href'); message('');
   }
   function active() { try { return ctx.getActiveChat(); } catch { return { chatId: null, characterId: null }; } }
+  function sourceCurrent() { const snapshot = active(); return !disposed && !!source && snapshot.chatId === source.chatId && snapshot.characterId === source.characterId; }
+  play.addEventListener('click', () => {
+    if (!sourceCurrent()) { clear(); void load(); return; }
+    if (frame || !updatePolicy()) return;
+    frame = el('iframe', 'jb-soundcloud-frame'); frame.title = source!.name ? `SoundCloud soundtrack for ${source!.name}` : 'SoundCloud soundtrack';
+    frame.referrerPolicy = 'no-referrer'; frame.loading = 'eager'; frame.height = '166'; frame.width = '100%';
+    frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox');
+    frame.src = source!.url; content.append(frame); content.hidden = false; close.hidden = false; play.hidden = true; play.setAttribute('aria-expanded', 'true');
+    message('Press Play in the SoundCloud player. Close player unloads it.');
+  });
+  close.addEventListener('click', () => { closePlayer(true); message(''); updatePolicy(); });
+  open.addEventListener('click', event => { if (!sourceCurrent()) { event.preventDefault(); clear(); void load(); } });
+  root.addEventListener('keydown', event => { if (event.key === 'Escape' && frame) { event.preventDefault(); event.stopPropagation(); closePlayer(true); message(''); updatePolicy(); } });
+  const onPolicyViolation = (event: Event) => {
+    const violation = event as SecurityPolicyViolationEvent;
+    if (!frame || violation.disposition === 'report' || !['frame-src', 'child-src', 'default-src'].includes(violation.effectiveDirective)) return;
+    try { if (new URL(violation.blockedURI).origin !== PLAYER_ORIGIN) return; } catch { return; }
+    headerBlocked = true; closePlayer(); updatePolicy();
+  };
+  document.addEventListener('securitypolicyviolation', onPolicyViolation);
+  cleanups.push(() => document.removeEventListener('securitypolicyviolation', onPolicyViolation));
   async function load() {
-    const generation = ++request; clear();
+    const generation = ++request;
     if (disposed) return;
-    const snapshot = active(); if (!snapshot.chatId || !snapshot.characterId) return;
+    const snapshot = active();
+    if (!source || source.chatId !== snapshot.chatId || source.characterId !== snapshot.characterId) clear();
+    if (!snapshot.chatId || !snapshot.characterId) { clear(); return; }
     const current = () => !disposed && generation === request && active().chatId === snapshot.chatId && active().characterId === snapshot.characterId;
     try {
       const character = record(await ctx.characters.get(snapshot.characterId));
-      if (!current() || (typeof character.id === 'string' && character.id !== snapshot.characterId)) return;
-      const track = characterSoundCloudTrack(character); const url = soundCloudWidgetUrl(track); if (!url) return;
+      if (!current()) return;
+      if (typeof character.id === 'string' && character.id !== snapshot.characterId) { clear(); return; }
+      const track = characterSoundCloudTrack(character); const url = soundCloudWidgetUrl(track); if (!track || !url) { clear(); return; }
       const name = typeof character.name === 'string' ? character.name.slice(0, 200) : '';
-      open.href = track?.startsWith('https://soundcloud.com/') ? track : url;
-      root.title = 'Open character soundtrack on SoundCloud';
+      if (source && source.track !== track) clear();
+      source = { chatId: snapshot.chatId, characterId: snapshot.characterId, track, url, name };
+      open.href = track.startsWith('https://soundcloud.com/') ? track : url;
+      root.title = 'Character soundtrack on SoundCloud';
       open.setAttribute('aria-label', name ? `Open ${name} soundtrack on SoundCloud in a new tab` : 'Open character soundtrack on SoundCloud in a new tab');
-      root.setAttribute('aria-label', name ? `${name} soundtrack` : 'Character soundtrack'); root.hidden = false;
+      root.setAttribute('aria-label', name ? `${name} soundtrack` : 'Character soundtrack'); root.hidden = false; updatePolicy();
     } catch { if (current()) clear(); }
   }
   if (ctx.state?.subscribe) {
@@ -105,6 +181,7 @@ export function createSoundCloud(ctx: SpindleFrontendContext) {
   return {
     root,
     refresh() { if (!disposed) void load(); },
+    close() { if (!disposed) { closePlayer(); message(''); updatePolicy(); } },
     destroy() { if (disposed) return; disposed = true; request++; clear(); cleanups.splice(0).forEach(cleanup => cleanup()); root.remove(); },
   };
 }
