@@ -4,4 +4,6 @@ These screenshots show Lumiverse's native controls in a local test instance. Gro
 
 Keep screenshots free of API keys, private conversations, browser account details, and imported character definitions. When native controls change, update the relevant image and its matching steps, alt text, and caption in `src/feature-tutorials.ts` and `src/tutorial-screenshots.ts`.
 
+The Hone guide uses the public repository install field, the built-in Default model profile, the built-in Input Single Pass selector, and a fictional unsent draft. It does not show provider credentials or custom prompt text. No enhancement was run, and the sample draft was cleared after capture. Its captions and highlights live in `src/hone-screenshots.ts`.
+
 `bun run build` embeds these PNGs in the frontend bundle. Tutorials load them locally when opened; no image hosting or external screenshot requests are required.
