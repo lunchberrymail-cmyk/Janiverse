@@ -9,18 +9,28 @@ import cardImportCSS from './card-import.css' with { type: 'text' };
 import myChatsCSS from './my-chats.css' with { type: 'text' };
 import soundCloudCSS from './soundcloud.css' with { type: 'text' };
 import customizeCSS from './customize.css' with { type: 'text' };
+import characterCreateCSS from './character-create.css' with { type: 'text' };
+import honeCSS from './hone.css' with { type: 'text' };
+import tutorialCSS from './feature-tutorials.css' with { type: 'text' };
 import { createChatMemory } from './memory';
 import { createApiSettings } from './api-settings';
 import { createPromptSettings } from './prompt-settings';
 import { icon } from './icons';
 import { createComposer } from './composer';
 import { createComposerActions } from './composer-actions';
-import { createHomeBanner } from './home-banner';
+import { createHomeBanner, createMemoryPromo, createPresetPromo } from './home-banner';
 import { createCardImport } from './card-import';
 import { createMyChats } from './my-chats';
 import { createSoundCloud } from './soundcloud';
 import { mountCharacterProfile } from './character-profile';
 import { createCustomize } from './customize';
+import { createSettingsWindow } from './settings-window';
+import { creatorAttribution, type CreatorAttribution } from './creator-attribution';
+import { createCharacterCreate } from './character-create';
+import { createHone } from './hone';
+import { honeScreenshots } from './hone-screenshots';
+import { openFeatureTutorial, type TutorialFeature } from './feature-tutorials';
+import { tutorialScreenshots } from './tutorial-screenshots';
 
 type Character = { id: string; name: string; creator?: string; creator_notes?: string; description?: string; preview_description?: string; image_id?: string; tags?: string[]; updated_at?: number };
 type View = 'browse' | 'chats';
@@ -40,26 +50,94 @@ export function setup(ctx: SpindleFrontendContext) {
   let searchTimer: ReturnType<typeof setTimeout> | undefined, controller: AbortController | undefined;
   let libraryRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   let modal: SpindleModalHandle | undefined;
+  let tutorialWindow: ReturnType<typeof openFeatureTutorial> | undefined;
+  let tutorialRequest = 0;
   const cleanups: Array<() => void> = [];
-  const notePreviews = new Map<string, { revision: number | undefined; text: string }>();
+  const notePreviews = new Map<string, { revision: number | undefined; text: string; creator?: CreatorAttribution }>();
+  const favoriteWrites = new Map<string, boolean>();
+  let favoriteQueue = Promise.resolve();
   const mounts = [ctx.ui.mount('landing_header'), ctx.ui.mount('chat_header_left'), ctx.ui.mount('landing_hero')];
   const oldView = document.documentElement.getAttribute('data-janitor-bridge-view');
   const oldTools = document.documentElement.getAttribute('data-jb-tools');
   document.documentElement.setAttribute('data-jb-tools', 'false');
-  const memory = createChatMemory(ctx);
-  const composerActions = createComposerActions(ctx, { openMemoryDraft: (chatId, text) => memory.open(chatId, text) });
+  const settingsWindow = createSettingsWindow(ctx, {
+    hasChat: () => !!ctx.getActiveChat()?.chatId && location.pathname.startsWith('/chat/'),
+    navigate: section => {
+      if (section === 'memory') { const chatId = ctx.getActiveChat()?.chatId; if (chatId) openMemory(chatId); }
+      else if (section === 'customize') openCustomize();
+      else openApi();
+    },
+  });
+  const memory = createChatMemory(settingsWindow.context('memory'), {
+    mountPromo: target => {
+      const promo = createMemoryPromo(ctx, { invoke: async ref => {
+        const opened = await invoke(ref);
+        if (opened) settingsWindow.close();
+        return opened;
+      } });
+      target.append(promo.root);
+      return promo;
+    },
+  });
+  const composerActions = createComposerActions(ctx, { openMemoryDraft: (chatId, text) => openMemory(chatId, text) });
+  const hone = createHone(ctx, { screenshots: honeScreenshots, revealTools: () => {
+    document.documentElement.setAttribute('data-jb-tools', 'true');
+    toolsToggle.setAttribute('aria-pressed', 'true'); homeToolsToggle.setAttribute('aria-pressed', 'true');
+  } });
   const composer = createComposer(ctx, {
-    onEnhanceDraft: () => composerActions.enhanceDraft(),
+    onEnhanceDraft: () => hone.enhanceDraft(),
     onWriteForMe: () => composerActions.writeForMe(),
     onSummarize: () => composerActions.summarizeChat(),
   });
-  const promptSettings = createPromptSettings(ctx, { openConnection: () => apiSettings.open() });
-  const apiSettings = createApiSettings(ctx, {
-    openInstructions: () => promptSettings.open('prompt'),
-    openGeneration: () => promptSettings.open('generation'),
+  const promptSettings = createPromptSettings(settingsWindow.context('settings'), {
+    openConnection: openApi,
+    openPresetManager: () => {
+      void invoke({ kind: 'drawer_tab', id: 'loom' }).then(opened => {
+        if (opened) settingsWindow.close();
+      });
+    },
+    openIllarinSettings: () => {
+      void invoke({ kind: 'settings_tab', id: 'illarin' }, { anchorId: 'setsec-illarin-general' }).then(opened => {
+        if (opened) settingsWindow.close();
+      });
+    },
+  });
+  const apiSettings = createApiSettings(settingsWindow.context('settings'), {
+    openInstructions: () => openPrompt('prompt'),
+    openGeneration: () => openPrompt('generation'),
+    openNativeConnections: () => { void invoke({ kind: 'drawer_tab', id: 'connections' }); },
+    mountPreferences: target => {
+      const preferences = promptSettings.mount(target);
+      const footer = target.querySelector<HTMLElement>('.jb-prompt-settings-inline > .jb-settings-actions');
+      const apiRoot = target.closest<HTMLElement>('.jb-api-settings');
+      let footerObserver: MutationObserver | undefined;
+      if (footer) {
+        footer.classList.add('jb-settings-window-footer', 'jb-settings');
+        const savePreferences = footer.querySelector<HTMLButtonElement>('.jb-settings-save');
+        if (savePreferences) savePreferences.textContent = 'Save prompt & generation';
+        target.closest('.jb-settings-window-root')?.append(footer);
+        if (apiRoot && typeof MutationObserver === 'function') {
+          const syncFooter = () => { footer.inert = apiRoot.getAttribute('aria-busy') === 'true'; };
+          footerObserver = new MutationObserver(syncFooter);
+          footerObserver.observe(apiRoot, { attributes: true, attributeFilter: ['aria-busy'] });
+          syncFooter();
+        }
+      }
+      const promo = createPresetPromo(ctx);
+      target.parentElement?.prepend(promo.root);
+      return { refresh() { preferences.refresh(); }, destroy() { footerObserver?.disconnect(); preferences.destroy(); promo.destroy(); footer?.remove(); } };
+    },
     onApplied: () => { void refreshConnection(); },
   });
-  const customize = createCustomize(ctx, { settings: () => promptSettings.open('generation'), memory: chatId => memory.open(chatId) });
+  const customize = createCustomize(ctx, { settings: () => openPrompt('generation'), memory: chatId => openMemory(chatId) });
+  function openApi() { apiSettings.open(); }
+  function openPrompt(tab: 'prompt' | 'generation') { promptSettings.open(tab); }
+  function openMemory(chatId: string, draft?: string) { memory.open(chatId, draft); }
+  function openCustomize() {
+    settingsWindow.dismissEditor();
+    const panel = customize.open();
+    if (panel) settingsWindow.adoptCustomize(panel, () => customize.close());
+  }
   const cardImport = createCardImport(ctx, {
     onImported: () => { offset = 0; void loadCharacters(); },
     openCharacter: id => {
@@ -69,6 +147,16 @@ export function setup(ctx: SpindleFrontendContext) {
       }).catch(() => { if (!disposed) status.textContent = 'Could not open the imported character. It is saved in your character library.'; });
     },
   });
+  const characterCreate = createCharacterCreate(ctx, {
+    onCreated: () => { offset = 0; void loadCharacters(); },
+    openCharacter: id => {
+      void ctx.characters.get(id).then(value => {
+        const character = payload(value);
+        if (!disposed && typeof character.id === 'string' && typeof character.name === 'string') preview(character as Character);
+      }).catch(() => { if (!disposed) status.textContent = 'Your character is saved. Open it from the character library.'; });
+    },
+  });
+  cleanups.push(ctx.dom.addStyle(characterCreateCSS), ctx.dom.addStyle(honeCSS), ctx.dom.addStyle(tutorialCSS));
   cleanups.push(ctx.dom.addStyle(themeCSS), ctx.dom.addStyle(layoutCSS), ctx.dom.addStyle(uiCSS), ctx.dom.addStyle(settingsCSS), ctx.dom.addStyle(composerCSS), ctx.dom.addStyle(homeBannerCSS), ctx.dom.addStyle(cardImportCSS), ctx.dom.addStyle(myChatsCSS), ctx.dom.addStyle(soundCloudCSS), ctx.dom.addStyle(customizeCSS));
   const status = el('p', 'jb-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   const navButtons: Array<{ node: HTMLButtonElement; view: View }> = [];
@@ -85,7 +173,15 @@ export function setup(ctx: SpindleFrontendContext) {
     else if (jar) void invoke({ kind: 'drawer_tab', id: jar.id });
     else cardImport.open();
   }
+  function openTutorial(feature: TutorialFeature) {
+    tutorialWindow?.destroy();
+    const request = ++tutorialRequest;
+    tutorialWindow = openFeatureTutorial(ctx, feature, { invoke, openImport, screenshots: tutorialScreenshots,
+      onClose: () => { if (request === tutorialRequest) tutorialWindow = undefined; },
+    });
+  }
   function setView(next: View, navigate = true) {
+    soundCloud.close();
     view = next; document.documentElement.setAttribute('data-janitor-bridge-view', view);
     navButtons.forEach(({ node, view: target }) => {
       node.classList.toggle('jb-selected', target === view); node.setAttribute('aria-current', target === view ? 'page' : 'false');
@@ -103,9 +199,9 @@ export function setup(ctx: SpindleFrontendContext) {
   for (const [label, action] of [
     ['Import characters', openImport],
     ['Import card file or link', () => cardImport.open()],
-    ['API Settings', () => apiSettings.open()],
-    ['Prompt', () => promptSettings.open('prompt')],
-    ['Generation Settings', () => promptSettings.open('generation')],
+    ['API Settings', openApi],
+    ['Prompt', () => openPrompt('prompt')],
+    ['Generation Settings', () => openPrompt('generation')],
   ] as const) menu.append(button(label, () => { more.open = false; action(); }, 'jb-menu-link'));
   for (const [label, id] of [['My Personas', 'personas'], ['Advanced Presets', 'loom'], ['Lorebooks', 'lorebook'], ['Extensions', 'spindle']]) {
     menu.append(button(label, () => { more.open = false; void invoke({ kind: 'drawer_tab', id }); }, 'jb-menu-link'));
@@ -117,26 +213,26 @@ export function setup(ctx: SpindleFrontendContext) {
   }
   const homeToolsToggle = button('Lumiverse tools', toggleTools, 'jb-menu-link'); homeToolsToggle.setAttribute('aria-pressed', 'false'); menu.append(homeToolsToggle);
   more.append(moreLabel, menu);
-  const create = button('Create a Character', () => { void invoke({ kind: 'drawer_tab', id: 'characters' }); }, 'jb-create-link');
+  const create = button('Create a Character', () => characterCreate.open(), 'jb-create-link');
   masthead.append(nav); mounts[0].append(masthead);
 
   const chatHeader = el('header', 'jb-chat-header');
   const chatBar = el('div', 'jb-chat-bar'); const chatRight = el('div', 'jb-chat-right');
   const back = button('‹ Back', () => setView('chats'), 'jb-back');
-  const api = button('API Settings', () => apiSettings.open(), 'jb-api-status'); api.setAttribute('aria-label', 'API Settings');
-  const memoryButton = button('Chat Memory', () => { const chatId = ctx.getActiveChat()?.chatId; if (chatId) memory.open(chatId); }, 'jb-memory-button');
+  const api = button('API Settings', openApi, 'jb-api-status'); api.setAttribute('aria-label', 'API Settings');
+  const memoryButton = button('Chat Memory', () => { const chatId = ctx.getActiveChat()?.chatId; if (chatId) openMemory(chatId); }, 'jb-memory-button');
   const chatMenu = el('details', 'jb-more jb-chat-menu'); const chatMenuLabel = el('summary', '', '☰'); chatMenuLabel.setAttribute('aria-label', 'Chat menu');
   chatMenuLabel.replaceChildren(icon('menu'));
   const chatMenuItems = el('div', 'jb-more-menu');
   const chatAction = (label: string, action: () => void, picture: Parameters<typeof icon>[0]) => {
     const item = button(label, () => { chatMenu.open = false; action(); }, 'jb-menu-link'); item.prepend(icon(picture)); chatMenuItems.append(item);
   };
-  chatAction('Settings', () => promptSettings.open('generation'), 'settings');
-  chatAction('Chat Memory', () => { const chatId = ctx.getActiveChat()?.chatId; if (chatId) memory.open(chatId); }, 'memory');
-  chatAction('Customize', () => customize.open(), 'customize');
+  chatAction('Settings', openApi, 'settings');
+  chatAction('Chat Memory', () => { const chatId = ctx.getActiveChat()?.chatId; if (chatId) openMemory(chatId); }, 'memory');
+  chatAction('Customize', openCustomize, 'customize');
   chatAction('New Chat', () => { const characterId = ctx.getActiveChat()?.characterId; if (characterId) void invoke({ kind: 'entity_action', id: 'character_chat' }, { characterId, mode: 'new' }); }, 'new-chat');
   chatAction('All Chats', () => setView('chats'), 'all-chats');
-  chatAction('Prompt', () => promptSettings.open('prompt'), 'prompt');
+  chatAction('Prompt', () => openPrompt('prompt'), 'prompt');
   chatAction('My Persona', () => { void invoke({ kind: 'drawer_tab', id: 'personas' }); }, 'persona');
   const toolsToggle = button('Lumiverse tools', () => { toggleTools(); chatMenu.open = false; }, 'jb-menu-link'); toolsToggle.prepend(icon('tools')); toolsToggle.setAttribute('aria-pressed', 'false'); chatMenuItems.append(toolsToggle);
   chatMenu.append(chatMenuLabel, chatMenuItems); chatRight.append(api, memoryButton, chatMenu); chatBar.append(back, chatRight);
@@ -156,7 +252,7 @@ export function setup(ctx: SpindleFrontendContext) {
   function renderConnection(connection: Record<string, unknown>) {
     const model = typeof connection.model === 'string' ? connection.model : '';
     const provider = typeof connection.provider === 'string' ? connection.provider : '';
-    const providerNames: Record<string, string> = { custom: 'proxy', openai: 'OpenAI', openrouter: 'OpenRouter', google_vertex: 'Vertex', google: 'Gemini', anthropic: 'Claude' };
+    const providerNames: Record<string, string> = { custom: 'proxy', openai: 'OpenAI', openrouter: 'OpenRouter', nanogpt: 'NanoGPT', google_vertex: 'Vertex', google: 'Gemini', anthropic: 'Claude', deepseek: 'DeepSeek', zai: 'Z.AI', chutes: 'Chutes' };
     api.textContent = model || provider ? `using ${providerNames[provider] || provider || 'API'}` : 'API not ready · Set up';
     api.classList.toggle('jb-api-missing', !model && !provider);
     api.title = model || provider ? `API Settings: ${provider}${model ? ` / ${model}` : ''}` : 'Choose a provider and model';
@@ -182,12 +278,13 @@ export function setup(ctx: SpindleFrontendContext) {
     } catch { /* The settings dialog reports unavailable saved configurations. */ }
   }
   const home = el('section', 'jb-home'); home.setAttribute('aria-label', 'Character browsing');
-  const homeBanner = createHomeBanner(ctx, { invoke, openImport }); home.append(homeBanner.root);
+  const homeBanner = createHomeBanner(ctx, { invoke, openImport, openTutorial }); home.append(homeBanner.root);
   const recentSection = el('section', 'jb-recent-section'); const recentHeading = el('div', 'jb-section-heading');
   recentHeading.append(el('h2', '', 'My chats'), button('View all →', () => setView('chats'), 'jb-text-button'));
   const recent = el('div', 'jb-recent'); recentSection.append(recentHeading, recent); home.append(recentSection);
   const heading = el('div', 'jb-browse-heading'); const title = el('div');
   const browseTitle = el('h2', '', 'All Characters'); title.append(el('div', 'jb-eyebrow', 'CHARACTERS'), browseTitle);
+  title.append(el('p', 'jb-browse-help', 'Your saved character cards, including cards you haven’t chatted with yet.'));
   heading.append(title);
   const tools = el('div', 'jb-tools'); const filters = el('div', 'jb-filters'); filters.setAttribute('role', 'group'); filters.setAttribute('aria-label', 'Filter characters');
   const allButton = button('All characters', () => chooseFilter('all'), 'jb-filter jb-selected');
@@ -196,9 +293,12 @@ export function setup(ctx: SpindleFrontendContext) {
   const searchLabel = el('label', 'jb-search'); searchLabel.append(el('span', 'jb-sr-only', 'Search characters'));
   const search = el('input'); search.type = 'search'; search.placeholder = 'Search for characters or creators…'; search.maxLength = 256; searchLabel.append(search);
   const sort = el('select', 'jb-sort'); sort.setAttribute('aria-label', 'Sort characters');
-  for (const [value, text] of [['recent', 'Recently active'], ['name', 'Name A–Z'], ['created', 'Newest added']]) { const option = el('option', '', text); option.value = value; sort.append(option); }
+  for (const [value, text] of [['created', 'Newest added'], ['name', 'Name A–Z']]) { const option = el('option', '', text); option.value = value; sort.append(option); }
   masthead.append(searchLabel, create, more); heading.append(sort); tools.append(filters); home.append(tools, heading);
   const grid = el('div', 'jb-grid'); const count = el('p', 'jb-count');
+  let cardCleanups: Array<() => void> = [];
+  function disposeCards() { const previous = cardCleanups; cardCleanups = []; previous.forEach(cleanup => cleanup()); }
+  cleanups.push(disposeCards);
   const paging = el('div', 'jb-paging'); const pageLabel = el('span');
   const previous = button('← Previous', () => { offset = Math.max(0, offset - pageSize); void loadCharacters(); });
   const next = button('Next →', () => { offset += pageSize; void loadCharacters(); }); paging.append(previous, pageLabel, next);
@@ -217,38 +317,59 @@ export function setup(ctx: SpindleFrontendContext) {
     }
     void loadCharacters();
   }
-  const favorites = () => { const value = ctx.state?.get('characters.favorites'); return Array.isArray(value) ? value as string[] : []; };
+  const favorites = () => {
+    const value = ctx.state?.get('characters.favorites'); const ids = new Set<string>(Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []);
+    for (const [id, added] of favoriteWrites) { if (added) ids.add(id); else ids.delete(id); }
+    return [...ids];
+  };
+  function renderCreator(target: HTMLElement, creator?: CreatorAttribution) {
+    target.replaceChildren();
+    if (!creator) { target.textContent = 'Creator not recorded'; return; }
+    const name = creator.name === 'Creator profile' || creator.name.startsWith('@') ? creator.name : `@${creator.name}`;
+    if (!creator.profileUrl) { target.textContent = name; return; }
+    const link = el('a', '', name); link.href = creator.profileUrl; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.setAttribute('aria-label', `View creator ${creator.name}`); target.append(link);
+  }
   function notePreview(value: string) {
     const text = plain(value.replace(/<\/?(?:p|div|h[1-6]|br|li|ul|ol|blockquote|hr)\b[^>]*>/gi, ' '));
     return text ? text.slice(0, 230) + (text.length > 230 ? '…' : '') : 'No creator’s note.';
   }
   function renderCards(characters: Character[], generation = request) {
-    grid.replaceChildren();
-    const pending: Array<{ character: Character; node: HTMLElement }> = [];
+    disposeCards(); grid.replaceChildren();
+    const pending: Array<{ character: Character; node: HTMLElement; creator: HTMLElement }> = [];
     for (const character of characters) {
-      const card = button('', () => preview(character), 'jb-card'); card.setAttribute('aria-label', `View ${character.name}`);
-      const portrait = el('div', 'jb-portrait');
+      const card = el('article', 'jb-card'); card.dataset.characterId = character.id; card.setAttribute('aria-label', character.name);
+      card.addEventListener('click', event => { if (!(event.target as Element).closest?.('button,a,input,select,textarea,summary')) preview(character); });
+      const portrait = button('', () => preview(character), 'jb-portrait jb-card-open'); portrait.setAttribute('aria-label', `Read Creator’s Notes for ${character.name}`);
       if (character.image_id) { const img = el('img'); img.src = `/api/v1/images/${encodeURIComponent(character.image_id)}?size=lg`; img.alt = ''; img.loading = 'lazy'; img.addEventListener('error', () => img.remove()); portrait.append(img); }
       portrait.append(el('span', 'jb-avatar-fallback', character.name.slice(0, 1).toUpperCase()));
-      if (favorites().includes(character.id)) portrait.append(el('span', 'jb-favorite', '♥'));
-      portrait.append(el('span', 'jb-card-cta', 'View character →'));
-      const cardTitle = el('h3', 'jb-card-name', character.name);
-      const info = el('div', 'jb-card-info'); info.append(el('p', 'jb-creator', character.creator ? `@${character.creator}` : 'Your library'));
+      portrait.append(el('span', 'jb-card-cta', 'Read Creator’s Notes →'));
+      const cardTitle = el('h3', 'jb-card-name'); cardTitle.append(button(character.name, () => preview(character), 'jb-card-title'));
+      const media = el('div', 'jb-card-media');
+      const cardStatus = el('p', 'jb-card-status'); cardStatus.setAttribute('role', 'status');
+      const favorite = favoriteControl(character.id, {
+        isCurrent: () => generation === request && view === 'browse' && card.isConnected,
+        onDispose: cleanup => { cardCleanups.push(cleanup); },
+      }, cardStatus, character.name);
+      favorite.classList.add('jb-card-favorite'); media.append(portrait, favorite);
+      const info = el('div', 'jb-card-info'); const creator = el('p', 'jb-creator'); info.append(creator);
       const cached = notePreviews.get(character.id);
+      const freshCache = cached?.revision === character.updated_at ? cached : undefined;
+      renderCreator(creator, freshCache?.creator ?? creatorAttribution(character));
       const note = el('p', 'jb-description');
       note.setAttribute('aria-label', 'Creator’s note');
       if (typeof character.creator_notes === 'string') note.textContent = notePreview(character.creator_notes);
-      else if (cached && cached.revision === character.updated_at) note.textContent = cached.text;
-      else { note.textContent = 'Loading creator’s note…'; pending.push({ character, node: note }); }
-      info.append(note);
+      else if (freshCache) note.textContent = freshCache.text;
+      else note.textContent = 'Loading creator’s note…';
+      if (!freshCache && (typeof character.creator_notes !== 'string' || !creatorAttribution(character)?.profileUrl)) pending.push({ character, node: note, creator });
+      info.append(note, cardStatus);
       const tags = el('div', 'jb-tags'); for (const tag of (character.tags || []).slice(0, 4)) tags.append(el('span', '', tag)); info.append(tags);
-      card.append(cardTitle, portrait, info); grid.append(card);
+      card.append(cardTitle, media, info); grid.append(card);
     }
     if (!characters.length) {
-      const empty = el('div', 'jb-empty'); empty.append(el('h3', '', 'No characters found'), el('p', '', filter === 'favorites' ? 'Characters you favorite in Lumiverse appear here.' : search.value ? 'Try another name, creator, or description.' : 'Add a character to start your first conversation.'), button('Open character library', () => { void invoke({ kind: 'drawer_tab', id: 'characters' }); })); grid.append(empty);
+      const empty = el('div', 'jb-empty'); empty.append(el('h3', '', 'No character cards found'), el('p', '', filter === 'favorites' ? 'Character cards you favorite in Lumiverse appear here.' : search.value ? 'Try another name, creator, or description.' : 'Create or import a character card to add it to your library.'), button('Open character library', () => { void invoke({ kind: 'drawer_tab', id: 'characters' }); })); grid.append(empty);
     }
-    // The native summary DTO omits creator_notes. Read only this page, with a
-    // bounded pool, and retain short previews until a revision/library change.
+    // Summary DTOs can omit notes and creator provenance. Read only this page,
+    // with one bounded pool, and cache both until a revision/library change.
     const current = () => !disposed && generation === request && view === 'browse';
     void Promise.all(Array.from({ length: Math.min(4, pending.length) }, async () => {
       while (current()) {
@@ -257,11 +378,13 @@ export function setup(ctx: SpindleFrontendContext) {
           const value = payload(await ctx.characters.get(item.character.id));
           if (!current()) return;
           if (value.id !== item.character.id) throw new Error('Wrong character');
-          const text = notePreview(typeof value.creator_notes === 'string' ? value.creator_notes : '');
-          notePreviews.set(item.character.id, { revision: item.character.updated_at, text });
+          const text = notePreview(typeof value.creator_notes === 'string' ? value.creator_notes : item.character.creator_notes ?? '');
+          const creator = creatorAttribution(value) ?? creatorAttribution(item.character);
+          notePreviews.set(item.character.id, { revision: item.character.updated_at, text, creator });
           if (notePreviews.size > 200) notePreviews.delete(notePreviews.keys().next().value!);
           if (item.node.isConnected) item.node.textContent = text;
-        } catch { if (current() && item.node.isConnected) item.node.textContent = 'Creator’s note unavailable.'; }
+          if (item.creator.isConnected) renderCreator(item.creator, creator);
+        } catch { if (current() && item.node.isConnected && typeof item.character.creator_notes !== 'string') item.node.textContent = 'Creator’s note unavailable.'; }
       }
     }));
   }
@@ -280,12 +403,12 @@ export function setup(ctx: SpindleFrontendContext) {
         total = typeof result.total === 'number' ? result.total : characters.length; renderCards(characters);
       }
       if (disposed || generation !== request) return;
-      count.textContent = `${total} character${total === 1 ? '' : 's'}${filter === 'favorites' ? ' in favorites' : ' in your library'}`;
-      pageLabel.textContent = total ? `${offset + 1}–${Math.min(offset + pageSize, total)} of ${total}` : '0 characters';
+      count.textContent = `${total} ${filter === 'favorites' ? 'favorite' : 'saved'} character card${total === 1 ? '' : 's'}`;
+      pageLabel.textContent = total ? `${offset + 1}–${Math.min(offset + pageSize, total)} of ${total}` : '0 character cards';
       paging.hidden = total <= pageSize; previous.disabled = offset === 0; next.disabled = offset + pageSize >= total;
     } catch (error) {
       if (disposed || generation !== request || (error as Error).name === 'AbortError') return;
-      grid.replaceChildren(); status.replaceChildren(document.createTextNode('Could not load characters. '), button('Retry', () => { void loadCharacters(); })); count.textContent = ''; paging.hidden = true;
+      disposeCards(); grid.replaceChildren(); status.replaceChildren(document.createTextNode('Could not load character cards. '), button('Retry', () => { void loadCharacters(); })); count.textContent = ''; paging.hidden = true;
     } finally { if (!disposed && generation === request) grid.setAttribute('aria-busy', 'false'); }
   }
   let recentRequest = 0;
@@ -309,54 +432,80 @@ export function setup(ctx: SpindleFrontendContext) {
       }
     } catch { if (!disposed && generation === recentRequest) recentSection.hidden = true; }
   }
+  function favoriteControl(characterId: string, owner: { isCurrent: () => boolean; onDispose: (cleanup: () => void) => void }, localStatus: HTMLElement, cardName?: string) {
+    const toggle = button('Favorite', () => { void save(); });
+    const abort = new AbortController(); let closed = false, busy = false;
+    const current = () => !disposed && !closed && owner.isCurrent();
+    function render() {
+      const added = favorites().includes(characterId); toggle.textContent = cardName ? added ? '♥' : '♡' : added ? 'Favorited' : 'Favorite';
+      toggle.setAttribute('aria-pressed', String(added)); toggle.title = added ? 'Remove from favorites' : 'Add to favorites'; toggle.disabled = busy;
+      if (cardName) toggle.setAttribute('aria-label', added ? `Remove ${cardName} from favorites` : `Favorite ${cardName}`);
+    }
+    async function save() {
+      if (!current() || busy) return;
+      const added = !favorites().includes(characterId); busy = true; render(); localStatus.textContent = 'Saving favorite…';
+      const previousWrite = favoriteQueue; let release!: () => void;
+      favoriteQueue = new Promise<void>(resolve => { release = resolve; });
+      try {
+        await previousWrite; if (!current()) return;
+        // Re-read the authenticated native preference before merging so unrelated
+        // favorites saved from another surface are not replaced by our snapshot.
+        const response = await fetch('/api/v1/settings/favorites', { credentials: 'same-origin', signal: abort.signal });
+        if (!current()) return;
+        if (!response.ok && response.status !== 404) throw new Error('read');
+        const previous: unknown = response.status === 404 ? [] : payload(await response.json()).value;
+        if (!current()) return;
+        if (!Array.isArray(previous) || previous.some(id => typeof id !== 'string')) throw new Error('invalid favorites');
+        const next = added ? [...new Set([...previous, characterId])] : previous.filter(id => id !== characterId);
+        if (JSON.stringify(next) !== JSON.stringify(previous)) {
+          const saved = await fetch('/api/v1/settings/favorites', { method: 'PUT', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: next }) });
+          if (!saved.ok) throw new Error('save');
+        }
+        if (!current()) return;
+        // Only bridge the short gap until SETTINGS_UPDATED refreshes the host's
+        // characters.favorites selector. Persistence belongs to Lumiverse.
+        favoriteWrites.set(characterId, added);
+        localStatus.textContent = added ? 'Added to favorites.' : 'Removed from favorites.';
+        offset = 0; if (view === 'browse') void loadCharacters();
+      } catch { if (current()) localStatus.textContent = 'Could not save this favorite. Please try again.'; }
+      finally { release(); busy = false; if (current()) render(); }
+    }
+    const stop = ctx.state?.subscribe('characters.favorites', render);
+    owner.onDispose(() => { closed = true; abort.abort(); stop?.(); });
+    render(); return toggle;
+  }
   function openProfile(characterId: string, name = 'Character profile') {
     modal?.dismiss(); modal = ctx.ui.showModal({ title: name, width: 720, maxHeight: 800 });
     const current = modal; current.root.classList.add('jb-preview', 'jb-profile-window');
     const actions = el('div', 'jb-preview-actions'); const localStatus = el('p', 'jb-status'); localStatus.setAttribute('role', 'status');
-    const chat = button('Chat with this character', () => {
+    const canStartChat = ctx.host.surfaces?.list(['entity_action']).some(s => s.id === 'character_chat' && s.invocable !== false) ?? false;
+    const chat = button('Start new chat', () => {
+      if (!canStartChat || chat.disabled) return;
       chat.disabled = true;
-      void invoke({ kind: 'entity_action', id: 'character_chat' }, { characterId, mode: 'latest' }).then(ok => {
+      void invoke({ kind: 'entity_action', id: 'character_chat' }, { characterId, mode: 'new' }).then(ok => {
+        if (disposed || modal !== current) return;
         chat.disabled = false; if (ok) current.dismiss(); else localStatus.textContent = 'Enable the extension’s Chats permission in Extensions to start chats here.';
       });
-    }, 'jb-button jb-primary');
-    chat.disabled = !ctx.host.surfaces?.list(['entity_action']).some(s => s.id === 'character_chat' && s.invocable !== false);
-    const edit = button('Edit character', () => {
+    });
+    chat.disabled = !canStartChat;
+    if (!canStartChat) localStatus.textContent = 'Starting a chat needs the extension’s Chats permission. You can still read and favorite this card.';
+    const edit = button('Edit card', () => {
       edit.disabled = true;
       void invoke({ kind: 'modal', id: 'character_editor' }, { id: characterId }).then(ok => {
+        if (disposed || modal !== current) return;
         edit.disabled = false; if (ok) current.dismiss(); else localStatus.textContent = 'Could not open the character editor. Your profile is still available here.';
       });
     });
     edit.disabled = !ctx.host.surfaces?.list(['modal']).some(s => s.id === 'character_editor' && s.invocable !== false);
-    actions.append(chat, edit, button('Close', () => current.dismiss()));
-    const body = el('div'); current.root.append(actions, localStatus, body);
+    actions.append(favoriteControl(characterId, { isCurrent: () => modal === current, onDispose: cleanup => { current.onDismiss(cleanup); } }, localStatus), edit, button('Close', () => current.dismiss()));
+    const body = el('div', 'jb-preview-body'); const chatActions = el('div', 'jb-profile-chat-actions'); chatActions.append(chat);
+    current.root.append(body, actions, localStatus, chatActions);
     const cleanup = mountCharacterProfile(ctx, body, characterId);
     current.onDismiss(() => { cleanup(); if (modal === current) modal = undefined; });
   }
   function preview(character: Character) {
-    modal?.dismiss(); modal = ctx.ui.showModal({ title: character.name, width: 620, maxHeight: 760 });
-    const current = modal; current.root.classList.add('jb-preview');
-    const actions = el('div', 'jb-preview-actions'); const previewStatus = el('p', 'jb-status'); previewStatus.setAttribute('role', 'status');
-    const canStartChat = ctx.host.surfaces?.list(['entity_action']).some(s => s.id === 'character_chat' && s.invocable !== false) ?? false;
-    function openChat(mode: 'latest' | 'new') {
-      if (!canStartChat || chat.disabled) return;
-      chat.disabled = true;
-      void invoke({ kind: 'entity_action', id: 'character_chat' }, { characterId: character.id, mode }).then(ok => {
-        chat.disabled = false; if (ok) current.dismiss(); else previewStatus.textContent = 'Enable the extension’s Chats permission in Extensions to start chats here.';
-      });
-    }
-    const chat = button('Chat with this character', () => openChat('latest'), 'jb-button jb-primary');
-    if (!canStartChat) { chat.disabled = true; previewStatus.textContent = 'Opening a new chat here needs the extension’s Chats permission. Existing chats below remain available.'; }
-    actions.append(chat, button('View profile', () => openProfile(character.id, character.name)));
-    const body = el('div', 'jb-preview-body'); current.root.append(actions, previewStatus, body);
-    if (ctx.components.listHostSurfaces().some(s => s.id === 'character_preview_panel')) {
-      const surface = ctx.components.mountHostSurface(body, 'character_preview_panel', { characterId: character.id, imageHeight: 280 });
-      surface.on('close', () => current.dismiss());
-      surface.on('edit', () => { void invoke({ kind: 'modal', id: 'character_editor' }, { id: character.id }).then(ok => { if (ok) current.dismiss(); else previewStatus.textContent = 'Could not open the character editor.'; }); });
-      surface.on('openChat', value => { const data = payload(value); if (typeof data.chatId === 'string') { current.dismiss(); void invoke({ kind: 'route', id: '/chat/:chatId' }, { chatId: data.chatId }); } else openChat('new'); });
-      surface.on('openWorldBook', () => { current.dismiss(); void invoke({ kind: 'drawer_tab', id: 'lorebook' }); });
-      current.onDismiss(() => surface.destroy());
-    } else body.append(el('p', '', plain(character.description) || 'No description.'));
-    current.onDismiss(() => { if (modal === current) modal = undefined; });
+    openProfile(character.id, character.name);
   }
   search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { offset = 0; void loadCharacters(); }, 200); });
   sort.addEventListener('change', () => { offset = 0; void loadCharacters(); });
@@ -369,10 +518,11 @@ export function setup(ctx: SpindleFrontendContext) {
       }));
     }
   }
-  if (ctx.state) cleanups.push(ctx.state.subscribe('characters.favorites', () => { offset = 0; if (view === 'browse') void loadCharacters(); }));
+  if (ctx.state) cleanups.push(ctx.state.subscribe('characters.favorites', () => { favoriteWrites.clear(); offset = 0; if (view === 'browse') void loadCharacters(); }));
   if (ctx.state) cleanups.push(ctx.state.subscribe('chat.active', () => { void refreshChatHeader(); void refreshConnection(); }), ctx.state.subscribe('connections.active', () => { void refreshConnection(); }));
-  let lastHome = location.pathname === '/';
+  let lastPath = location.pathname, lastHome = lastPath === '/';
   const routeTimer = setInterval(() => {
+    if (location.pathname !== lastPath) { settingsWindow.syncRoute(); if (!location.pathname.startsWith('/chat/')) soundCloud.close(); lastPath = location.pathname; }
     const atHome = location.pathname === '/';
     if (atHome && !lastHome) {
       if (view === 'chats') myChats.activate();
@@ -383,7 +533,7 @@ export function setup(ctx: SpindleFrontendContext) {
   setView('browse', false);
   void refreshChatHeader(); refreshConnection();
   return () => {
-    disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; notePreviews.clear(); controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); composerActions.destroy(); memory.destroy(); apiSettings.destroy(); promptSettings.destroy();
+    disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); tutorialWindow?.destroy(); characterCreate.destroy(); hone.destroy(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); composerActions.destroy(); memory.destroy(); apiSettings.destroy(); promptSettings.destroy(); settingsWindow.destroy();
     cleanups.reverse().forEach(cleanup => cleanup()); mounts.forEach(root => root.replaceChildren());
     if (oldView === null) document.documentElement.removeAttribute('data-janitor-bridge-view'); else document.documentElement.setAttribute('data-janitor-bridge-view', oldView);
     if (oldTools === null) document.documentElement.removeAttribute('data-jb-tools'); else document.documentElement.setAttribute('data-jb-tools', oldTools);

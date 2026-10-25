@@ -3,6 +3,8 @@ import type { SpindleFrontendContext, SpindleModalHandle } from 'lumiverse-spind
 export type ApiSettingsNavigation = {
   openInstructions?: () => void;
   openGeneration?: () => void;
+  openNativeConnections?: () => void;
+  mountPreferences?: (target: HTMLElement) => { destroy(): void; refresh?(): void };
   onApplied?: () => void;
 };
 type Profile = { id: string; name: string; provider: string; api_url: string; model: string; has_api_key: boolean; is_default: boolean };
@@ -15,10 +17,15 @@ type NativeConnections = {
   setActiveAcknowledged?: (id: string | null) => void | Promise<void>;
   setActive?: (id: string | null) => void | Promise<void>;
 };
-const providers = [
-  { id: 'openai', label: 'OpenAI', url: 'https://api.openai.com/v1' },
-  { id: 'openrouter', label: 'OpenRouter', url: 'https://openrouter.ai/api/v1' },
-  { id: 'custom', label: 'Proxy / Custom', url: '' },
+type Provider = { id: string; label: string; url: string; keyRequired: boolean; simple: boolean };
+// These use Lumiverse's ordinary API-key/base-URL profile fields. Providers
+// with regional credentials or other setup remain in its native editor.
+const simpleProviders = new Set(['openai', 'anthropic', 'google', 'openrouter', 'deepseek', 'chutes', 'nanogpt', 'zai', 'moonshot', 'mistral', 'ai21', 'perplexity', 'groq', 'xai', 'electronhub', 'fireworks', 'pollinations_text', 'pollinations', 'siliconflow', 'infermatic', 'custom']);
+const fallbackProviders: Provider[] = [
+  { id: 'openai', label: 'OpenAI', url: 'https://api.openai.com/v1', keyRequired: true, simple: true },
+  { id: 'openrouter', label: 'OpenRouter', url: 'https://openrouter.ai/api/v1', keyRequired: true, simple: true },
+  { id: 'nanogpt', label: 'NanoGPT', url: 'https://nano-gpt.com/api/v1', keyRequired: true, simple: true },
+  { id: 'custom', label: 'Proxy / Custom', url: '', keyRequired: false, simple: true },
 ];
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
   const result = document.createElement(tag); result.className = className; result.textContent = text; return result;
@@ -30,8 +37,22 @@ function profile(value: unknown): Profile | null {
   return { id: row.id, name: row.name, provider: row.provider, api_url: typeof row.api_url === 'string' ? row.api_url : '',
     model: typeof row.model === 'string' ? row.model : '', has_api_key: row.has_api_key === true, is_default: row.is_default === true };
 }
-function endpoint(value: string, providerId: string) {
-  const candidate = value.trim() || providers.find(p => p.id === providerId)?.url || '';
+function providerCatalog(value: unknown): Provider[] {
+  const rows = object(value).providers;
+  if (!Array.isArray(rows)) return [...fallbackProviders];
+  const seen = new Set<string>();
+  const result: Provider[] = [];
+  for (const item of rows) {
+    const row = object(item);
+    if (typeof row.id !== 'string' || !row.id.trim() || typeof row.name !== 'string' || !row.name.trim() || typeof row.default_url !== 'string' || seen.has(row.id)) continue;
+    seen.add(row.id);
+    result.push({ id: row.id, label: row.id === 'custom' ? 'Proxy / Custom' : row.name, url: row.default_url,
+      keyRequired: object(row.capabilities).apiKeyRequired !== false && row.id !== 'custom', simple: simpleProviders.has(row.id) });
+  }
+  return result.length ? result : [...fallbackProviders];
+}
+function endpoint(value: string, defaultUrl: string) {
+  const candidate = value.trim() || defaultUrl;
   let parsed: URL;
   try { parsed = new URL(candidate); } catch { throw new Error('Enter a valid API base URL.'); }
   if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.hash || parsed.search) {
@@ -58,10 +79,13 @@ export function createApiSettings(ctx: SpindleFrontendContext, navigation: ApiSe
     const prefix = `jb-api-${++sequence}`;
     const chatId = ctx.getActiveChat()?.chatId ?? null;
     let rows: Profile[] = [], selected: Profile | undefined, providerId = 'openai';
+    let providers = [...fallbackProviders];
     let boundId = '', boundModel = '', globalId = '', loaded = false, busy = false, hasGeneration = false;
     let savedFields = '';
+    let preferences: { destroy(): void; refresh?(): void } | undefined;
+    let preferencesRoot: HTMLElement | undefined, preferencesObserver: MutationObserver | undefined;
     modal.root.classList.add('jb-settings', 'jb-api-settings');
-    modal.onDismiss(() => { session.closed = true; session.abort.abort(); key.value = ''; if (active === session) active = undefined; });
+    modal.onDismiss(() => { session.closed = true; session.abort.abort(); key.value = ''; preferencesObserver?.disconnect(); preferences?.destroy(); if (active === session) active = undefined; });
     const button = (text: string, action: () => void, className = 'jb-button') => {
       const result = node('button', className, text); result.type = 'button'; result.addEventListener('click', action); return result;
     };
@@ -82,86 +106,130 @@ export function createApiSettings(ctx: SpindleFrontendContext, navigation: ApiSe
       event.preventDefault(); available[next]?.focus();
     });
     const panel = node('section', 'jb-settings-section'); panel.id = `${prefix}-panel`; panel.setAttribute('role', 'tabpanel'); panel.setAttribute('aria-labelledby', connectionTab.id);
-    panel.append(node('h2', '', 'Choose your API'), node('p', 'jb-settings-help', 'Use a saved connection or add your provider below. Settings are saved in Lumiverse.'));
+    const providerCard = node('section', 'jb-settings-card jb-api-provider-card');
+    providerCard.append(node('h2', '', 'Provider'));
+    const providerGrid = node('div', 'jb-settings-grid');
+    const configCard = node('section', 'jb-settings-card jb-api-config-card');
+    const configHeading = node('div', 'jb-settings-card-heading');
+    const addConnection = button('+ New', () => selectProfile(''));
+    configHeading.append(node('h2', '', 'API configurations'), addConnection);
+    configCard.append(configHeading);
     const grid = node('div', 'jb-settings-grid');
-    function field(label: string, control: HTMLElement, full = false) {
+    const connectionGrid = node('div', 'jb-settings-grid');
+    function field(label: string, control: HTMLElement, full = false, target = grid) {
       const wrapper = node('label', `jb-settings-field${full ? ' jb-settings-field-full' : ''}`);
       control.setAttribute('aria-label', label);
-      wrapper.append(node('span', 'jb-settings-label', label), control); grid.append(wrapper); return wrapper;
+      wrapper.append(node('span', 'jb-settings-label', label), control); target.append(wrapper); return wrapper;
     }
     const saved = node('select', 'jb-settings-select'); saved.name = 'api-connection'; field('Saved connection', saved);
     const scope = node('select', 'jb-settings-select'); scope.name = 'api-scope';
     if (chatId) { const option = node('option', '', 'This chat'); option.value = 'chat'; scope.append(option); }
     const defaultScope = node('option', '', 'Default connection'); defaultScope.value = 'default'; scope.append(defaultScope); field('Apply to', scope);
-    const scopeHelp = node('p', 'jb-settings-help'); scopeHelp.classList.add('jb-settings-field-full'); grid.append(scopeHelp);
-    const providerPills = node('div', 'jb-provider-tabs'); providerPills.setAttribute('role', 'group'); providerPills.setAttribute('aria-label', 'API provider');
-    const pills = providers.map(provider => {
-      const pill = button(provider.label, () => {
-        const oldProvider = providers.find(p => p.id === providerId);
-        providerId = provider.id;
-        if (!name.value.trim() || name.value === oldProvider?.label) name.value = provider.label;
-        url.value = provider.url; key.value = ''; model.value = ''; modelOptions.replaceChildren(); renderProvider();
-      }, 'jb-provider-pill');
-      pill.setAttribute('aria-pressed', 'false'); providerPills.append(pill); return pill;
-    });
-    const providerNotice = node('p', 'jb-settings-help');
-    const config = node('div', 'jb-settings-config'); config.append(providerPills, providerNotice);
-    const name = node('input', 'jb-settings-input'); name.name = 'api-profile-name'; name.maxLength = 120; field('Connection name', name);
-    const url = node('input', 'jb-settings-input'); url.name = 'api-base-url'; url.type = 'url'; url.autocomplete = 'off'; url.placeholder = 'https://your-provider.example/v1'; field('API base URL', url);
-    const key = node('input', 'jb-settings-input'); key.name = 'api-key'; key.type = 'password'; key.autocomplete = 'new-password'; key.spellcheck = false; field('API key', key, true);
-    const keyHelp = node('p', 'jb-settings-help'); keyHelp.classList.add('jb-settings-field-full'); grid.append(keyHelp);
+    const scopeHelp = node('p', 'jb-settings-help');
+    const connectionSummary = node('p', 'jb-settings-help jb-settings-connection-summary');
+    connectionSummary.setAttribute('aria-live', 'polite');
+    const providerSelect = node('select', 'jb-settings-select jb-settings-provider-select'); providerSelect.name = 'api-provider';
+    field('API provider', providerSelect, true, providerGrid);
+    const providerNotice = node('p', 'jb-settings-help jb-settings-provider-note');
+    const nativeSettings = navigation.openNativeConnections ? button('Advanced provider settings', () => { if (!busy) { modal.dismiss(); navigation.openNativeConnections!(); } }) : undefined;
+    providerCard.append(providerGrid, providerNotice); if (nativeSettings) providerCard.append(nativeSettings);
+    const name = node('input', 'jb-settings-input'); name.name = 'api-profile-name'; name.maxLength = 120; field('Connection name', name, false, connectionGrid);
+    const url = node('input', 'jb-settings-input'); url.name = 'api-base-url'; url.type = 'url'; url.autocomplete = 'off'; url.placeholder = 'https://your-provider.example/v1'; field('API base URL', url, false, connectionGrid);
+    const key = node('input', 'jb-settings-input'); key.name = 'api-key'; key.type = 'password'; key.autocomplete = 'new-password'; key.spellcheck = false; field('API key', key, true, connectionGrid);
+    const keyHelp = node('p', 'jb-settings-help'); keyHelp.classList.add('jb-settings-field-full'); connectionGrid.append(keyHelp);
     const model = node('input', 'jb-settings-input'); model.name = 'api-model'; model.placeholder = 'Enter a model ID'; model.autocomplete = 'off'; model.setAttribute('list', `${prefix}-models`);
     const modelOptions = node('datalist'); modelOptions.id = `${prefix}-models`; field('Model', model, true);
-    const remoteActions = node('div', 'jb-settings-actions');
+    const remoteActions = node('div', 'jb-settings-toolbar');
     const models = button('Load models', () => { void run(loadModels); });
-    const test = button('Test connection', () => { void run(testConnection); }); remoteActions.append(models, test);
+    const test = button('Test connection', () => { void run(testConnection); }); remoteActions.append(models);
     const remoteHelp = node('p', 'jb-settings-help', 'Load models and Test connection contact your selected provider only when clicked. Testing uses the saved connection.');
+    const details = node('details', 'jb-settings-advanced jb-settings-details jb-settings-connection-details');
+    const detailsLabel = node('summary', '', 'Connection details');
+    details.append(detailsLabel, connectionGrid);
+    const about = node('details', 'jb-settings-advanced jb-settings-details jb-settings-connection-help');
+    about.append(node('summary', '', 'Connection tools and help'), scopeHelp, remoteHelp, test);
     const access = node('div', 'jb-settings-section');
-    access.append(node('p', 'jb-settings-help', 'Allow connection settings to save API configuration, choose connections, and contact providers when requested.'));
+    access.append(node('p', 'jb-settings-help', 'Allow access to save and use API connections.'));
     const allow = button('Allow connection settings', () => { void run(requestPermission); }); access.append(allow);
     const status = node('p', 'jb-settings-status', 'Loading connections…'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
     const actions = node('div', 'jb-settings-actions');
     const cancel = button('Cancel', () => modal.dismiss());
     const apply = button('Save & Use', () => { void run(saveAndUse); }, 'jb-button jb-primary');
     const retry = button('Retry loading', () => { void initialize(); }); retry.hidden = true;
-    actions.append(retry, cancel, apply);
-    panel.append(config, grid, modelOptions, remoteActions, remoteHelp, access, status, actions); modal.root.append(tabs, panel);
-    const editable = () => providers.some(p => p.id === providerId);
+    const applyHelp = node('p', 'jb-settings-help');
+    actions.append(applyHelp, retry, cancel, apply);
+    configCard.append(grid, connectionSummary, modelOptions, remoteActions, details, about, access, status, actions);
+    panel.append(providerCard, configCard); modal.root.append(tabs, panel);
+    if (navigation.mountPreferences) {
+      modal.root.classList.add('jb-settings-combined');
+      const target = node('section', 'jb-settings-preferences'); panel.append(target);
+      preferencesRoot = target;
+      preferences = navigation.mountPreferences(target);
+      if (typeof MutationObserver === 'function') {
+        preferencesObserver = new MutationObserver(() => { if (current()) controls(); });
+        preferencesObserver.observe(target, { attributes: true, attributeFilter: ['aria-busy'], childList: true, subtree: true });
+      }
+    }
+    const editable = () => providers.some(p => p.id === providerId && p.simple);
     const fieldsSignature = () => JSON.stringify([name.value, providerId, url.value, model.value, key.value]);
+    const preferencesBusy = () => preferencesRoot?.getAttribute('aria-busy') === 'true' || !!preferencesRoot?.querySelector('[aria-busy="true"]');
     function controls() {
-      saved.disabled = scope.disabled = !loaded || busy;
-      for (const control of [name, url, key]) control.disabled = !loaded || busy || !editable();
-      model.disabled = !loaded || busy;
+      const locked = busy || preferencesBusy();
+      modal.root.setAttribute('aria-busy', String(busy));
+      if (preferencesRoot) preferencesRoot.inert = busy;
+      saved.disabled = scope.disabled = !loaded || locked;
+      for (const control of [name, url, key]) control.disabled = !loaded || locked || !editable();
+      model.disabled = !loaded || locked;
       // Keep a saved secret paired with its provider. Switching providers is a
       // new connection, rather than retargeting an existing credential.
-      pills.forEach(pill => { pill.disabled = !loaded || busy || !!selected; });
-      for (const tab of callbackTabs) tab.disabled = busy;
-      allow.disabled = busy; access.hidden = hasGeneration;
-      apply.disabled = !loaded || busy || !hasGeneration;
+      providerSelect.disabled = !loaded || locked;
+      addConnection.disabled = !loaded || locked;
+      if (nativeSettings) nativeSettings.disabled = locked;
+      for (const tab of callbackTabs) tab.disabled = locked;
+      allow.disabled = cancel.disabled = locked; access.hidden = hasGeneration;
+      apply.disabled = !loaded || locked || !hasGeneration || (!selected && !editable());
       apply.textContent = 'Save & Use';
-      models.disabled = !loaded || busy || !hasGeneration;
-      test.disabled = !loaded || busy || !hasGeneration || !selected;
-      retry.disabled = busy;
+      models.disabled = !loaded || locked || !hasGeneration || (!selected && !editable());
+      test.disabled = !loaded || locked || !hasGeneration || !selected;
+      retry.disabled = locked;
+    }
+    function renderProviderOptions() {
+      const options = providers.map(provider => { const option = node('option', '', provider.label); option.value = provider.id; return option; });
+      if (!providers.some(provider => provider.id === providerId)) { const option = node('option', '', providerId); option.value = providerId; options.push(option); }
+      providerSelect.replaceChildren(...options); providerSelect.value = providerId;
     }
     function renderProvider() {
-      pills.forEach((pill, index) => pill.setAttribute('aria-pressed', String(providers[index].id === providerId)));
-      providerNotice.textContent = editable() ? 'OpenAI-compatible proxies use a base URL, not a chat/completions endpoint.' : `Saved provider: ${providerId}. Choose its model here. Its existing credentials and advanced provider configuration are preserved.`;
-      key.placeholder = selected?.has_api_key ? 'Saved key — leave blank to keep it' : 'Enter an API key (optional for a custom proxy)';
+      renderProviderOptions();
+      const provider = providers.find(item => item.id === providerId);
+      const label = provider?.label ?? providerId;
+      providerNotice.textContent = !editable()
+        ? selected ? `${label} uses its saved Lumiverse setup. You can choose its model here.` : `Set up ${label} in Advanced provider settings, then select the saved configuration here.`
+        : selected ? 'Changing providers starts a new configuration.' : 'Select a provider, then enter your key and model below.';
+      key.placeholder = selected?.has_api_key ? 'Saved key — leave blank to keep it' : provider?.keyRequired ? 'Enter your API key' : 'API key (optional)';
+      url.placeholder = provider?.url || 'https://your-provider.example/v1';
       keyHelp.textContent = !editable() ? 'This provider’s saved credentials stay in Lumiverse. Changing its model does not change credentials or provider options.' : selected?.has_api_key ? 'A key is saved in Lumiverse. Blank keeps it unchanged; enter a replacement to update it.' : 'Your key is stored by Lumiverse and is never read back or displayed here.';
+      renderSummary();
       controls();
+    }
+    function renderSummary() {
+      const providerLabel = providers.find(provider => provider.id === providerId)?.label ?? providerId;
+      const credential = key.value.trim() ? 'Key entered' : selected?.has_api_key ? 'Saved credentials' : 'No saved key';
+      connectionSummary.textContent = `${providerLabel} · ${credential}`;
     }
     function renderScope() {
       scopeHelp.textContent = scope.value === 'chat'
         ? 'Applies the selected connection and model to this chat. API keys, URLs, and connection names are shared profile settings.'
         : chatId ? 'Changes the native default. Chats with their own connection keep that override.' : 'Uses this connection as Lumiverse’s default for chats without an override.';
+      applyHelp.textContent = scope.value === 'chat' ? 'Use this API and model for this chat.' : 'Use this API by default for chats without an override.';
     }
     function selectProfile(id: string) {
-      selected = rows.find(row => row.id === id); providerId = selected?.provider ?? 'openai';
-      name.value = selected?.name ?? 'OpenAI';
+      selected = rows.find(row => row.id === id); providerId = selected?.provider ?? (providers.some(provider => provider.id === 'openai') ? 'openai' : providers[0]?.id ?? 'openai');
+      name.value = selected?.name ?? providers.find(provider => provider.id === providerId)?.label ?? 'OpenAI';
       url.value = selected?.api_url || providers.find(p => p.id === providerId)?.url || '';
       key.value = '';
       model.value = scope.value === 'chat' && selected?.id === boundId && boundModel ? boundModel : selected?.model ?? '';
       modelOptions.replaceChildren(); saved.value = selected?.id ?? '';
+      details.open = !selected;
       savedFields = fieldsSignature(); renderProvider(); renderScope(); status.textContent = '';
     }
     function savedOptions() {
@@ -171,6 +239,16 @@ export function createApiSettings(ctx: SpindleFrontendContext, navigation: ApiSe
       saved.value = selected?.id ?? '';
     }
     saved.addEventListener('change', () => selectProfile(saved.value));
+    providerSelect.addEventListener('change', () => {
+      const provider = providers.find(provider => provider.id === providerSelect.value);
+      if (!provider || provider.id === providerId) return;
+      // A provider change always starts a clean draft. Saved credentials and
+      // provider-specific metadata remain attached to their original profile.
+      selected = undefined; saved.value = ''; providerId = provider.id;
+      name.value = provider.label; url.value = provider.url; key.value = ''; model.value = ''; modelOptions.replaceChildren();
+      details.open = provider.simple; savedFields = fieldsSignature(); renderProvider(); renderScope(); status.textContent = '';
+    });
+    key.addEventListener('input', renderSummary);
     scope.addEventListener('change', () => {
       const unchanged = fieldsSignature() === savedFields;
       model.value = scope.value === 'chat' && selected?.id === boundId && boundModel ? boundModel : selected?.model ?? '';
@@ -191,20 +269,24 @@ export function createApiSettings(ctx: SpindleFrontendContext, navigation: ApiSe
       return true;
     }
     async function run(action: () => Promise<void>) {
-      if (!current() || busy || !loaded) return;
+      if (!current() || busy || preferencesBusy() || !loaded) return;
       busy = true; controls();
       try { await action(); }
       catch (error) {
         if (current()) status.textContent = error instanceof Error && error.name === 'ApiSettingsInputError' ? error.message : 'Could not complete this action. Your settings are still here; check them and try again.';
       } finally { busy = false; if (current()) controls(); }
     }
-    function inputError(message: string): never { const error = new Error(message); error.name = 'ApiSettingsInputError'; throw error; }
+    function inputError(message: string, revealConnection = false): never {
+      if (revealConnection) details.open = true;
+      const error = new Error(message); error.name = 'ApiSettingsInputError'; throw error;
+    }
     function draft(requireModel = true): ProfileInput {
-      if (!name.value.trim()) inputError('Enter a connection name.');
+      if (!name.value.trim()) inputError('Enter a connection name.', true);
       if (requireModel && !model.value.trim()) inputError('Enter or choose a model ID.');
       let apiUrl: string;
-      try { apiUrl = endpoint(url.value, providerId); } catch (error) { inputError((error as Error).message); }
-      if (providerId !== 'custom' && !key.value.trim() && (!selected?.has_api_key || selected.provider !== providerId)) inputError('Enter an API key for this provider.');
+      const provider = providers.find(item => item.id === providerId);
+      try { apiUrl = endpoint(url.value, provider?.url ?? ''); } catch (error) { inputError((error as Error).message, true); }
+      if (provider?.keyRequired && !key.value.trim() && (!selected?.has_api_key || selected.provider !== providerId)) inputError('Enter an API key for this provider.', true);
       const input: ProfileInput = { name: name.value.trim(), provider: providerId, api_url: apiUrl, model: model.value.trim() };
       if (key.value.trim()) input.api_key = key.value.trim();
       return input;
@@ -313,17 +395,25 @@ export function createApiSettings(ctx: SpindleFrontendContext, navigation: ApiSe
           body: JSON.stringify({ value: result.id }) });
       }
       if (!current()) return;
-      modal.dismiss(); navigation.onApplied?.();
+      if (preferences) {
+        if (useChat) { boundId = result.id; boundModel = chosenModel !== result.model ? chosenModel : ''; }
+        else { globalId = result.id; savedOptions(); }
+        savedFields = fieldsSignature(); status.textContent = 'Configuration saved and selected.';
+        preferences.refresh?.();
+      } else modal.dismiss();
+      navigation.onApplied?.();
     }
     async function initialize() {
       loaded = false; retry.hidden = true; controls(); status.textContent = 'Loading connections…';
       try {
-        const [profilesValue, granted, chatValue] = await Promise.all([
+        const [profilesValue, granted, chatValue, catalog] = await Promise.all([
           connections?.list ? connections.list() : request('/connections?limit=100&offset=0'),
           ctx.permissions.getGranted(),
           chatId ? request(`/chats/${encodeURIComponent(chatId)}?messages=false`) : Promise.resolve(null),
+          request('/providers').catch(() => null),
         ]);
         if (!current()) return;
+        providers = providerCatalog(catalog);
         const list = Array.isArray(profilesValue) ? profilesValue : object(profilesValue).data;
         rows = Array.isArray(list) ? list.map(profile).filter((item): item is Profile => !!item) : [];
         hasGeneration = granted.includes('generation');

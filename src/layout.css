@@ -115,4 +115,10 @@ html[data-jb-tools="false"] [data-component="InputArea"] > [class*="_actionBar_"
   [data-component="BubbleMessage"][data-part] > [data-component="BubbleActions"] { margin-left: 48px; }
   [data-component="MinimalMessage"][data-part] { grid-template-columns: 36px minmax(0, 1fr); column-gap: 12px; }
   [data-component="InputArea"] { padding-inline: 7px; }
+  [data-component="BubbleActions"],
+  [data-component="MinimalMessage"] [class*="_actions_"],
+  [data-component="SwipeControls"] { flex-wrap: wrap; gap: 2px; }
+  [data-component="BubbleActions"] > button,
+  [data-component="MinimalMessage"] [class*="_actionsWrap_"] button,
+  [data-component="SwipeControls"] > button { width: 44px; min-width: 44px; min-height: 44px; height: 44px; padding: 10px; }
 }

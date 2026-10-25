@@ -159,3 +159,181 @@
 @media (prefers-reduced-motion: reduce) {
   .jb-settings :is(input, select, textarea, button) { transition: none; }
 }
+
+/* One extension-owned panel; Lumiverse still manages focus and dismissal. */
+.jb-settings-window-layer {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: flex-end !important;
+  padding: 12px !important;
+  box-sizing: border-box;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  pointer-events: none;
+}
+.jb-settings-window-frame {
+  display: flex !important;
+  flex-direction: column;
+  width: min(480px, 100%) !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: 100% !important;
+  min-height: 0;
+  margin: 0 !important;
+  overflow: hidden !important;
+  border: 1px solid #4c4e58 !important;
+  border-radius: 14px !important;
+  background: #303238 !important;
+  box-shadow: 0 12px 38px #0005 !important;
+  pointer-events: auto;
+}
+.jb-settings-window-native-header { display: none !important; }
+.jb-settings-window-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+.jb-settings-window-root {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  color: #e9e7ed;
+  background: #303238;
+  font: 14px/1.5 Arial, Helvetica, sans-serif;
+  color-scheme: dark;
+}
+.jb-settings-window-root *, .jb-settings-window-root *::before, .jb-settings-window-root *::after { box-sizing: border-box; }
+.jb-settings-window-root [hidden] { display: none !important; }
+.jb-settings-window-header { display: flex; align-items: center; flex: 0 0 auto; gap: 4px; min-height: 48px; padding: 8px 10px; border-bottom: 1px solid #494b54; background: #2b2d32; }
+.jb-settings-window-icon { display: grid; place-items: center; flex: 0 0 28px; width: 28px; height: 30px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #b5b4c0; font: 23px/1 Arial, sans-serif; cursor: pointer; }
+.jb-settings-window-icon:hover { background: #ffffff0c; color: #fff; }
+.jb-settings-window-tabs { display: flex; align-items: center; justify-content: center; flex: 1; gap: 3px; min-width: 0; padding-right: 24px; }
+.jb-settings-window-tabs > button { min-height: 32px; padding: 5px 12px; border: 0; border-radius: 7px; background: transparent; color: #c0bfd0; font: 14px/1.4 Arial, Helvetica, sans-serif; cursor: pointer; }
+.jb-settings-window-tabs > button[aria-selected="true"] { background: #44444e; color: #fff; font-weight: 600; }
+.jb-settings-window-root button:disabled { cursor: default; opacity: .45; }
+.jb-settings-window-root :is(button, a, input, select, textarea, summary):focus-visible { outline: 2px solid #c7a0df; outline-offset: 2px; }
+.jb-settings-window-content { flex: 1 1 auto; min-height: 0; min-width: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.jb-settings-window-editor.jb-settings { --jb-settings-gutter: 16px; width: 100%; max-width: none; padding: 16px; }
+.jb-settings-window-editor > .jb-settings-tabs { position: sticky; top: -16px; z-index: 6; margin: -16px -16px 18px; padding: 3px 12px 0; border-bottom-color: #4c4d56; background: #303238; }
+.jb-settings-window-editor .jb-settings-tab { flex: 1 1 0; padding: 11px 7px; font-size: 13px; }
+.jb-settings-window-editor .jb-settings-grid { gap: 14px 12px; }
+.jb-settings-window-editor .jb-settings-intro { margin-bottom: 16px; }
+.jb-settings-window-editor :is(h2, .jb-settings-heading) { font-size: 19px; }
+.jb-settings-window-editor .jb-settings-actions { gap: 8px; }
+.jb-settings-window-editor .jb-settings-actions > .jb-settings-help { flex-basis: 100%; }
+.jb-settings-window-editor .jb-settings-actions > .jb-primary { flex: 1 1 auto; }
+.jb-settings-card { min-width: 0; margin: 0 0 14px; padding: 15px; border: 1px solid #50515c; border-radius: 11px; background: #32343b; }
+.jb-settings-card > :last-child { margin-bottom: 0; }
+.jb-settings-details { margin: 14px 0 0; border: 1px solid #50515c; border-radius: 9px; padding: 0 13px 13px; background: #2d2f35; }
+.jb-settings-details > summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; padding: 11px 0; color: #d4c3e2; font-size: 13px; font-weight: 600; list-style: none; cursor: pointer; }
+.jb-settings-details > summary::-webkit-details-marker { display: none; }
+.jb-settings-details > summary::after { content: ''; width: 6px; height: 6px; margin: 0 2px 3px 0; flex: 0 0 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); }
+.jb-settings-details[open] > summary::after { transform: rotate(225deg); margin-bottom: -3px; }
+.jb-settings-details:not([open]) { padding-bottom: 0; }
+.jb-settings-details .jb-settings-grid { margin-top: 4px; }
+.jb-settings-details .jb-settings-help { margin-bottom: 10px; }
+.jb-settings-details .jb-settings-help:last-child { margin-bottom: 0; }
+.jb-settings-connection-summary { margin: 10px 0 18px; color: #bdb8c8; font-size: 12px; line-height: 1.6; }
+.jb-settings-window-editor textarea.jb-settings-prompt { min-height: 230px; }
+.jb-settings-window-editor .jb-settings-section { margin-top: 16px; padding-top: 16px; }
+.jb-settings-window-editor > .jb-settings-section:first-of-type { margin-top: 0; padding-top: 0; border-top: 0; }
+.jb-settings-window-editor .jb-settings-toolbar { margin: 10px 0 14px; }
+.jb-settings-window-editor.jb-memory .jb-memory-card > label { display: block; margin-bottom: 9px; color: #ddd9e3; font-size: 13px; font-weight: 600; }
+.jb-settings-window-editor.jb-memory .jb-memory-textarea { min-height: 280px; }
+.jb-settings-window-content[data-section="customize"] { display: flex; overflow: hidden; }
+.jb-settings-window-content[data-section="customize"] > .jb-settings-window-editor { display: flex; flex: 1 1 auto; min-height: 0; }
+.jb-settings-window-editor .jb-customize-embedded { position: static; inset: auto; flex: 1 1 auto; width: 100%; max-width: none; height: 100%; min-height: 0; border: 0; border-radius: 0; box-shadow: none; }
+.jb-customize-embedded > .jb-customize-header { display: none; }
+.jb-customize-embedded > .jb-customize-content { padding: 12px 14px 16px; }
+.jb-customize-embedded > .jb-customize-footer { padding: 10px 14px 12px; }
+.jb-customize-embedded .jb-customize-save { min-height: 40px; background: #9165aa; }
+.jb-customize-embedded .jb-customize-section h3 { font-size: 15px; }
+.jb-settings-window-frame.jb-settings-window-collapsed { height: auto !important; }
+.jb-settings-window-root.jb-settings-window-collapsed .jb-settings-window-header { border-bottom: 0; }
+@media (max-width: 600px) {
+  .jb-settings-window-layer { padding: 0 !important; }
+  .jb-settings-window-frame { width: 100% !important; height: 100% !important; max-height: 100% !important; border: 0 !important; border-radius: 0 !important; }
+  .jb-settings-window-tabs { padding-right: 4px; }
+  .jb-settings-window-tabs > button { padding-inline: 9px; font-size: 13px; }
+  .jb-settings-window-editor.jb-settings { --jb-settings-gutter: 14px; padding: 14px; }
+  .jb-settings-window-editor > .jb-settings-tabs { top: -14px; margin: -14px -14px 16px; }
+  .jb-settings-window-editor .jb-settings-grid { grid-template-columns: minmax(0, 1fr); }
+  .jb-settings-card { padding: 13px; }
+}
+
+/* Janitor-style Settings: provider, configurations, prompt and samplers share
+   one scroll area. Native connections and preset saves remain separate. */
+.jb-settings-combined > .jb-settings-tabs { display: none; }
+.jb-settings-combined > .jb-settings-section { margin: 0; padding: 0; border: 0; }
+.jb-settings-combined .jb-memory-promo { margin-bottom: 10px; }
+.jb-settings-combined .jb-settings-card { margin-bottom: 10px; padding: 12px; border-radius: 11px; background: #303238; border-color: #4b4d56; }
+.jb-settings-combined .jb-settings-card h2 { margin: 0 0 10px; font-size: 14px; }
+.jb-settings-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.jb-settings-card-heading h2 { margin-bottom: 0 !important; }
+.jb-settings .jb-settings-card-heading > button { min-height: 30px; padding: 4px 10px; font-size: 12px; }
+.jb-api-provider-card .jb-settings-grid { display: block; }
+.jb-api-provider-card .jb-settings-label { display: none; }
+.jb-api-provider-card .jb-settings-provider-note { margin-top: 8px; font-size: 11px; }
+.jb-api-provider-card > button { margin-top: 8px; }
+.jb-settings-combined .jb-api-config-card .jb-settings-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.jb-settings-combined .jb-settings-label { font-weight: 500; }
+.jb-settings-combined .jb-settings-connection-summary { margin: 9px 0 12px; }
+.jb-settings-combined .jb-settings-details { margin-top: 10px; padding-inline: 10px; background: #2d2f34; }
+.jb-settings-combined .jb-settings-details > summary { font-size: 12px; font-weight: 500; }
+.jb-settings-combined .jb-api-config-card .jb-settings-actions { position: static; margin: 12px 0 0; padding: 12px 0 0; }
+.jb-settings-combined .jb-api-config-card .jb-settings-actions > .jb-settings-help { display: none; }
+.jb-settings-combined .jb-api-config-card .jb-settings-actions > button:not(.jb-primary) { min-height: 36px; }
+.jb-settings-combined .jb-api-config-card .jb-settings-actions > .jb-primary { min-height: 36px; background: #47434f; border-color: #67616f; }
+.jb-prompt-settings-inline.jb-settings { --jb-settings-gutter: 0px; max-width: none; padding: 0; }
+.jb-settings-global-prompt > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 32px; cursor: pointer; list-style: none; }
+.jb-settings-global-prompt > summary::-webkit-details-marker { display: none; }
+.jb-settings-global-prompt > summary::after { content: '⌄'; color: #b4a8c4; }
+.jb-settings-global-prompt[open] > summary { margin-bottom: 12px; }
+.jb-settings-global-prompt[open] > summary::after { content: '⌃'; }
+.jb-settings-global-prompt > summary h2 { margin: 0; }
+.jb-prompt-settings-inline .jb-settings-scope { margin: 10px 0; padding: 0; border: 0; background: transparent; color: #b6b5bf; font-size: 11px; }
+.jb-prompt-settings-inline .jb-settings-scope:empty { display: none; }
+.jb-prompt-settings-inline .jb-settings-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.jb-settings-slider-field > label { display: block; margin-bottom: 7px; }
+.jb-settings-slider-control { display: grid; grid-template-columns: minmax(0, 1fr) 86px; align-items: center; gap: 16px; }
+.jb-settings-slider-control input[type="number"] { min-height: 32px; padding: 5px 8px; text-align: right; }
+.jb-settings-slider-control input[type="range"] { height: 20px; padding: 0; border: 0; accent-color: #b08bed; }
+.jb-prompt-settings-inline .jb-settings-toggle-row { padding-top: 0; margin-bottom: 12px; }
+.jb-prompt-settings-inline .jb-settings-toggle-row > span { font-size: 12px; }
+.jb-prompt-settings-inline .jb-settings-help { font-size: 11px; }
+.jb-settings-prompt-source-controls { display: grid; gap: 12px; margin-bottom: 14px; }
+.jb-settings-prompt-source-controls > button { justify-self: start; max-width: 100%; }
+.jb-settings-prompt-source-help:empty { display: none; }
+.jb-settings-prompt-help > .jb-settings-help { margin: 0 0 12px; font-size: 12px; line-height: 1.6; }
+.jb-settings-prompt-examples { margin-top: 12px; }
+.jb-settings-prompt-examples > button { width: 100%; margin-top: 8px; text-align: left; }
+.jb-settings-prompt-help > button { margin-bottom: 12px; }
+.jb-prompt-settings-inline .jb-settings-generation-advanced { padding: 0 2px; margin-top: 14px; }
+.jb-settings-window-footer.jb-settings { flex: 0 0 auto; width: 100%; max-width: none; margin: 0; padding: 7px 10px; border: 0; border-top: 1px solid #494b54; border-radius: 0; background: #2b2d32; }
+.jb-settings-window-footer > .jb-settings-help { display: none; }
+.jb-settings-window-footer > .jb-settings-save { flex: 1 1 100%; min-height: 36px; padding: 7px 12px; border: 1px solid #6e5b7c; background: #9a70b2; }
+.jb-settings-window-footer > .jb-settings-status { flex: 1 1 100%; margin: 0; padding: 6px 8px; font-size: 12px; }
+.jb-settings-window-footer > .jb-settings-status:not([data-tone="success"]):not([data-tone="error"]):not([data-tone="warning"]) { display: none; }
+.jb-settings-window-collapsed > .jb-settings-window-footer { display: none; }
+@media (max-width: 600px), (pointer: coarse) {
+  .jb-settings-window-icon { flex-basis: 44px; width: 44px; height: 44px; }
+  .jb-settings-window-tabs { gap: 0; padding-right: 0; }
+  .jb-settings-window-tabs > button { min-height: 44px; padding-inline: 8px; font-size: 13px; }
+  .jb-settings-window-editor.jb-settings { --jb-settings-gutter: 12px; padding: 12px; }
+  .jb-settings-window-root :is(input:not([type="range"]):not([type="checkbox"]), textarea, select) { font-size: 16px; }
+  .jb-settings-window-root :is(button, summary, select) { min-height: 44px !important; }
+  .jb-settings-slider-control { grid-template-columns: minmax(0, 1fr) 92px; gap: 12px; }
+  .jb-settings-slider-control input[type="number"] { min-height: 44px; }
+  .jb-settings-window-header { padding-top: max(4px, env(safe-area-inset-top, 0px)); }
+  .jb-settings-window-footer.jb-settings { padding-bottom: max(8px, env(safe-area-inset-bottom, 0px)); }
+  .jb-customize-embedded > .jb-customize-footer { padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)); }
+}
+@media (max-width: 350px) {
+  .jb-settings-window-header { gap: 0; padding-inline: 2px; }
+  .jb-settings-window-tabs > button { padding-inline: 5px; font-size: 12px; }
+}

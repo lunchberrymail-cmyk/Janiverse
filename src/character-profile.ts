@@ -1,5 +1,6 @@
 import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
 import { profileMarkup } from './my-chats';
+import { creatorAttribution } from './creator-attribution';
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') {
   const node = document.createElement(tag); node.className = cls; node.textContent = text; return node;
@@ -7,7 +8,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') 
 function text(value: unknown): string { return typeof value === 'string' ? value : ''; }
 
 /** Read a selected card without leaving the home view or changing the active chat. */
-export function mountCharacterProfile(ctx: SpindleFrontendContext, root: HTMLElement, characterId: string) {
+export function mountCharacterProfile(ctx: SpindleFrontendContext, root: HTMLElement, characterId: string, options: { notesPreview?: boolean } = {}) {
   let disposed = false, request = 0, injection: Element | undefined;
   root.classList.add('jb-character-profile');
   function clear() {
@@ -33,7 +34,13 @@ export function mountCharacterProfile(ctx: SpindleFrontendContext, root: HTMLEle
       img.src = `/api/v1/characters/${encodeURIComponent(characterId)}/avatar?size=lg`;
       img.addEventListener('error', () => img.remove()); header.append(img);
       const identity = el('div'); identity.append(el('h2', '', text(character.name)));
-      if (text(character.creator)) identity.append(el('p', 'jb-profile-creator', `@${character.creator}`));
+      const creator = creatorAttribution(character); const attribution = el('p', 'jb-profile-creator');
+      if (creator) {
+        const name = creator.name === 'Creator profile' || creator.name.startsWith('@') ? creator.name : `@${creator.name}`;
+        if (creator.profileUrl) { const link = el('a', '', name); link.href = creator.profileUrl; link.target = '_blank'; link.rel = 'noopener noreferrer'; attribution.append(link); }
+        else attribution.textContent = name;
+      } else attribution.textContent = 'Creator not recorded';
+      identity.append(attribution);
       const tags = el('div', 'jb-profile-tags'); tags.setAttribute('aria-label', 'Character tags');
       if (Array.isArray(character.tags)) for (const tag of character.tags.slice(0, 64)) if (typeof tag === 'string') tags.append(el('span', '', tag));
       identity.append(tags); header.append(identity); root.append(header);
@@ -41,7 +48,10 @@ export function mountCharacterProfile(ctx: SpindleFrontendContext, root: HTMLEle
       notes.append(el('h3', '', 'Creator’s Note'));
       const content = el('div', 'jb-profile-rich'); notes.append(content); root.append(notes);
       const note = text(character.creator_notes);
-      if (note.trim()) {
+      if (note.trim() && options.notesPreview) {
+        const preview = note.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        content.textContent = preview.slice(0, 350) + (preview.length > 350 ? '…' : '');
+      } else if (note.trim()) {
         try { injection = ctx.dom.inject(content, profileMarkup(note)); }
         catch { content.textContent = note; }
       } else content.append(el('p', '', 'No creator’s note.'));

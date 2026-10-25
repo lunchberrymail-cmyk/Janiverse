@@ -1,12 +1,12 @@
 {
   "name": "janiverse",
-  "version": "0.8.6",
+  "version": "0.8.15",
   "private": true,
   "type": "module",
   "engines": { "bun": ">=1.4.4" },
   "repository": { "type": "git", "url": "https://github.com/lunchberrymail-cmyk/Janiverse.git" },
   "scripts": {
-    "build": "bun build src/frontend.ts src/backend.ts --target browser --outdir dist --minify",
+    "build": "bun scripts/build.ts",
     "test": "bun run build && bun test tests"
   },
   "devDependencies": {

@@ -1,0 +1,54 @@
+/* Only the extension's character-creation form; the host editor remains available. */
+.jb-settings.jb-character-create { max-width: none; }
+.jb-character-create .jb-character-form { min-width: 0; margin: 0; }
+.jb-character-create .jb-character-create-layout { display: grid; grid-template-columns: 205px minmax(0, 1fr); align-items: start; gap: 34px; }
+.jb-character-create .jb-character-content { min-width: 0; }
+.jb-character-create .jb-character-content > h2 { scroll-margin-top: 15px; }
+.jb-character-create .jb-character-fields { display: grid; gap: 24px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.jb-character-create .jb-character-rail { position: sticky; top: 12px; min-width: 0; }
+.jb-character-create .jb-character-nav { display: grid; gap: 5px; padding-bottom: 22px; border-bottom: 1px solid #ffffff18; }
+.jb-character-create .jb-character-nav-link { display: block; padding: 10px 13px; border: 1px solid transparent; border-radius: 7px; color: #bbb8c3; font-size: 14px; text-decoration: none; }
+.jb-character-create .jb-character-nav-link:hover { background: #ffffff08; color: #eee4f6; }
+.jb-character-create .jb-character-nav-link[aria-current] { border-color: #7b628c; background: #66507460; color: #eadcf3; font-weight: 600; }
+.jb-character-create .jb-character-preview-label { margin: 22px 0 10px; color: #bcb5c5; font-size: 12px; }
+.jb-character-create .jb-character-card-preview { overflow: hidden; border: 1px solid #8c6c9f; border-radius: 10px; background: #35263f; }
+.jb-character-create .jb-character-card-title { display: block; overflow: hidden; padding: 12px 10px; color: #e2bde9; font-size: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.jb-character-create .jb-character-card-media { display: grid; place-items: center; width: 100%; aspect-ratio: 4 / 5; overflow: hidden; background: linear-gradient(145deg, #60516d, #2e2438); }
+.jb-character-create .jb-character-card-media img { width: 100%; height: 100%; object-fit: cover; }
+.jb-character-create .jb-character-card-letter { color: #d9b9e8; font-size: 52px; }
+.jb-character-create .jb-character-card-bio { display: -webkit-box; overflow: hidden; min-height: 64px; margin: 12px 9px; padding: 9px; border-radius: 7px; background: #ffffff12; color: #ddd5e3; font-size: 12px; line-height: 1.55; white-space: pre-line; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+.jb-character-create .jb-character-card-tags { display: flex; justify-content: center; flex-wrap: wrap; gap: 5px; padding: 0 9px 13px; }
+.jb-character-create .jb-character-card-tags > span { max-width: 100%; overflow-wrap: anywhere; padding: 2px 7px; border: 1px solid #7e678b; border-radius: 12px; color: #d9c9e2; font-size: 10px; }
+.jb-character-create .jb-character-portrait { display: flex; flex-direction: column; align-items: stretch; gap: 7px; min-width: 0; text-align: center; }
+.jb-character-create button.jb-character-portrait-preview { display: grid; place-items: center; width: 100%; height: 165px; padding: 10px; overflow: hidden; border: 1px dashed #8c759a; border-radius: 10px; background: #29272f; color: inherit; cursor: pointer; }
+.jb-character-create button.jb-character-portrait-preview:hover, .jb-character-create button.jb-character-portrait-preview.jb-character-dragging { border-color: #ceb0df; background: #44364e; }
+.jb-character-create .jb-character-portrait-preview img { max-width: 100%; width: auto; height: 143px; border-radius: 6px; object-fit: contain; }
+.jb-character-create .jb-character-portrait-placeholder { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 12px; color: #d4bddf; font-size: 13px; }
+.jb-character-create .jb-character-portrait-placeholder svg { width: 30px; height: 30px; opacity: .8; }
+.jb-character-create .jb-character-portrait-placeholder small { color: #a49aac; font-size: 11px; font-weight: 400; }
+.jb-character-create .jb-character-portrait-file { position: absolute; width: 1px !important; height: 1px; min-height: 0 !important; padding: 0 !important; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.jb-character-create .jb-character-portrait .jb-settings-link { min-height: 24px; padding-block: 0; }
+.jb-character-create textarea.jb-character-bio { min-height: 115px; }
+.jb-character-create textarea.jb-character-definition { min-height: 210px; }
+.jb-character-create textarea.jb-character-greeting { min-height: 180px; }
+.jb-character-create .jb-character-section-heading { margin: 8px 0 -16px; padding-top: 26px; border-top: 1px solid #ffffff1a; color: #e1c8ed; font-size: 21px; scroll-margin-top: 15px; }
+.jb-character-create .jb-character-definition-intro { margin-bottom: -2px; }
+.jb-character-create .jb-character-initial-messages { display: grid; gap: 8px; min-width: 0; }
+.jb-character-create .jb-character-message-tabs { display: flex; gap: 5px; overflow-x: auto; margin-top: 5px; padding-bottom: 6px; scrollbar-width: thin; }
+.jb-character-create button.jb-character-message-tab { flex: 0 0 auto; min-height: 34px; padding: 7px 13px; border: 1px solid #60556a; border-radius: 6px; background: #2a2830; color: #bab1c5; font: inherit; font-size: 12px; cursor: pointer; }
+.jb-character-create button.jb-character-message-tab[aria-selected="true"] { border-color: #a17ab9; background: #634e73; color: #eee1f6; }
+.jb-character-create .jb-character-message-panel > .jb-settings-link { margin-top: 7px; }
+.jb-character-create .jb-character-add-message { justify-self: start; }
+.jb-character-create .jb-settings-advanced { margin-top: 0; }
+.jb-character-create .jb-character-advanced-fields { display: grid; gap: 22px; }
+.jb-character-create .jb-character-actions { position: sticky; bottom: calc(-1 * var(--jb-settings-gutter)); z-index: 5; margin: 22px calc(-1 * var(--jb-settings-gutter)) calc(-1 * var(--jb-settings-gutter)); padding: 14px var(--jb-settings-gutter); background: #303238; }
+.jb-character-create .jb-character-close-note { margin-top: 12px; }
+@media (max-width: 780px) {
+  .jb-character-create .jb-character-create-layout { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  .jb-character-create .jb-character-rail { position: static; }
+  .jb-character-create .jb-character-nav { display: flex; gap: 8px; padding-bottom: 15px; }
+  .jb-character-create .jb-character-card-preview, .jb-character-create .jb-character-preview-label { display: none; }
+  .jb-character-create .jb-character-nav-link { flex: 1; text-align: center; }
+  .jb-character-create button.jb-character-portrait-preview { height: 145px; }
+  .jb-character-create .jb-character-portrait-preview img { height: 123px; }
+}

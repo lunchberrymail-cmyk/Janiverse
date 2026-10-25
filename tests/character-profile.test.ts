@@ -83,3 +83,15 @@ test('injection failure keeps the note readable as inert text', async () => {
   expect(root.querySelector('.jb-profile-rich')!.textContent).toBe('<b>Readable note</b>');
   expect(root.querySelector('.jb-profile-rich b')).toBeNull();
 });
+
+test('card preview keeps notes as a short inert introduction while preserving the separate full-notes reader', async () => {
+  result = async id => ({ id, name: 'Card preview', creator_notes: '<p>' + 'Story '.repeat(100) + '</p><img src="https://example.com/art.png">', description: 'Card definition' });
+  cleanup = mountCharacterProfile(ctx, root, 'preview', { notesPreview: true }); await flush();
+  const content = root.querySelector('.jb-profile-rich')!;
+  expect(content.textContent!.length).toBe(351); expect(content.textContent!.endsWith('…')).toBe(true);
+  expect(content.querySelector('img')).toBeNull(); expect(injections).toHaveLength(0);
+  expect((root.querySelector('.jb-profile-details') as HTMLDetailsElement).open).toBe(false);
+  cleanup(); cleanup = mountCharacterProfile(ctx, root, 'preview'); await flush();
+  expect(root.querySelector('.jb-profile-notes img')).not.toBeNull();
+  expect(root.querySelector('.jb-profile-rich')!.textContent!.length).toBeGreaterThan(350);
+});

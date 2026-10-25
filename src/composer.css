@@ -60,3 +60,16 @@ html[data-jb-composer="true"] [data-component="InputArea"] .jb-composer-popover-
   .jb-composer-persona { max-width: 185px; }
   .jb-assist-action { min-height: 48px; padding: 13px 15px; font-size: 14px; }
 }
+@media (max-width: 600px), (pointer: coarse), (max-height: 500px) {
+  /* The popup can scroll as a whole in a short/keyboard-reduced viewport. */
+  .jb-composer-popover { max-height: clamp(44px, calc(var(--app-scaled-viewport-height, 100dvh) - 210px), 420px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+  .jb-composer-persona-list { max-height: min(290px, calc(var(--app-scaled-viewport-height, 100dvh) * .36)); }
+}
+@media (max-width: 600px), (pointer: coarse) {
+  .jb-assist-toggle { width: 44px; height: 44px; }
+  .jb-composer-persona { height: 44px; max-width: 185px; }
+  .jb-composer-persona-search { height: 44px; font-size: 16px; }
+  .jb-composer-persona-option, .jb-composer-persona-footer button { min-height: 44px; }
+  html[data-jb-composer="true"] [data-component="InputArea"] [class*="_sendBtn_"] { width: 44px; height: 44px; }
+  html[data-jb-composer="true"] [data-component="InputArea"] :is(textarea[name="chat-message"], [class*="_textareaMirror_"]) { font-size: max(16px, calc(15px * var(--lumiverse-font-scale, 1))); }
+}
