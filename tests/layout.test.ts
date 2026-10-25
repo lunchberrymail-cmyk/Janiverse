@@ -653,7 +653,6 @@ test('import shortcuts discover the installed JAR extension by both unique keywo
     ] : []),
   ];
   start(); await flush();
-  findButton('Next idea').click();
   findButton('Start guided import').click(); await flush();
   findButton('Import characters', roots.get('landing_header')!).click(); await flush();
   expect(calls).toEqual([
@@ -673,7 +672,6 @@ test('the guided JAR capability opens its assistant directly through the shared 
   ctx.events = { emit: (name: string, payload: unknown) => emitted.push({ name, payload }) };
   start(); await flush();
   const priorRequests = requests.length;
-  findButton('Next idea').click();
   findButton('Start guided import').click(); await flush();
   expect(emitted).toEqual([{ name: 'jar_bridge:open_import', payload: {} }]);
   expect(calls).toHaveLength(0); expect(requests).toHaveLength(priorRequests);
@@ -689,7 +687,6 @@ test('without an invocable JAR drawer import opens the card file/link modal with
   ctx.permissions.getGranted = async () => { permissionsRead++; return []; };
   ctx.permissions.request = async () => { permissionRequests++; return []; };
   start(); await flush(); const priorRequests = requests.length;
-  findButton('Next idea').click();
   findButton('Start guided import').click(); await flush();
   const modal = document.querySelector('[role=dialog]')!;
   expect(modal.getAttribute('aria-label')).toBe('Import character');

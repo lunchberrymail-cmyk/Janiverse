@@ -15,18 +15,19 @@ beforeEach(() => {
 afterEach(() => { banner.destroy(); dom.window.close(); globalThis.document = oldDocument; });
 
 test('introduces one optional feature and opens it directly without changing configuration', async () => {
-  expect(banner.root.querySelector('h2')!.textContent).toBe('Keep the important moments.');
-  expect(find('Import chats and cards').hidden).toBe(true);
-  expect(find('Explore Memory Cortex').hidden).toBe(false);
+  expect(banner.root.querySelector('h2')!.textContent).toBe('Import your old chats and cards.');
+  expect(find('Import chats and cards')).toBeUndefined();
+  expect(find('Explore Memory Cortex').hidden).toBe(true);
   expect(invoked).toEqual([]);
+  find('Next idea').click();
+  expect(banner.root.querySelector('h2')!.textContent).toBe('Keep the important moments.');
+  expect(find('Explore Memory Cortex').hidden).toBe(false);
   find('Set up summaries').click(); await flush();
   find('Explore Memory Cortex').click(); await flush();
   expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'summary' }, { kind: 'drawer_tab', id: 'cortex' }]);
   find('Next idea').click();
-  expect(banner.root.querySelector('h2')!.textContent).toBe('Import your old chats and cards.');
-  expect(find('Explore Memory Cortex').hidden).toBe(true);
-  find('Next idea').click();
   expect(banner.root.querySelector('h2')!.textContent).toBe('Build a world beyond the character card.');
+  expect(find('Explore Memory Cortex').hidden).toBe(true);
   find('Explore Lorebooks').click(); await flush();
   expect(invoked[2]).toEqual({ kind: 'drawer_tab', id: 'lorebook' });
   find('Next idea').click();
@@ -40,7 +41,7 @@ test('introduces one optional feature and opens it directly without changing con
   find('Next idea').click(); expect(banner.root.querySelector('h2')!.textContent).toBe('Add something new when you want it.');
   find('Manage extensions').click(); await flush();
   expect(invoked[5]).toEqual({ kind: 'drawer_tab', id: 'spindle' });
-  find('Next idea').click(); expect(banner.root.querySelector('h2')!.textContent).toBe('Keep the important moments.');
+  find('Next idea').click(); expect(banner.root.querySelector('h2')!.textContent).toBe('Import your old chats and cards.');
 });
 
 test('feature help stays optional, opens no tool, and resets between ideas', async () => {
@@ -63,11 +64,13 @@ test('feature help stays optional, opens no tool, and resets between ideas', asy
 });
 
 test('banner opens the import review window without importing or requesting access', async () => {
+  const oldImportButton = find('Start guided import');
+  oldImportButton.click(); await flush(); expect(imports).toBe(1); expect(invoked).toEqual([]);
+  for (let idea = 0; idea < 5; idea++) {
+    find('Next idea').click(); expect(find('Import chats and cards')).toBeUndefined();
+  }
   find('Next idea').click();
-  find('Start guided import').click(); await flush(); expect(imports).toBe(1); expect(invoked).toEqual([]);
-  find('Next idea').click(); expect(find('Import chats and cards').hidden).toBe(false);
-  find('Import chats and cards').click(); expect(imports).toBe(2);
-  const oldImportButton = find('Import chats and cards'); banner.destroy(); oldImportButton.click(); expect(imports).toBe(2);
+  banner.destroy(); oldImportButton.click(); expect(imports).toBe(1);
   expect(document.querySelector('.jb-discover')).toBeNull();
 });
 
@@ -75,6 +78,7 @@ test('unavailable memory destinations give an actionable fallback without select
   banner.destroy();
   banner = createHomeBanner({} as any, { invoke: async ref => { invoked.push(ref); return false; }, openImport: () => { imports++; } });
   document.body.append(banner.root);
+  find('Next idea').click();
   find('Explore Memory Cortex').click(); await flush();
   expect(banner.root.querySelector('[role="status"]')!.textContent).toContain('You can still try Summary');
   expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'cortex' }]);
