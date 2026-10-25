@@ -67,10 +67,8 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
   const description = make('p', 'jb-discover-description');
   const actions = make('div', 'jb-discover-actions');
   const tryButton = make('button', 'jb-discover-primary'); tryButton.type = 'button';
-  const importButton = make('button', 'jb-discover-import', 'Import chats and cards'); importButton.type = 'button';
-  importButton.prepend(icon('import'));
   const cortexButton = make('button', 'jb-discover-import', 'Explore Memory Cortex'); cortexButton.type = 'button'; cortexButton.prepend(icon('embeddings'));
-  actions.append(tryButton, cortexButton, importButton);
+  actions.append(tryButton, cortexButton);
   const footer = make('div', 'jb-discover-footer');
   const progress = make('span', 'jb-discover-progress'); progress.setAttribute('aria-live', 'polite');
   const next = make('button', 'jb-discover-next', 'Next idea'); next.type = 'button'; next.append(icon('arrow'));
@@ -89,18 +87,18 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
   root.append(content, art);
   const ideas = [
     {
-      name: 'Memory', title: 'Keep the important moments.',
-      description: 'Your story keeps growing. Use Summary for a running recap, or explore Memory Cortex to help recall people, events, and relationships.',
-      action: 'Set up summaries', picture: 'memory',
-      steps: ['Open Summary to choose how recaps are created, or Memory Cortex to set up recall.', 'Choose the settings that suit your chat, then return to your story.'],
-      open: () => options.invoke(memoryTools.summary),
-    },
-    {
       name: 'Import', title: 'Import your old chats and cards.',
       description: 'Your stories can come with you. Use JAR to bring your characters and conversations into Lumiverse, with a short guide for each step.',
       action: 'Start guided import', picture: 'import',
       steps: ['Open the import assistant and choose a card, a conversation, or both.', 'Follow the JAR connection or exported-file path, review the result, then import.'],
       open: async () => { options.openImport(); return true; },
+    },
+    {
+      name: 'Memory', title: 'Keep the important moments.',
+      description: 'Your story keeps growing. Use Summary for a running recap, or explore Memory Cortex to help recall people, events, and relationships.',
+      action: 'Set up summaries', picture: 'memory',
+      steps: ['Open Summary to choose how recaps are created, or Memory Cortex to set up recall.', 'Choose the settings that suit your chat, then return to your story.'],
+      open: () => options.invoke(memoryTools.summary),
     },
     {
       name: 'Lorebooks', title: 'Build a world beyond the character card.',
@@ -134,7 +132,7 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
   function render() {
     const idea = ideas[index];
     eyebrow.textContent = idea.name === 'Memory' ? 'HELP YOUR CHARACTERS REMEMBER MORE' : idea.name === 'Import' ? 'PICK UP WHERE YOU LEFT OFF' : 'A LITTLE MORE LUMIVERSE';
-    importButton.hidden = idea.name === 'Import' || idea.name === 'Memory'; cortexButton.hidden = idea.name !== 'Memory';
+    cortexButton.hidden = idea.name !== 'Memory';
     root.dataset.idea = idea.name.toLowerCase(); title.textContent = idea.title; description.textContent = idea.description;
     guide.open = false;
     guideSteps.replaceChildren(...idea.steps.map(step => make('li', '', step)));
@@ -157,7 +155,6 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
       if (!disposed && !ok) status.textContent = 'Memory Cortex is unavailable right now. You can still try Summary.';
     }).catch(() => { if (!disposed) status.textContent = 'Could not open Memory Cortex. Please try again from Lumiverse’s sidebar.'; });
   });
-  importButton.addEventListener('click', () => { if (!disposed) options.openImport(); });
   render();
   return { root, destroy() { disposed = true; root.remove(); } };
 }
