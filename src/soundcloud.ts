@@ -105,7 +105,7 @@ export function createSoundCloud(ctx: SpindleFrontendContext) {
   const play = el('button', 'jb-soundcloud-play', 'Play in chat'); play.type = 'button'; play.setAttribute('aria-expanded', 'false');
   const open = el('a', 'jb-soundcloud-open', 'Open externally'); open.target = '_blank'; open.rel = 'noopener noreferrer'; open.referrerPolicy = 'no-referrer';
   const close = el('button', 'jb-soundcloud-close', 'Close player'); close.type = 'button'; close.hidden = true;
-  const content = el('div', 'jb-soundcloud-player'); content.id = `jb-soundcloud-player-${++playerId}`; content.hidden = true; play.setAttribute('aria-controls', content.id);
+  const content = el('div', 'jb-soundcloud-player'); content.id = `jb-soundcloud-player-${++playerId}`; content.hidden = true; content.setAttribute('role', 'region'); content.setAttribute('aria-label', 'SoundCloud player'); play.setAttribute('aria-controls', content.id);
   const status = el('p', 'jb-soundcloud-status'); status.hidden = true; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   bar.append(label, play, open, close); root.append(bar, content, status);
 
@@ -117,7 +117,7 @@ export function createSoundCloud(ctx: SpindleFrontendContext) {
   }
   function updatePolicy() {
     const allowed = !headerBlocked && soundCloudFrameAllowed(); play.disabled = !allowed;
-    play.title = allowed ? 'Load SoundCloud’s official player. Audio will not start automatically.' : 'This Lumiverse copy currently blocks SoundCloud’s embedded player.';
+    play.title = allowed ? 'Open SoundCloud’s official player above the conversation. Audio will not start automatically.' : 'This Lumiverse copy currently blocks SoundCloud’s embedded player.';
     if (!allowed) { closePlayer(); message(BLOCKED_MESSAGE); }
     else if (status.textContent === BLOCKED_MESSAGE) message('');
     return allowed;
@@ -135,11 +135,15 @@ export function createSoundCloud(ctx: SpindleFrontendContext) {
     frame.referrerPolicy = 'no-referrer'; frame.loading = 'eager'; frame.height = '166'; frame.width = '100%';
     frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox');
     frame.src = source!.url; content.append(frame); content.hidden = false; close.hidden = false; play.hidden = true; play.setAttribute('aria-expanded', 'true');
-    message('Press Play in the SoundCloud player. Close player unloads it.');
+    message('');
   });
   close.addEventListener('click', () => { closePlayer(true); message(''); updatePolicy(); });
   open.addEventListener('click', event => { if (!sourceCurrent()) { event.preventDefault(); clear(); void load(); } });
-  root.addEventListener('keydown', event => { if (event.key === 'Escape' && frame) { event.preventDefault(); event.stopPropagation(); closePlayer(true); message(''); updatePolicy(); } });
+  const onEscape = (event: KeyboardEvent) => { if (event.key === 'Escape' && frame) { event.preventDefault(); event.stopPropagation(); closePlayer(true); message(''); updatePolicy(); } };
+  const onOutside = (event: Event) => { if (frame && event.target instanceof document.defaultView!.Node && !root.contains(event.target as Node)) { closePlayer(); message(''); updatePolicy(); } };
+  document.addEventListener('keydown', onEscape);
+  document.addEventListener('pointerdown', onOutside);
+  cleanups.push(() => { document.removeEventListener('keydown', onEscape); document.removeEventListener('pointerdown', onOutside); });
   const onPolicyViolation = (event: Event) => {
     const violation = event as SecurityPolicyViolationEvent;
     if (!frame || violation.disposition === 'report' || !['frame-src', 'child-src', 'default-src'].includes(violation.effectiveDirective)) return;

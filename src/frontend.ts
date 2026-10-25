@@ -9,6 +9,9 @@ import cardImportCSS from './card-import.css' with { type: 'text' };
 import myChatsCSS from './my-chats.css' with { type: 'text' };
 import soundCloudCSS from './soundcloud.css' with { type: 'text' };
 import customizeCSS from './customize.css' with { type: 'text' };
+import characterCreateCSS from './character-create.css' with { type: 'text' };
+import honeCSS from './hone.css' with { type: 'text' };
+import tutorialCSS from './feature-tutorials.css' with { type: 'text' };
 import { createChatMemory } from './memory';
 import { createApiSettings } from './api-settings';
 import { createPromptSettings } from './prompt-settings';
@@ -23,6 +26,10 @@ import { mountCharacterProfile } from './character-profile';
 import { createCustomize } from './customize';
 import { createSettingsWindow } from './settings-window';
 import { creatorAttribution, type CreatorAttribution } from './creator-attribution';
+import { createCharacterCreate } from './character-create';
+import { createHone } from './hone';
+import { openFeatureTutorial, type TutorialFeature } from './feature-tutorials';
+import { tutorialScreenshots } from './tutorial-screenshots';
 
 type Character = { id: string; name: string; creator?: string; creator_notes?: string; description?: string; preview_description?: string; image_id?: string; tags?: string[]; updated_at?: number };
 type View = 'browse' | 'chats';
@@ -42,6 +49,8 @@ export function setup(ctx: SpindleFrontendContext) {
   let searchTimer: ReturnType<typeof setTimeout> | undefined, controller: AbortController | undefined;
   let libraryRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   let modal: SpindleModalHandle | undefined;
+  let tutorialWindow: ReturnType<typeof openFeatureTutorial> | undefined;
+  let tutorialRequest = 0;
   const cleanups: Array<() => void> = [];
   const notePreviews = new Map<string, { revision: number | undefined; text: string; creator?: CreatorAttribution }>();
   const favoriteWrites = new Map<string, boolean>();
@@ -70,8 +79,12 @@ export function setup(ctx: SpindleFrontendContext) {
     },
   });
   const composerActions = createComposerActions(ctx, { openMemoryDraft: (chatId, text) => openMemory(chatId, text) });
+  const hone = createHone(ctx, { revealTools: () => {
+    document.documentElement.setAttribute('data-jb-tools', 'true');
+    toolsToggle.setAttribute('aria-pressed', 'true'); homeToolsToggle.setAttribute('aria-pressed', 'true');
+  } });
   const composer = createComposer(ctx, {
-    onEnhanceDraft: () => composerActions.enhanceDraft(),
+    onEnhanceDraft: () => hone.enhanceDraft(),
     onWriteForMe: () => composerActions.writeForMe(),
     onSummarize: () => composerActions.summarizeChat(),
   });
@@ -133,6 +146,16 @@ export function setup(ctx: SpindleFrontendContext) {
       }).catch(() => { if (!disposed) status.textContent = 'Could not open the imported character. It is saved in your character library.'; });
     },
   });
+  const characterCreate = createCharacterCreate(ctx, {
+    onCreated: () => { offset = 0; void loadCharacters(); },
+    openCharacter: id => {
+      void ctx.characters.get(id).then(value => {
+        const character = payload(value);
+        if (!disposed && typeof character.id === 'string' && typeof character.name === 'string') preview(character as Character);
+      }).catch(() => { if (!disposed) status.textContent = 'Your character is saved. Open it from the character library.'; });
+    },
+  });
+  cleanups.push(ctx.dom.addStyle(characterCreateCSS), ctx.dom.addStyle(honeCSS), ctx.dom.addStyle(tutorialCSS));
   cleanups.push(ctx.dom.addStyle(themeCSS), ctx.dom.addStyle(layoutCSS), ctx.dom.addStyle(uiCSS), ctx.dom.addStyle(settingsCSS), ctx.dom.addStyle(composerCSS), ctx.dom.addStyle(homeBannerCSS), ctx.dom.addStyle(cardImportCSS), ctx.dom.addStyle(myChatsCSS), ctx.dom.addStyle(soundCloudCSS), ctx.dom.addStyle(customizeCSS));
   const status = el('p', 'jb-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   const navButtons: Array<{ node: HTMLButtonElement; view: View }> = [];
@@ -148,6 +171,13 @@ export function setup(ctx: SpindleFrontendContext) {
     if (jar && jar.keywords?.includes('jar-bridge-guided-import') && ctx.events?.emit) ctx.events.emit('jar_bridge:open_import', {});
     else if (jar) void invoke({ kind: 'drawer_tab', id: jar.id });
     else cardImport.open();
+  }
+  function openTutorial(feature: TutorialFeature) {
+    tutorialWindow?.destroy();
+    const request = ++tutorialRequest;
+    tutorialWindow = openFeatureTutorial(ctx, feature, { invoke, openImport, screenshots: tutorialScreenshots,
+      onClose: () => { if (request === tutorialRequest) tutorialWindow = undefined; },
+    });
   }
   function setView(next: View, navigate = true) {
     soundCloud.close();
@@ -182,7 +212,7 @@ export function setup(ctx: SpindleFrontendContext) {
   }
   const homeToolsToggle = button('Lumiverse tools', toggleTools, 'jb-menu-link'); homeToolsToggle.setAttribute('aria-pressed', 'false'); menu.append(homeToolsToggle);
   more.append(moreLabel, menu);
-  const create = button('Create a Character', () => { void invoke({ kind: 'drawer_tab', id: 'characters' }); }, 'jb-create-link');
+  const create = button('Create a Character', () => characterCreate.open(), 'jb-create-link');
   masthead.append(nav); mounts[0].append(masthead);
 
   const chatHeader = el('header', 'jb-chat-header');
@@ -247,7 +277,7 @@ export function setup(ctx: SpindleFrontendContext) {
     } catch { /* The settings dialog reports unavailable saved configurations. */ }
   }
   const home = el('section', 'jb-home'); home.setAttribute('aria-label', 'Character browsing');
-  const homeBanner = createHomeBanner(ctx, { invoke, openImport }); home.append(homeBanner.root);
+  const homeBanner = createHomeBanner(ctx, { invoke, openImport, openTutorial }); home.append(homeBanner.root);
   const recentSection = el('section', 'jb-recent-section'); const recentHeading = el('div', 'jb-section-heading');
   recentHeading.append(el('h2', '', 'My chats'), button('View all →', () => setView('chats'), 'jb-text-button'));
   const recent = el('div', 'jb-recent'); recentSection.append(recentHeading, recent); home.append(recentSection);
@@ -501,7 +531,7 @@ export function setup(ctx: SpindleFrontendContext) {
   setView('browse', false);
   void refreshChatHeader(); refreshConnection();
   return () => {
-    disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; notePreviews.clear(); controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); composerActions.destroy(); memory.destroy(); apiSettings.destroy(); promptSettings.destroy(); settingsWindow.destroy();
+    disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); tutorialWindow?.destroy(); characterCreate.destroy(); hone.destroy(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); composerActions.destroy(); memory.destroy(); apiSettings.destroy(); promptSettings.destroy(); settingsWindow.destroy();
     cleanups.reverse().forEach(cleanup => cleanup()); mounts.forEach(root => root.replaceChildren());
     if (oldView === null) document.documentElement.removeAttribute('data-janitor-bridge-view'); else document.documentElement.setAttribute('data-janitor-bridge-view', oldView);
     if (oldTools === null) document.documentElement.removeAttribute('data-jb-tools'); else document.documentElement.setAttribute('data-jb-tools', oldTools);

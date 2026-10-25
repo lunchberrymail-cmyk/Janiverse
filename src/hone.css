@@ -1,0 +1,13 @@
+.jb-hone { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.jb-hone p { margin: 0; line-height: 1.55; }
+.jb-hone .jb-hone-state { padding: 12px; border: 1px solid #6d547b; border-radius: 8px; background: #42344d; color: #eee6f4; }
+.jb-hone .jb-hone-steps { margin: 0; padding-left: 23px; line-height: 1.55; }
+.jb-hone .jb-hone-steps li + li { margin-top: 9px; }
+.jb-hone .jb-hone-repository { display: flex; flex-direction: column; gap: 6px; font-weight: 600; }
+.jb-hone .jb-hone-repository input { width: 100%; min-width: 0; padding: 10px; border: 1px solid #56525f; border-radius: 7px; background: #26272b; color: #e4d7ee; font: inherit; font-size: 13px; }
+.jb-hone .jb-hone-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.jb-hone .jb-hone-actions:empty { display: none; }
+.jb-hone .jb-hone-notice { color: #bdb7c5; font-size: 12px; }
+.jb-hone [hidden] { display: none !important; }
+.jb-hone :is(button, a, input):focus-visible { outline: 2px solid #c29de2; outline-offset: 2px; }
+@media (max-width: 480px) { .jb-hone .jb-hone-actions .jb-button { min-height: 44px; } }

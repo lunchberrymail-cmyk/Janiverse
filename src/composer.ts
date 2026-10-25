@@ -54,7 +54,7 @@ export function createComposer(ctx: SpindleFrontendContext, actions: ComposerAct
   const prefix = `jb-composer-${++composerSequence}`; assistMenu.id = `${prefix}-assist`; assist.setAttribute('aria-controls', assistMenu.id);
   const actionButtons: Array<{ button: HTMLButtonElement; callback?: () => void | Promise<void>; needsDraft: boolean }> = [];
   for (const [label, callback, needsDraft] of [
-    ['Enhance my draft', actions.onEnhanceDraft, true],
+    ['Enhance my draft', actions.onEnhanceDraft, false],
     ['Write something for me', actions.onWriteForMe, false],
     ['Summarize this chat', actions.onSummarize, false],
   ] as const) {

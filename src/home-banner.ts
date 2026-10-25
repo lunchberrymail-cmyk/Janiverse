@@ -1,10 +1,12 @@
-import type { SpindleFrontendContext, SpindleHostSurfaceRef } from 'lumiverse-spindle-types';
+import type { SpindleFrontendContext, SpindleHostSurfaceRef, SpindleModalHandle } from 'lumiverse-spindle-types';
 import { icon } from './icons';
 import { createLunchPicks } from './lunch-picks';
+import type { TutorialFeature } from './feature-tutorials';
 
 type Options = {
   invoke: (ref: SpindleHostSurfaceRef) => Promise<boolean>;
   openImport: () => void;
+  openTutorial?: (feature: TutorialFeature) => void;
 };
 type MemoryOptions = Pick<Options, 'invoke'>;
 const memoryTools = {
@@ -61,12 +63,12 @@ export function createPresetPromo(_ctx?: SpindleFrontendContext) {
 /** A quiet, user-paced introduction: one idea and one next step at a time. */
 export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) {
   let disposed = false, index = 0;
+  let picksModal: SpindleModalHandle | undefined;
   const root = make('section', 'jb-discover'); root.setAttribute('aria-label', 'Discover more of Lumiverse');
   const content = make('div', 'jb-discover-content');
   const eyebrow = make('p', 'jb-discover-eyebrow', 'A LITTLE MORE LUMIVERSE');
   const title = make('h2', 'jb-discover-title');
   const description = make('p', 'jb-discover-description');
-  const lunchPicks = createLunchPicks();
   const actions = make('div', 'jb-discover-actions');
   const tryButton = make('button', 'jb-discover-primary'); tryButton.type = 'button';
   const cortexButton = make('button', 'jb-discover-import', 'Explore Memory Cortex'); cortexButton.type = 'button'; cortexButton.prepend(icon('embeddings'));
@@ -74,12 +76,10 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
   const footer = make('div', 'jb-discover-footer');
   const progress = make('span', 'jb-discover-progress'); progress.setAttribute('aria-live', 'polite');
   const next = make('button', 'jb-discover-next', 'Next idea'); next.type = 'button'; next.append(icon('arrow'));
-  footer.append(progress, next);
+  const tutorial = make('button', 'jb-discover-tutorial', 'Full tutorial'); tutorial.type = 'button';
+  footer.append(progress, tutorial, next);
   const status = make('p', 'jb-discover-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
-  const guide = make('details', 'jb-discover-guide');
-  const guideSummary = make('summary', '', 'How to try it');
-  const guideSteps = make('ol'); guide.append(guideSummary, guideSteps);
-  content.append(eyebrow, title, description, lunchPicks, actions, guide, footer, status);
+  content.append(eyebrow, title, description, actions, footer, status);
   const art = make('div', 'jb-discover-art'); art.setAttribute('aria-hidden', 'true');
   for (const [picture, cls] of [['all-chats', 'back'], ['extension', 'middle'], ['embeddings', 'front']] as const) {
     const card = make('div', `jb-discover-card jb-discover-card-${cls}`);
@@ -87,72 +87,96 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
     art.append(card);
   }
   root.append(content, art);
+  function openLunchPicks() {
+    if (disposed) return;
+    picksModal?.dismiss();
+    const modal = ctx.ui.showModal({ title: 'Shameless ads by Lunch', width: 760, maxHeight: 850 }); picksModal = modal;
+    modal.root.classList.add('jb-lunch-panel');
+    const intro = make('p', '', 'A few favorite extensions, picked by Lunch. Follow a link to read about one before choosing to install it.');
+    const manage = make('button', 'jb-button jb-primary', 'Open Extensions'); manage.type = 'button';
+    const notice = make('p', 'jb-lunch-status'); notice.setAttribute('role', 'status');
+    const current = () => !disposed && picksModal === modal;
+    manage.addEventListener('click', () => {
+      if (!current() || manage.disabled) return;
+      manage.disabled = true; notice.textContent = '';
+      void options.invoke({ kind: 'drawer_tab', id: 'spindle' }).then(ok => {
+        if (!current()) return;
+        if (ok) modal.dismiss(); else notice.textContent = 'Extensions is unavailable. Open it from Lumiverse’s sidebar.';
+      }).catch(() => { if (current()) notice.textContent = 'Could not open Extensions. Open it from Lumiverse’s sidebar.'; })
+        .finally(() => { if (current()) manage.disabled = false; });
+    });
+    modal.root.append(intro, createLunchPicks(), manage, notice);
+    modal.onDismiss(() => { if (picksModal === modal) picksModal = undefined; if (!disposed && tryButton.isConnected) tryButton.focus(); });
+  }
   const ideas = [
     {
       name: 'Import', title: 'Import your old chats and cards.',
-      description: 'Your stories can come with you. Use JAR to bring your characters and conversations into Lumiverse, with a short guide for each step.',
+      description: 'Bring your JanitorAI characters and conversations into Lumiverse with a guided JAR import.',
       action: 'Start guided import', picture: 'import',
-      steps: ['Open the import assistant and choose a card, a conversation, or both.', 'Follow the JAR connection or exported-file path, review the result, then import.'],
+      tutorial: 'import',
       open: async () => { options.openImport(); return true; },
     },
     {
       name: 'Memory', title: 'Keep the important moments.',
-      description: 'Your story keeps growing. Use Summary for a running recap, or explore Memory Cortex to help recall people, events, and relationships.',
+      description: 'Keep a running recap with Summary, or recall people and events with Memory Cortex.',
       action: 'Set up summaries', picture: 'memory',
-      steps: ['Open Summary to choose how recaps are created, or Memory Cortex to set up recall.', 'Choose the settings that suit your chat, then return to your story.'],
+      tutorial: 'memory',
       open: () => options.invoke(memoryTools.summary),
     },
     {
       name: 'Lorebooks', title: 'Build a world beyond the character card.',
-      description: 'Keep places, factions, and world rules in a Lorebook. Mention a keyword in chat to bring the matching detail into context.',
+      description: 'Save places, people, and world rules. Matching keywords bring the right details into your chat.',
       action: 'Explore Lorebooks', picture: 'lorebook',
-      steps: ['Create or import a Lorebook, then add an entry for a place, person, or world rule.', 'Give the entry a keyword, such as a place name, and write the details the character should know.', 'Activate the book globally or attach it to a character. Matching keywords bring entries into the chat context.'],
+      tutorial: 'lorebooks',
       open: () => options.invoke({ kind: 'drawer_tab', id: 'lorebook' }),
     },
     {
       name: 'Group chats', title: 'Put your characters in the same scene.',
       description: 'Chat with two or more of your cards together. Let the cast interact, and choose who replies next.',
       action: 'Explore group chats', picture: 'group',
-      steps: ['In Character Browser, choose the Group Chat button.', 'Pick at least two character cards and create a separate group conversation.', 'Use the member bar in the chat to choose which character replies. Replies use your normal API connection.'],
+      tutorial: 'group',
       open: () => options.invoke({ kind: 'drawer_tab', id: 'characters' }),
     },
     {
       name: 'Voice', title: 'Hear their voice. Speak your replies.',
-      description: 'Set up spoken replies or dictate your messages. Voice & Speech offers voice connections and on-device Whistle dictation.',
+      description: 'Listen to spoken replies or dictate your messages with Voice & Speech.',
       action: 'Explore voice & dictation', picture: 'voice',
-      steps: ['Open Voice & Speech and choose speech-to-text for dictation, or text-to-speech for spoken replies.', 'Whistle dictation runs on your device and needs microphone access. It uses device processing power.', 'Spoken replies need a configured voice connection. Cloud voice and transcription services may charge for usage.'],
+      tutorial: 'voice',
       open: () => options.invoke({ kind: 'settings_tab', id: 'voice' }),
     },
     {
       name: 'Extensions', title: 'Add something new when you want it.',
-      description: 'Janiverse is one extension. Add other tools from their GitHub links, and manage the extensions you already use in one place.',
+      description: 'Add tools from GitHub and manage the extensions you use, all in one place.',
       action: 'Manage extensions', picture: 'extension',
-      steps: ['Open Extensions to see your installed tools.', 'To add another extension, use Add Extension and paste its GitHub repository link.', 'Review its requested access and enable the extension when you are ready.'],
+      tutorial: 'extensions',
       open: () => options.invoke({ kind: 'drawer_tab', id: 'spindle' }),
     },
     {
       name: 'Lunch’s picks', title: 'Shameless ads by Lunch',
       description: 'A few favorite extensions, picked by Lunch. Take a look and see what suits your stories.',
-      action: 'Open Extensions', picture: 'extension', steps: [],
-      open: () => options.invoke({ kind: 'drawer_tab', id: 'spindle' }),
+      action: 'See Lunch’s picks', picture: 'extension', tutorial: null,
+      open: async () => { openLunchPicks(); return true; },
     },
   ] as const;
   function render() {
     const idea = ideas[index];
     const isLunch = idea.name === 'Lunch’s picks';
     eyebrow.textContent = isLunch ? 'LUNCH’S PICKS' : idea.name === 'Memory' ? 'HELP YOUR CHARACTERS REMEMBER MORE' : idea.name === 'Import' ? 'PICK UP WHERE YOU LEFT OFF' : 'A LITTLE MORE LUMIVERSE';
-    lunchPicks.hidden = !isLunch; guide.hidden = isLunch;
+    tutorial.hidden = isLunch;
     root.classList.toggle('jb-discover-lunch', isLunch);
     cortexButton.hidden = idea.name !== 'Memory';
     root.dataset.idea = idea.name.toLowerCase(); title.textContent = idea.title; description.textContent = idea.description;
-    guide.open = false;
-    guideSteps.replaceChildren(...idea.steps.map(step => make('li', '', step)));
     tryButton.replaceChildren(icon(idea.picture), document.createTextNode(idea.action));
     progress.textContent = `${idea.name} · ${index + 1} of ${ideas.length}`;
     next.setAttribute('aria-label', `Next idea: ${ideas[(index + 1) % ideas.length].name}`); status.textContent = '';
     const front = art.querySelector('.jb-discover-card-front')!;
     front.querySelector('svg')?.replaceWith(icon(idea.picture));
   }
+  tutorial.addEventListener('click', () => {
+    if (disposed) return;
+    const feature = ideas[index].tutorial;
+    if (feature) options.openTutorial?.(feature);
+  });
   next.addEventListener('click', () => { index = (index + 1) % ideas.length; render(); });
   tryButton.addEventListener('click', () => {
     if (disposed) return;
@@ -167,5 +191,5 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
     }).catch(() => { if (!disposed) status.textContent = 'Could not open Memory Cortex. Please try again from Lumiverse’s sidebar.'; });
   });
   render();
-  return { root, destroy() { disposed = true; root.remove(); } };
+  return { root, destroy() { disposed = true; picksModal?.dismiss(); root.remove(); } };
 }
