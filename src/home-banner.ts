@@ -1,5 +1,6 @@
 import type { SpindleFrontendContext, SpindleHostSurfaceRef } from 'lumiverse-spindle-types';
 import { icon } from './icons';
+import { createLunchPicks } from './lunch-picks';
 
 type Options = {
   invoke: (ref: SpindleHostSurfaceRef) => Promise<boolean>;
@@ -65,6 +66,7 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
   const eyebrow = make('p', 'jb-discover-eyebrow', 'A LITTLE MORE LUMIVERSE');
   const title = make('h2', 'jb-discover-title');
   const description = make('p', 'jb-discover-description');
+  const lunchPicks = createLunchPicks();
   const actions = make('div', 'jb-discover-actions');
   const tryButton = make('button', 'jb-discover-primary'); tryButton.type = 'button';
   const cortexButton = make('button', 'jb-discover-import', 'Explore Memory Cortex'); cortexButton.type = 'button'; cortexButton.prepend(icon('embeddings'));
@@ -77,7 +79,7 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
   const guide = make('details', 'jb-discover-guide');
   const guideSummary = make('summary', '', 'How to try it');
   const guideSteps = make('ol'); guide.append(guideSummary, guideSteps);
-  content.append(eyebrow, title, description, actions, guide, footer, status);
+  content.append(eyebrow, title, description, lunchPicks, actions, guide, footer, status);
   const art = make('div', 'jb-discover-art'); art.setAttribute('aria-hidden', 'true');
   for (const [picture, cls] of [['all-chats', 'back'], ['extension', 'middle'], ['embeddings', 'front']] as const) {
     const card = make('div', `jb-discover-card jb-discover-card-${cls}`);
@@ -128,10 +130,19 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
       steps: ['Open Extensions to see your installed tools.', 'To add another extension, use Add Extension and paste its GitHub repository link.', 'Review its requested access and enable the extension when you are ready.'],
       open: () => options.invoke({ kind: 'drawer_tab', id: 'spindle' }),
     },
+    {
+      name: 'Lunch’s picks', title: 'Shameless ads by Lunch',
+      description: 'A few favorite extensions, picked by Lunch. Take a look and see what suits your stories.',
+      action: 'Open Extensions', picture: 'extension', steps: [],
+      open: () => options.invoke({ kind: 'drawer_tab', id: 'spindle' }),
+    },
   ] as const;
   function render() {
     const idea = ideas[index];
-    eyebrow.textContent = idea.name === 'Memory' ? 'HELP YOUR CHARACTERS REMEMBER MORE' : idea.name === 'Import' ? 'PICK UP WHERE YOU LEFT OFF' : 'A LITTLE MORE LUMIVERSE';
+    const isLunch = idea.name === 'Lunch’s picks';
+    eyebrow.textContent = isLunch ? 'LUNCH’S PICKS' : idea.name === 'Memory' ? 'HELP YOUR CHARACTERS REMEMBER MORE' : idea.name === 'Import' ? 'PICK UP WHERE YOU LEFT OFF' : 'A LITTLE MORE LUMIVERSE';
+    lunchPicks.hidden = !isLunch; guide.hidden = isLunch;
+    root.classList.toggle('jb-discover-lunch', isLunch);
     cortexButton.hidden = idea.name !== 'Memory';
     root.dataset.idea = idea.name.toLowerCase(); title.textContent = idea.title; description.textContent = idea.description;
     guide.open = false;
