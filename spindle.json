@@ -1,0 +1,13 @@
+{
+  "version": "0.8.6",
+  "name": "Janiverse",
+  "identifier": "janitor_bridge",
+  "author": "lunchberrymail-cmyk",
+  "github": "https://github.com/lunchberrymail-cmyk/Janiverse",
+  "homepage": "https://github.com/lunchberrymail-cmyk/Janiverse",
+  "description": "A JanitorAI-inspired interface with native-saving settings, character imports, and optional feature discovery.",
+  "permissions": ["chats", "generation", "presets", "personas", "characters"],
+  "entry_backend": "dist/backend.js",
+  "entry_frontend": "dist/frontend.js",
+  "minimum_lumiverse_version": "1.2.5"
+}
