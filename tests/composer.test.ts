@@ -69,13 +69,15 @@ describe('familiar composer controls preserve native draft and Send', () => {
     expect(fetches.every(call => call.url.startsWith('/api/v1/personas/'))).toBe(true);
   });
 
-  test('Enhance follows native draft state and callbacks never send or replace the textarea', async () => {
+  test('Enhance can open Hone setup without a draft and callbacks never send or replace the textarea', async () => {
     let enhanced = 0; setup({ onEnhanceDraft: () => { enhanced++; }, onWriteForMe: () => {} }); await settle();
-    expect(assistButton('Enhance my draft').disabled).toBe(true);
+    expect(assistButton('Enhance my draft').disabled).toBe(false);
+    selector<HTMLButtonElement>('.jb-assist-toggle').click(); assistButton('Enhance my draft').click(); await settle();
+    expect(enhanced).toBe(1); expect(text).toBe('');
     text = 'Please improve this'; emit();
     expect(assistButton('Enhance my draft').disabled).toBe(false);
     selector<HTMLButtonElement>('.jb-assist-toggle').click(); assistButton('Enhance my draft').click(); await settle();
-    expect(enhanced).toBe(1); expect(text).toBe('Please improve this');
+    expect(enhanced).toBe(2); expect(text).toBe('Please improve this');
     expect(selector('#native').outerHTML).toBe(nativeBefore);
     expect(invoked).toHaveLength(0); expect(selector<HTMLElement>('.jb-composer-popover').hidden).toBe(true);
   });

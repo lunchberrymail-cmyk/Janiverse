@@ -4,19 +4,26 @@ import { createHomeBanner, createMemoryPromo, createPresetPromo } from '../src/h
 
 let dom: any, oldDocument: any, banner: ReturnType<typeof createHomeBanner>, imports: number;
 let invoked: Array<{kind: string; id: string}>;
+let ctx: any, modals: any[], tutorials: string[], invokeResult: () => Promise<boolean>;
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 const find = (name: string) => [...document.querySelectorAll('button')].find(button => button.textContent === name)! as HTMLButtonElement;
 beforeEach(() => {
   oldDocument = globalThis.document; dom = new JSDOM('<!doctype html><html><body></body></html>'); globalThis.document = dom.window.document;
-  imports = 0; invoked = [];
-  banner = createHomeBanner({} as any, { invoke: async ref => { invoked.push(ref); return true; }, openImport: () => { imports++; } });
+  imports = 0; invoked = []; modals = []; tutorials = []; invokeResult = async () => true;
+  ctx = { ui: { showModal: ({ title }: { title: string }) => {
+    const root = document.createElement('div'); root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', title); document.body.append(root);
+    const listeners = new Set<() => void>(); let closed = false;
+    const modal = { root, dismiss() { if (closed) return; closed = true; root.remove(); [...listeners].forEach(listener => listener()); listeners.clear(); }, onDismiss(listener: () => void) { listeners.add(listener); return () => listeners.delete(listener); } };
+    modals.push(modal); return modal;
+  } } };
+  banner = createHomeBanner(ctx, { invoke: async ref => { invoked.push(ref); return invokeResult(); }, openImport: () => { imports++; }, openTutorial: feature => { tutorials.push(feature); } });
   document.body.append(banner.root);
 });
-afterEach(() => { banner.destroy(); dom.window.close(); globalThis.document = oldDocument; });
+afterEach(() => { banner.destroy(); modals.forEach(modal => modal.dismiss()); dom.window.close(); globalThis.document = oldDocument; });
 
 test('introduces one optional feature and opens it directly without changing configuration', async () => {
   expect(banner.root.querySelector('h2')!.textContent).toBe('Import your old chats and cards.');
-  expect((banner.root.querySelector('.jb-lunch-picks') as HTMLElement).hidden).toBe(true);
+  expect(banner.root.querySelector('.jb-lunch-picks')).toBeNull();
   expect(find('Import chats and cards')).toBeUndefined();
   expect(find('Explore Memory Cortex').hidden).toBe(true);
   expect(invoked).toEqual([]);
@@ -44,36 +51,75 @@ test('introduces one optional feature and opens it directly without changing con
   expect(invoked[5]).toEqual({ kind: 'drawer_tab', id: 'spindle' });
   find('Next idea').click(); expect(banner.root.querySelector('h2')!.textContent).toBe('Shameless ads by Lunch');
   expect(banner.root.querySelector('.jb-discover-progress')!.textContent).toBe('Lunch’s picks · 7 of 7');
-  expect(banner.root.querySelector<HTMLDetailsElement>('.jb-discover-guide')!.hidden).toBe(true);
-  const picks = banner.root.querySelector<HTMLElement>('.jb-lunch-picks')!;
-  expect(picks.hidden).toBe(false);
+  expect(find('Full tutorial').hidden).toBe(true);
+  expect(banner.root.querySelector('.jb-lunch-picks')).toBeNull();
+  find('See Lunch’s picks').click(); await flush();
+  const picks = document.querySelector<HTMLElement>('.jb-lunch-panel')!;
+  expect(picks.isConnected).toBe(true);
   expect([...picks.querySelectorAll('a')].map(link => link.href)).toEqual([
     'https://github.com/patatasbravasch-arch/Choir', 'https://github.com/AMousePad/LumiBooks',
     'https://github.com/japolino/cue-living-novel', 'https://github.com/kittyafterdark/Pocket',
   ]);
+  expect(invoked).toHaveLength(6);
   find('Open Extensions').click(); await flush();
   expect(invoked[6]).toEqual({ kind: 'drawer_tab', id: 'spindle' });
+  expect(picks.isConnected).toBe(false);
   find('Next idea').click(); expect(banner.root.querySelector('h2')!.textContent).toBe('Import your old chats and cards.');
-  expect(picks.hidden).toBe(true);
+  expect(find('Full tutorial').hidden).toBe(false);
 });
 
-test('feature help stays optional, opens no tool, and resets between ideas', async () => {
-  const guide = banner.root.querySelector<HTMLDetailsElement>('.jb-discover-guide')!;
-  expect(guide.open).toBe(false);
-  find('Next idea').click(); find('Next idea').click();
-  expect(banner.root.dataset.idea).toBe('lorebooks');
-  expect(guide.textContent).toContain('keyword');
-  expect(banner.root.textContent).not.toContain('Explore embeddings');
-  guide.open = true; await flush();
+test('full tutorials open only on request with the right feature and preserve the banner selection', () => {
+  expect(banner.root.querySelector('details')).toBeNull();
+  expect(tutorials).toEqual([]);
+  for (const feature of ['import', 'memory', 'lorebooks', 'group', 'voice', 'extensions']) {
+    const idea = banner.root.dataset.idea;
+    find('Full tutorial').click(); expect(tutorials.at(-1)).toBe(feature);
+    expect(banner.root.dataset.idea).toBe(idea);
+    find('Next idea').click();
+  }
+  expect(find('Full tutorial').hidden).toBe(true);
+  find('Full tutorial').click(); expect(tutorials).toHaveLength(6);
   expect(invoked).toEqual([]); expect(imports).toBe(0);
-  find('Next idea').click();
-  expect(guide.open).toBe(false);
-  expect(guide.textContent).toContain('at least two');
-  expect(guide.textContent).not.toContain('keyword');
-  find('Next idea').click();
-  expect(guide.textContent).toContain('may charge');
-  expect(guide.textContent).toContain('microphone access');
-  expect(invoked).toEqual([]);
+  const oldTutorial = find('Full tutorial'); banner.destroy(); oldTutorial.click(); expect(tutorials).toHaveLength(6);
+});
+
+test('reopening Lunch picks replaces its window and disabling the banner closes it and stops old actions', async () => {
+  for (let idea = 0; idea < 6; idea++) find('Next idea').click();
+  find('See Lunch’s picks').click(); await flush(); const first = document.querySelector('.jb-lunch-panel')!;
+  find('See Lunch’s picks').click(); await flush(); const second = document.querySelector('.jb-lunch-panel')!;
+  expect(first.isConnected).toBe(false); expect(second).not.toBe(first); expect(document.querySelectorAll('.jb-lunch-panel')).toHaveLength(1);
+  const oldManage = find('Open Extensions'), oldPrimary = find('See Lunch’s picks');
+  banner.destroy(); expect(second.isConnected).toBe(false);
+  oldManage.click(); oldPrimary.click(); await flush();
+  expect(invoked).toEqual([]); expect(document.querySelector('.jb-lunch-panel')).toBeNull();
+});
+
+test('Lunch native setup failures keep the recommendations and show local recovery guidance', async () => {
+  for (let idea = 0; idea < 6; idea++) find('Next idea').click();
+  find('See Lunch’s picks').click(); await flush();
+  const panel = document.querySelector('.jb-lunch-panel')!;
+  invokeResult = async () => false;
+  find('Open Extensions').click(); await flush();
+  expect(panel.isConnected).toBe(true); expect(panel.textContent).toContain('sidebar');
+  invokeResult = async () => { throw new Error('unavailable'); };
+  find('Open Extensions').click(); await flush();
+  expect(panel.textContent).toContain('Could not open Extensions');
+  expect(panel.querySelectorAll('.jb-lunch-pick')).toHaveLength(4);
+});
+
+test('a late result from replaced Lunch picks cannot close or rewrite its replacement', async () => {
+  for (let idea = 0; idea < 6; idea++) find('Next idea').click();
+  let resolve!: (ok: boolean) => void;
+  invokeResult = () => new Promise<boolean>(complete => { resolve = complete; });
+  find('See Lunch’s picks').click(); await flush();
+  const oldManage = find('Open Extensions'); oldManage.click(); oldManage.click(); await flush();
+  expect(invoked).toHaveLength(1);
+  find('See Lunch’s picks').click(); await flush();
+  const replacement = document.querySelector('.jb-lunch-panel')!;
+  oldManage.click(); resolve(false); await flush();
+  expect(invoked).toHaveLength(1); expect(replacement.isConnected).toBe(true);
+  expect(replacement.textContent).not.toContain('unavailable');
+  expect(find('Open Extensions').disabled).toBe(false);
 });
 
 test('banner opens the import review window without importing or requesting access', async () => {

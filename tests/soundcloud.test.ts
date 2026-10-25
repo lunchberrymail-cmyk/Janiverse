@@ -119,6 +119,20 @@ describe('soundtrack lifecycle and native isolation', () => {
     read = async () => card('wrong-character'); player!.refresh(); await settle(); expect(document.querySelector('iframe')).toBeNull(); expect(player!.root.hidden).toBe(true);
   });
 
+  test('outside pointer closes and unloads the floating player without changing the draft', async () => {
+    policy(allowedPolicy); setup(); await settle(); node<HTMLButtonElement>('.jb-soundcloud-play').click();
+    const frame = node('iframe');
+    node('.jb-soundcloud-bar').dispatchEvent(new dom.window.Event('pointerdown', { bubbles: true }));
+    expect(frame.isConnected).toBe(true);
+    node('#native').dispatchEvent(new dom.window.Event('pointerdown', { bubbles: true }));
+    expect(frame.isConnected).toBe(false); expect(node<HTMLButtonElement>('.jb-soundcloud-play').hidden).toBe(false);
+    expect(node<HTMLTextAreaElement>('#native').value).toBe('Native draft'); expect(fetches).toHaveLength(0);
+    player!.destroy(); player = undefined;
+    document.dispatchEvent(new dom.window.Event('pointerdown', { bubbles: true }));
+    document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(document.querySelector('iframe')).toBeNull();
+  });
+
   test('chat navigation hides old soundtrack immediately and rejects stale character reads', async () => {
     policy(allowedPolicy); setup(); await settle(); node<HTMLButtonElement>('.jb-soundcloud-play').click(); expect(document.querySelector('iframe')).not.toBeNull();
     let resolveOld: (value: unknown) => void = () => {}; read = () => new Promise(resolve => { resolveOld = resolve; });
