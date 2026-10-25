@@ -110,6 +110,26 @@ describe('familiar composer controls preserve native draft and Send', () => {
     expect(personaOption('Alex').getAttribute('aria-checked')).toBe('false');
   });
 
+  test('touch users can browse personas without automatically opening the search keyboard', async () => {
+    Object.defineProperty(dom.window, 'matchMedia', { configurable: true, value: (query: string) => ({ matches: query === '(pointer: coarse)' }) });
+    setup(); await settle();
+    const picker = selector<HTMLButtonElement>('.jb-composer-persona');
+    picker.focus(); picker.click(); await settle();
+    const search = selector<HTMLInputElement>('.jb-composer-persona-search');
+    expect(selector<HTMLElement>('.jb-composer-persona-menu').hidden).toBe(false);
+    expect(document.activeElement).toBe(picker);
+    expect(document.querySelectorAll('.jb-composer-persona-option')).toHaveLength(2);
+    search.focus(); search.value = 'historian'; search.dispatchEvent(new dom.window.Event('input'));
+    expect(document.activeElement).toBe(search);
+    expect(document.querySelectorAll('.jb-composer-persona-option')).toHaveLength(1);
+  });
+
+  test('desktop persona search retains immediate keyboard focus', async () => {
+    Object.defineProperty(dom.window, 'matchMedia', { configurable: true, value: () => ({ matches: false }) });
+    setup(); await settle(); selector<HTMLButtonElement>('.jb-composer-persona').click();
+    expect(document.activeElement).toBe(selector('.jb-composer-persona-search'));
+  });
+
   test('persona selection requires its exact permission and explicit Allow never silently selects', async () => {
     setup(); await settle(); selector<HTMLButtonElement>('.jb-composer-persona').click(); await settle();
     personaOption('Alex').click(); await settle(); expect(invoked).toHaveLength(0);

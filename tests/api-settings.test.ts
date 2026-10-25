@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
-import { createApiSettings } from '../src/api-settings';
+import { createApiSettings, type ApiSettingsNavigation } from '../src/api-settings';
 
 type Call = { url: string; options?: RequestInit };
 type Profile = { id: string; name: string; provider: string; api_url: string; model: string; has_api_key: boolean; is_default: boolean; metadata: Record<string, unknown> };
 const originalFetch = globalThis.fetch;
+const originalObserver = globalThis.MutationObserver;
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
 const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); await new Promise(resolve => setTimeout(resolve, 1)); };
 let dom: JSDOM;
@@ -22,6 +23,8 @@ let respond: (url: string, options?: RequestInit) => Promise<Response>;
 let update: (id: string, input: Record<string, unknown>) => Promise<unknown>;
 let getGranted: () => Promise<string[]>;
 let applied: number;
+let navigation: ApiSettingsNavigation;
+let catalog: Array<{ id: string; name: string; default_url: string; capabilities?: { apiKeyRequired: boolean } }>;
 
 const root = () => roots.at(-1)!;
 const control = <T extends HTMLInputElement | HTMLSelectElement = HTMLInputElement>(name: string) => root().querySelector<T>(`[name="${name}"]`)!;
@@ -31,6 +34,7 @@ function choose(name: string, value: string) { const input = control(name); inpu
 beforeEach(() => {
   dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost:11113' });
   globalThis.document = dom.window.document;
+  globalThis.MutationObserver = dom.window.MutationObserver;
   roots = []; calls = []; updates = []; activeSwitches = []; modelLoads = []; applied = 0;
   granted = ['generation', 'chats'];
   currentChat = { chatId: 'chat/one', characterId: 'character' };
@@ -38,6 +42,17 @@ beforeEach(() => {
   profiles = [
     { id: 'primary', name: 'Main provider', provider: 'openai', api_url: 'https://api.openai.com/v1', model: 'global-model', has_api_key: true, is_default: true, metadata: { preserve: 'global' } },
     { id: 'bound', name: 'Chat provider', provider: 'openrouter', api_url: 'https://openrouter.ai/api/v1', model: 'profile-model', has_api_key: true, is_default: false, metadata: { reasoningBindings: { promptBias: 'Keep prefix' }, preserve: 'bound' } },
+  ];
+  catalog = [
+    { id: 'openai', name: 'OpenAI', default_url: 'https://api.openai.com/v1' },
+    { id: 'openrouter', name: 'OpenRouter', default_url: 'https://openrouter.ai/api/v1' },
+    { id: 'nanogpt', name: 'NanoGPT', default_url: 'https://nano-gpt.com/api/v1' },
+    { id: 'anthropic', name: 'Anthropic', default_url: 'https://api.anthropic.com' },
+    { id: 'google', name: 'Google Gemini', default_url: 'https://generativelanguage.googleapis.com' },
+    { id: 'pollinations_text', name: 'Pollinations (Text)', default_url: 'https://text.pollinations.ai/openai', capabilities: { apiKeyRequired: false } },
+    { id: 'custom', name: 'Custom (OpenAI-compatible)', default_url: '', capabilities: { apiKeyRequired: false } },
+    { id: 'google_vertex', name: 'Google Vertex AI', default_url: 'https://aiplatform.googleapis.com' },
+    { id: 'bedrock', name: 'Amazon Bedrock', default_url: 'https://bedrock-mantle.us-east-1.api.aws/v1' },
   ];
   getGranted = async () => [...granted];
   update = async (id, input) => {
@@ -48,6 +63,7 @@ beforeEach(() => {
     return structuredClone(existing);
   };
   respond = async (url, options) => {
+    if (url === '/api/v1/providers') return json({ providers: catalog });
     if (options?.method === 'PATCH') {
       Object.assign(metadata, JSON.parse(String(options.body)));
       return json({ metadata });
@@ -57,6 +73,7 @@ beforeEach(() => {
     throw new Error(`Unexpected fetch ${options?.method ?? 'GET'} ${url}`);
   };
   globalThis.fetch = (async (url, options) => { calls.push({ url: String(url), options }); return respond(String(url), options); }) as typeof fetch;
+  navigation = { onApplied: () => { applied++; } };
   api = createApiSettings({
     getActiveChat: () => currentChat,
     state: { get: () => ({ activeProfileId: 'primary', model: 'global-model', provider: 'openai' }) },
@@ -76,9 +93,9 @@ beforeEach(() => {
         onDismiss(fn: () => void) { callbacks.push(fn); return () => {}; },
       };
     } },
-  } as any, { onApplied: () => { applied++; } });
+  } as any, navigation);
 });
-afterEach(() => { api.destroy(); globalThis.fetch = originalFetch; dom.window.close(); });
+afterEach(() => { api.destroy(); globalThis.fetch = originalFetch; globalThis.MutationObserver = originalObserver; dom.window.close(); });
 
 describe('API settings preserve native connection and chat scope', () => {
   test('saved Vertex models are editable for this chat without changing provider credentials or shared model', async () => {
@@ -144,6 +161,118 @@ describe('API settings preserve native connection and chat scope', () => {
     expect(control('api-key').value).toBe('');
   });
 
+  test('new configurations use the native provider catalog and its current base URLs', async () => {
+    catalog.find(provider => provider.id === 'nanogpt')!.default_url = 'https://native-nano.example/api/v2';
+    catalog.push({ id: 'chutes', name: 'Chutes', default_url: 'https://llm.chutes.ai/v1' });
+    api.open(); await settle(); button('+ New').click();
+    const providers = control<HTMLSelectElement>('api-provider');
+    expect([...providers.options].map(option => option.textContent)).toContain('NanoGPT');
+    expect([...providers.options].map(option => option.textContent)).toContain('Chutes');
+    expect(root().querySelector('.jb-api-provider-card')!.contains(providers)).toBe(true);
+    expect(root().querySelector('.jb-api-config-card')!.contains(control('api-connection'))).toBe(true);
+    choose('api-provider', 'nanogpt');
+    expect(control('api-base-url').value).toBe('https://native-nano.example/api/v2');
+    expect(control('api-profile-name').value).toBe('NanoGPT');
+    choose('api-provider', 'anthropic'); expect(control('api-base-url').value).toBe('https://api.anthropic.com');
+    choose('api-provider', 'google'); expect(control('api-base-url').value).toBe('https://generativelanguage.googleapis.com');
+    expect(calls.every(call => !call.options?.method)).toBe(true);
+    expect(updates).toHaveLength(0); expect(modelLoads).toHaveLength(0);
+  });
+
+  test('NanoGPT previews use its native provider and only run when Load models is clicked', async () => {
+    const previousRespond = respond;
+    respond = async (url, options) => url === '/api/v1/connections/models/preview' ? json({ models: ['native-nano-model'] }) : previousRespond(url, options);
+    api.open(); await settle(); choose('api-connection', ''); choose('api-provider', 'nanogpt');
+    control('api-key').value = 'synthetic-nano-key';
+    expect(calls.every(call => !call.options?.method)).toBe(true);
+    button('Load models').click(); await settle();
+    const preview = calls.find(call => call.url.endsWith('/models/preview'))!;
+    expect(preview.options?.method).toBe('POST');
+    expect(JSON.parse(String(preview.options?.body))).toEqual({ provider: 'nanogpt', api_url: 'https://nano-gpt.com/api/v1', api_key: 'synthetic-nano-key' });
+    expect(root().querySelector('datalist option')?.getAttribute('value')).toBe('native-nano-model');
+    expect(updates).toHaveLength(0); expect(activeSwitches).toHaveLength(0);
+  });
+
+  test('NanoGPT retains native subscription, caching, routing and saved credentials on chat apply', async () => {
+    profiles[1].provider = 'nanogpt'; profiles[1].api_url = '';
+    profiles[1].metadata = { use_subscription_api: true, nanogpt: { model_overrides: { 'profile-model': { only: ['saved-provider'] } } }, nanogpt_caching: { enabled: true }, reasoningBindings: { promptBias: 'keep' } };
+    const original = structuredClone(profiles[1].metadata);
+    api.open(); await settle();
+    expect(control('api-key').disabled).toBe(false);
+    control('api-model').value = 'nano-chat-model'; button('Save & Use').click(); await settle();
+    expect(updates[0].input.provider).toBe('nanogpt');
+    expect(updates[0].input).not.toHaveProperty('api_key'); expect(updates[0].input).not.toHaveProperty('metadata'); expect(updates[0].input).not.toHaveProperty('model');
+    expect(profiles[1].metadata).toEqual(original); expect(profiles[1].has_api_key).toBe(true);
+    expect(metadata.connection_model).toBe('nano-chat-model'); expect(modelLoads).toHaveLength(0);
+  });
+
+  test('native key requirements allow a keyless provider to create a normal saved configuration', async () => {
+    let created: Record<string, unknown> | undefined;
+    const previousRespond = respond;
+    respond = async (url, options) => {
+      if (url === '/api/v1/connections' && options?.method === 'POST') {
+        created = JSON.parse(String(options.body));
+        const saved = { id: 'keyless', ...created, has_api_key: false, is_default: false, metadata: {} } as Profile;
+        profiles.push(saved); return json(saved);
+      }
+      return previousRespond(url, options);
+    };
+    api.open(); await settle(); choose('api-connection', ''); choose('api-provider', 'pollinations_text');
+    control('api-model').value = 'keyless-model'; button('Save & Use').click(); await settle();
+    expect(created).toEqual({ name: 'Pollinations (Text)', provider: 'pollinations_text', api_url: 'https://text.pollinations.ai/openai', model: 'keyless-model' });
+    expect(metadata.connection_profile_id).toBe('keyless'); expect(applied).toBe(1);
+  });
+
+  test('regional providers use native advanced setup rather than creating incomplete credentials', async () => {
+    let nativeOpened = 0; navigation.openNativeConnections = () => { nativeOpened++; };
+    api.open(); await settle(); choose('api-connection', ''); choose('api-provider', 'google_vertex');
+    expect(button('Save & Use').disabled).toBe(true); expect(button('Load models').disabled).toBe(true);
+    expect(control('api-key').disabled).toBe(true); expect(control('api-base-url').disabled).toBe(true);
+    expect(root().textContent).toContain('Set up Google Vertex AI in Advanced provider settings');
+    expect(calls.every(call => !call.options?.method)).toBe(true);
+    button('Advanced provider settings').click();
+    expect(nativeOpened).toBe(1); expect(root().isConnected).toBe(false); expect(updates).toHaveLength(0);
+  });
+
+  test('catalog failure keeps basic providers usable without blocking saved configurations', async () => {
+    const previousRespond = respond;
+    respond = async (url, options) => url === '/api/v1/providers' ? json({}, 404) : previousRespond(url, options);
+    api.open(); await settle(); expect(control('api-connection').value).toBe('bound');
+    button('+ New').click(); choose('api-provider', 'nanogpt');
+    expect(control('api-base-url').value).toBe('https://nano-gpt.com/api/v1');
+    expect(control('api-provider').disabled).toBe(false); expect(button('Save & Use').disabled).toBe(false);
+    expect(root().textContent).not.toContain('Could not load API settings');
+  });
+
+  test('combined settings retain preference drafts after applying a configuration and clean up on close', async () => {
+    let destroyed = 0;
+    navigation.mountPreferences = target => {
+      const draft = document.createElement('textarea'); draft.value = 'Unsaved writing instructions'; target.append(draft);
+      return { destroy() { destroyed++; } };
+    };
+    api.open(); await settle(); const preferences = root().querySelector<HTMLElement>('.jb-settings-preferences')!;
+    const textarea = preferences.querySelector('textarea')!;
+    button('Save & Use').click(); await settle();
+    expect(root().isConnected).toBe(true); expect(textarea.isConnected).toBe(true); expect(textarea.value).toBe('Unsaved writing instructions');
+    expect(root().textContent).toContain('Configuration saved and selected.'); expect(destroyed).toBe(0); expect(applied).toBe(1);
+    button('Cancel').click(); expect(destroyed).toBe(1); expect(root().isConnected).toBe(false);
+  });
+
+  test('combined API and preferences prevent overlapping saves while either operation is busy', async () => {
+    let preferenceEditor: HTMLElement;
+    navigation.mountPreferences = target => { preferenceEditor = document.createElement('div'); target.append(preferenceEditor); return { destroy() {} }; };
+    api.open(); await settle();
+    preferenceEditor!.setAttribute('aria-busy', 'true'); await settle();
+    expect(button('Save & Use').disabled).toBe(true); expect(button('+ New').disabled).toBe(true);
+    button('Save & Use').click(); expect(updates).toHaveLength(0);
+    preferenceEditor!.setAttribute('aria-busy', 'false'); await settle(); expect(button('Save & Use').disabled).toBe(false);
+    let finish: (value: unknown) => void = () => {}; update = () => new Promise(resolve => { finish = resolve; });
+    button('Save & Use').click(); await settle();
+    expect(root().querySelector<HTMLElement>('.jb-settings-preferences')!.inert).toBe(true);
+    finish(structuredClone(profiles[1])); await settle();
+    expect(root().querySelector<HTMLElement>('.jb-settings-preferences')!.inert).toBe(false);
+  });
+
   test('opening and changing fields never contacts the provider or mutates configuration', async () => {
     api.open(); await settle();
     expect(control('api-connection').value).toBe('bound');
@@ -153,8 +282,55 @@ describe('API settings preserve native connection and chat scope', () => {
     control('api-key').value = 'replacement-key';
     control('api-model').value = 'other-model';
     await settle();
-    expect(calls.map(call => call.url)).toEqual(['/api/v1/chats/chat%2Fone?messages=false']);
+    expect(calls.map(call => call.url)).toEqual(['/api/v1/chats/chat%2Fone?messages=false', '/api/v1/providers']);
     expect(updates).toHaveLength(0); expect(activeSwitches).toHaveLength(0); expect(modelLoads).toHaveLength(0);
+  });
+
+  test('a saved API keeps model and destination visible while connection details and help are optional', async () => {
+    api.open(); await settle();
+    const details = root().querySelector<HTMLDetailsElement>('.jb-settings-connection-details')!;
+    const help = root().querySelector<HTMLDetailsElement>('.jb-settings-connection-help')!;
+    expect(details.open).toBe(false); expect(help.open).toBe(false);
+    expect(details.contains(control('api-model'))).toBe(false);
+    expect(details.contains(control('api-connection'))).toBe(false);
+    expect(details.contains(control('api-scope'))).toBe(false);
+    expect(details.contains(control('api-key'))).toBe(true);
+    expect(control('api-provider').disabled).toBe(false);
+    expect(root().querySelector('.jb-settings-connection-summary')!.textContent).toBe('OpenRouter · Saved credentials');
+    expect(help.contains(button('Test connection'))).toBe(true);
+    expect(help.contains(button('Load models'))).toBe(false);
+    details.open = true; help.open = true; await settle();
+    expect(calls.map(call => call.url)).toEqual(['/api/v1/chats/chat%2Fone?messages=false', '/api/v1/providers']);
+    expect(updates).toHaveLength(0); expect(activeSwitches).toHaveLength(0); expect(modelLoads).toHaveLength(0);
+  });
+
+  test('new connections expose provider setup and invalid hidden connection fields reopen before saving', async () => {
+    api.open(); await settle(); choose('api-connection', '');
+    const details = root().querySelector<HTMLDetailsElement>('.jb-settings-connection-details')!;
+    expect(details.open).toBe(true);
+    expect(control('api-provider').disabled).toBe(false);
+    choose('api-provider', 'custom');
+    control('api-base-url').value = 'not a URL';
+    control('api-model').value = 'test-model';
+    details.open = false;
+    button('Save & Use').click(); await settle();
+    expect(details.open).toBe(true);
+    expect(root().textContent).toContain('Enter a valid API base URL.');
+    expect(updates).toHaveLength(0); expect(activeSwitches).toHaveLength(0);
+    expect(calls.every(call => !call.options?.method)).toBe(true);
+  });
+
+  test('scope and key hints describe the draft without displaying secrets or changing saved settings', async () => {
+    api.open(); await settle();
+    expect(root().textContent).toContain('Use this API and model for this chat.');
+    choose('api-scope', 'default');
+    expect(root().textContent).toContain('Use this API by default for chats without an override.');
+    control('api-key').value = 'synthetic-replacement-key';
+    control('api-key').dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    expect(root().querySelector('.jb-settings-connection-summary')!.textContent).toBe('OpenRouter · Key entered');
+    expect(root().textContent).not.toContain('synthetic-replacement-key');
+    expect(updates).toHaveLength(0); expect(activeSwitches).toHaveLength(0); expect(modelLoads).toHaveLength(0);
+    expect(calls.every(call => !call.options?.method)).toBe(true);
   });
 
   test('blank stored credential is omitted, shared metadata and profile model survive chat apply', async () => {
@@ -200,22 +376,60 @@ describe('API settings preserve native connection and chat scope', () => {
     expect(applied).toBe(1);
   });
 
-  test('existing providers are immutable so a saved key cannot silently move to another provider', async () => {
+  test('changing a saved provider starts a clean new configuration and leaves the original untouched', async () => {
+    const original = structuredClone(profiles);
+    let created: Record<string, unknown> | undefined;
+    const previousRespond = respond;
+    respond = async (url, options) => {
+      if (url === '/api/v1/connections' && options?.method === 'POST') {
+        created = JSON.parse(String(options.body));
+        const saved = { id: 'new-nano', ...created, has_api_key: true, is_default: false, metadata: {} } as Profile;
+        profiles.push(saved); return json(saved);
+      }
+      return previousRespond(url, options);
+    };
     api.open(); await settle();
-    const pills = Array.from(root().querySelectorAll<HTMLButtonElement>('.jb-provider-pill'));
-    expect(pills.every(pill => pill.disabled)).toBe(true);
-    expect(pills.find(pill => pill.textContent === 'OpenRouter')?.getAttribute('aria-pressed')).toBe('true');
-    choose('api-connection', '');
-    expect(pills.every(pill => !pill.disabled)).toBe(true);
-    pills.find(pill => pill.textContent === 'Proxy / Custom')!.click();
-    expect(control('api-key').value).toBe('');
-    expect(updates).toHaveLength(0); expect(calls).toHaveLength(1);
+    expect(control('api-provider').disabled).toBe(false);
+    expect(control('api-provider').value).toBe('openrouter');
+    control('api-profile-name').value = 'Unsaved old name'; control('api-key').value = 'unsaved-old-key';
+    choose('api-provider', 'nanogpt');
+    expect(control('api-provider').value).toBe('nanogpt');
+    expect(control('api-connection').value).toBe('');
+    expect(control('api-profile-name').value).toBe('NanoGPT');
+    expect(control('api-base-url').value).toBe('https://nano-gpt.com/api/v1');
+    expect(control('api-key').value).toBe(''); expect(control('api-model').value).toBe('');
+    expect(control('api-key').placeholder).toBe('Enter your API key');
+    expect(root().querySelector<HTMLDetailsElement>('.jb-settings-connection-details')!.open).toBe(true);
+    expect(button('Test connection').disabled).toBe(true);
+    expect(profiles).toEqual(original); expect(updates).toHaveLength(0); expect(calls).toHaveLength(2);
+    control('api-model').value = 'new-nano-model'; button('Save & Use').click(); await settle();
+    expect(created).toBeUndefined(); expect(updates).toHaveLength(0);
+    control('api-key').value = 'new-nano-key'; button('Save & Use').click(); await settle();
+    expect(created).toEqual({ name: 'NanoGPT', provider: 'nanogpt', api_url: 'https://nano-gpt.com/api/v1', model: 'new-nano-model', api_key: 'new-nano-key' });
+    expect(profiles.slice(0, 2)).toEqual(original);
+    expect(updates).toEqual([{ id: 'new-nano', input: { name: 'NanoGPT' } }]);
+    expect(metadata.connection_profile_id).toBe('new-nano');
+  });
+
+  test('switching a saved regional provider also starts a draft and advanced choices cannot save incomplete setup', async () => {
+    profiles[1].provider = 'google_vertex';
+    const original = structuredClone(profiles[1]);
+    api.open(); await settle();
+    expect(control('api-provider').disabled).toBe(false);
+    choose('api-provider', 'openrouter');
+    expect(control('api-connection').value).toBe(''); expect(control('api-profile-name').value).toBe('OpenRouter');
+    expect(control('api-model').value).toBe(''); expect(control('api-key').value).toBe('');
+    choose('api-provider', 'bedrock');
+    expect(control('api-connection').value).toBe(''); expect(control('api-profile-name').value).toBe('Amazon Bedrock');
+    expect(button('Save & Use').disabled).toBe(true); expect(button('Load models').disabled).toBe(true);
+    expect(control('api-key').disabled).toBe(true); expect(profiles[1]).toEqual(original);
+    expect(updates).toHaveLength(0); expect(calls).toHaveLength(2);
   });
 
   test('revoked generation or chats permissions prevent every save write', async () => {
     api.open(); await settle();
     granted = ['chats']; button('Save & Use').click(); await settle();
-    expect(updates).toHaveLength(0); expect(calls).toHaveLength(1);
+    expect(updates).toHaveLength(0); expect(calls).toHaveLength(2);
     expect(root().textContent).toContain('Allow connection settings');
     granted = ['generation']; api.open(); await settle(); button('Save & Use').click(); await settle();
     expect(updates).toHaveLength(0); expect(calls.every(call => !call.options?.method)).toBe(true);
@@ -237,7 +451,7 @@ describe('API settings preserve native connection and chat scope', () => {
     api.open(); await settle();
     control('api-base-url').value = 'https://user:password@proxy.example/v1?key=secret';
     control('api-key').value = 'new-secret'; button('Save & Use').click(); await settle();
-    expect(updates).toHaveLength(0); expect(calls).toHaveLength(1);
+    expect(updates).toHaveLength(0); expect(calls).toHaveLength(2);
     expect(root().isConnected).toBe(true);
     expect(control('api-key').value).toBe('new-secret');
     expect(root().textContent).toContain('without a login, query, or fragment');
@@ -249,7 +463,20 @@ describe('API settings preserve native connection and chat scope', () => {
     button('Save & Use').click(); await settle();
     expect(root().isConnected).toBe(true); expect(control('api-profile-name').value).toBe('Keep my edit');
     expect(button('Save & Use').disabled).toBe(false);
-    expect(calls).toHaveLength(1); expect(applied).toBe(0);
+    expect(calls).toHaveLength(2); expect(applied).toBe(0);
+  });
+
+  test('the shared window can detect pending API work until its result finishes', async () => {
+    api.open(); await settle();
+    let finishUpdate: (value: unknown) => void = () => {};
+    update = () => new Promise(resolve => { finishUpdate = resolve; });
+    button('Save & Use').click(); await settle();
+    expect(root().getAttribute('aria-busy')).toBe('true');
+    expect(button('Save & Use').disabled).toBe(true);
+    finishUpdate(undefined); await settle();
+    expect(root().getAttribute('aria-busy')).toBe('false');
+    expect(root().isConnected).toBe(true);
+    expect(updates).toHaveLength(0); expect(activeSwitches).toHaveLength(0);
   });
 
   test('destroy during permission resolution prevents the pending write and clears a typed key', async () => {
@@ -258,7 +485,7 @@ describe('API settings preserve native connection and chat scope', () => {
     getGranted = () => new Promise(resolve => { grant = resolve; });
     const key = control('api-key'); button('Save & Use').click(); api.destroy();
     grant(['generation', 'chats']); await settle();
-    expect(key.value).toBe(''); expect(updates).toHaveLength(0); expect(calls).toHaveLength(1);
+    expect(key.value).toBe(''); expect(updates).toHaveLength(0); expect(calls).toHaveLength(2);
     expect(applied).toBe(0);
   });
 });

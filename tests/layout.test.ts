@@ -15,7 +15,7 @@ const cards = Array.from({ length: 24 }, (_, index) => ({ id: `char_${index}`, n
 let dom: any, ctx: any, stop: (() => void) | undefined;
 let native: HTMLElement, nativeMarkup: string, nativeClicks: number;
 let calls: Array<{ ref: Ref; params?: Record<string, string> }>;
-let requests: Array<{ url: URL; signal?: AbortSignal }>;
+let requests: Array<{ url: URL; signal?: AbortSignal; options: RequestInit }>;
 let fetchResult: (url: URL, init: RequestInit) => Promise<any>;
 let roots: Map<string, HTMLElement>, subscriptions: Map<string, Set<() => void>>;
 let favoriteIds: string[], allowChats: boolean, chatActionAvailable: boolean, previewSurfaces: boolean, surfaceDestroyed: number;
@@ -49,7 +49,7 @@ beforeEach(() => {
   fetchResult = async () => respond(cards, 72);
   globalThis.fetch = (async (input: any, init: RequestInit = {}) => {
     const url = new URL(String(input), dom.window.location.href);
-    requests.push({ url, signal: init.signal as AbortSignal | undefined });
+    requests.push({ url, signal: init.signal as AbortSignal | undefined, options: init });
     expect(init.credentials).toBe('same-origin');
     if (url.pathname === '/api/v1/chats/hidden-from-recent') return { ok: true, json: async () => [] };
     if (url.pathname === '/api/v1/chats' || url.pathname === '/api/v1/personas') return { ok: true, json: async () => ({ data: [], total: 0 }) };
@@ -61,8 +61,9 @@ beforeEach(() => {
   characterChatsResult = async () => [{ id: 'chat_123', name: 'Moonlit story', message_count: 12, created_at: Math.floor(Date.now() / 1000), updated_at: Math.floor(Date.now() / 1000), last_message_preview: 'The story continues.' }];
   const catalog = [
     { kind: 'route', id: '/' }, { kind: 'route', id: '/chat/:chatId' }, { kind: 'route', id: '/characters/:id' },
-    ...['characters', 'connections', 'personas', 'loom', 'lorebook', 'spindle', 'profile'].map(id => ({ kind: 'drawer_tab', id })),
+    ...['characters', 'connections', 'personas', 'loom', 'lorebook', 'spindle', 'profile', 'summary', 'cortex'].map(id => ({ kind: 'drawer_tab', id })),
     { kind: 'settings_tab', id: 'display' },
+    { kind: 'settings_tab', id: 'illarin' },
     { kind: 'entity_action', id: 'character_chat' },
     { kind: 'modal', id: 'character_editor' },
   ];
@@ -202,7 +203,7 @@ test('chat header opens owned settings, preserves native chat actions, and refle
   findButton('Settings', header).click(); await flush();
   expect(document.querySelector('.jb-settings input[name="temperature"]')).not.toBeNull();
   expect(calls.some(call => call.ref.id === 'loom')).toBe(false);
-  findButton('Close', document.querySelector('.jb-settings')!).click();
+  findButton('×', document.querySelector('.jb-settings-window-root')!).click();
   findButton('Customize', header).click(); await flush();
   expect(document.querySelector('.jb-customize')).not.toBeNull();
   expect(calls.some(call => call.ref.kind === 'settings_tab' && call.ref.id === 'display')).toBe(false);
@@ -214,6 +215,97 @@ test('chat header opens owned settings, preserves native chat actions, and refle
   connectionProjection = { activeProfileId: 'connection_2', provider: 'other-provider', model: 'model-two' };
   subscriptions.get('connections.active')!.forEach(handler => handler());
   expect(api.title).toContain('model-two'); expect(api.classList.contains('jb-api-missing')).toBe(false);
+});
+
+test('Settings composes native API, prompt and generation editors with a persistent footer and cleans them on tab changes', async () => {
+  dom.window.history.replaceState({}, '', '/chat/active_chat');
+  activeChat = { chatId: 'active_chat', characterId: 'char_current' }; start(); await flush();
+  findButton('Settings', roots.get('chat_header_left')!).click(); await flush();
+  const window = document.querySelector('.jb-settings-window-root')!;
+  const api = window.querySelector('.jb-api-settings')!;
+  const promo = api.querySelector('.jb-preset-promo')!;
+  const provider = api.querySelector('.jb-api-provider-card')!;
+  expect(promo.compareDocumentPosition(provider) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+  expect([...promo.querySelectorAll('a')].map(anchor => [anchor.textContent, anchor.href])).toEqual([
+    ['Browse presets', 'https://illarin.com/browse?type=preset'],
+    ['Presets on Discord', 'https://discord.com/channels/1484149939167821915/1484156801447497792'],
+    ['Join Discord', 'https://discord.gg/28rBWVFfCu'],
+  ]);
+  expect(api.querySelector('[aria-label="Improve chat memory"]')).toBeNull();
+  expect([...api.querySelectorAll('button')].some(button => button.textContent === 'Set up summaries')).toBe(false);
+  expect(api.classList.contains('jb-settings-combined')).toBe(true);
+  expect(api.querySelector('input[name="temperature-slider"]')).not.toBeNull();
+  expect(api.querySelector('textarea[name="global-prompt"]')).not.toBeNull();
+  const footer = window.querySelector('.jb-settings-window-footer')!;
+  expect(footer.parentElement).toBe(window);
+  expect(findButton('Save prompt & generation', footer)).not.toBeNull();
+  expect(calls).toHaveLength(0);
+  findButton('Customize', window).click(); await flush();
+  expect(document.querySelector('.jb-prompt-settings-inline')).toBeNull();
+  expect(document.querySelector('.jb-settings-window-footer')).toBeNull();
+  findButton('Settings', window).click(); await flush();
+  expect(document.querySelectorAll('.jb-settings-window-footer')).toHaveLength(1);
+  stop!(); stop = undefined;
+  expect(document.querySelector('.jb-settings-window-root')).toBeNull();
+  expect(document.querySelector('.jb-settings-window-footer')).toBeNull();
+});
+
+test('Memory tab advertises memory tools and opens native setup without running generation', async () => {
+  dom.window.history.replaceState({}, '', '/chat/active_chat');
+  activeChat = { chatId: 'active_chat', characterId: 'char_current' }; start(); await flush();
+  findButton('Settings', roots.get('chat_header_left')!).click(); await flush();
+  findButton('Memory', document.querySelector('.jb-settings-window-root')!).click(); await flush();
+  const ad = document.querySelector('.jb-memory [aria-label="Improve chat memory"]')!;
+  expect(ad.querySelector('h3')!.textContent).toBe('Give your characters more memory.');
+  expect(document.querySelector('.jb-settings-window-root .jb-preset-promo')).toBeNull();
+  expect(document.querySelector('.jb-memory textarea')).not.toBeNull();
+  expect(calls).toHaveLength(0);
+  findButton('Set up summaries', ad).click(); await flush();
+  expect(calls).toEqual([{ ref: { kind: 'drawer_tab', id: 'summary' }, params: undefined }]);
+  expect(document.querySelector('.jb-settings-window-root')).toBeNull();
+  expect(document.querySelector('.jb-settings-window-footer')).toBeNull();
+  expect(requests.every(request => !/\/(?:generate|generation)(?:\/|$)/.test(request.url.pathname))).toBe(true);
+  expect(native.outerHTML).toBe(nativeMarkup);
+});
+
+test('unavailable memory setup keeps the Memory editor and its unsaved text available', async () => {
+  dom.window.history.replaceState({}, '', '/chat/active_chat');
+  activeChat = { chatId: 'active_chat', characterId: 'char_current' };
+  const nativeList = ctx.host.surfaces.list;
+  ctx.host.surfaces.list = (kinds?: string[]) => nativeList(kinds).filter((surface: Ref) => surface.id !== 'cortex');
+  start(); await flush();
+  findButton('Chat Memory', roots.get('chat_header_left')!).click(); await flush();
+  const editor = document.querySelector('.jb-memory')!;
+  const note = editor.querySelector('textarea')!; note.value = 'Unsaved story fact';
+  findButton('Explore Memory Cortex', editor).click(); await flush();
+  expect(calls).toHaveLength(0);
+  expect(editor.isConnected).toBe(true); expect(note.value).toBe('Unsaved story fact');
+  expect(editor.querySelector('.jb-memory-promo-status')!.textContent).toContain('unavailable');
+  expect(native.outerHTML).toBe(nativeMarkup);
+});
+
+test('preset management and Illarin connection open only after explicit help actions and close the settings panel', async () => {
+  dom.window.history.replaceState({}, '', '/chat/active_chat');
+  activeChat = { chatId: 'active_chat', characterId: 'char_current' }; start(); await flush();
+  const header = roots.get('chat_header_left')!;
+  findButton('Settings', header).click(); await flush();
+  let panel = document.querySelector('.jb-settings-window-root')!;
+  expect(calls).toHaveLength(0);
+  const prompt = panel.querySelector<HTMLDetailsElement>('.jb-settings-global-prompt')!;
+  prompt.querySelector('summary')!.click();
+  findButton('Manage / import presets', panel).click(); await flush();
+  expect(calls).toEqual([{ ref: { kind: 'drawer_tab', id: 'loom' }, params: undefined }]);
+  expect(document.querySelector('.jb-settings-window-root')).toBeNull();
+  findButton('Settings', header).click(); await flush();
+  panel = document.querySelector('.jb-settings-window-root')!;
+  panel.querySelector<HTMLDetailsElement>('.jb-settings-global-prompt')!.querySelector('summary')!.click();
+  panel.querySelector<HTMLDetailsElement>('.jb-settings-prompt-help')!.querySelector('summary')!.click();
+  expect(calls).toHaveLength(1);
+  findButton('Connect Illarin', panel).click(); await flush();
+  expect(calls[1]).toEqual({ ref: { kind: 'settings_tab', id: 'illarin' }, params: { anchorId: 'setsec-illarin-general' } });
+  expect(document.querySelector('.jb-settings-window-root')).toBeNull();
+  expect(requests.every(request => !/\/(?:generate|generation)(?:\/|$)/.test(request.url.pathname))).toBe(true);
+  expect(native.outerHTML).toBe(nativeMarkup);
 });
 
 test('chat header ignores an older character lookup after the active chat switches', async () => {
@@ -244,6 +336,20 @@ test('API status reflects the chat-bound profile and model rather than the globa
   expect(api.title).not.toContain('model-one');
 });
 
+test('leaving a chat unloads its SoundCloud frame even when the native active chat is unchanged', async () => {
+  dom.window.history.replaceState({}, '', '/chat/active_chat'); activeChat = { chatId: 'active_chat', characterId: 'char_current' };
+  characterResult = async id => ({ id, name: 'Soundtrack character', extensions: { jar_bridge: { soundcloud_track_id: '123456789' } } });
+  start(); await flush();
+  const header = roots.get('chat_header_left')!; findButton('Play in chat', header).click();
+  expect(header.querySelector('iframe')).not.toBeNull();
+  findButton('‹ Back', header).click(); expect(header.querySelector('iframe')).toBeNull();
+  findButton('Play in chat', header).click(); const frame = header.querySelector('iframe')!;
+  subscriptions.get('chat.active')!.forEach(handler => handler()); await flush();
+  expect(header.querySelector('iframe')).toBe(frame);
+  dom.window.history.replaceState({}, '', '/'); await new Promise(resolve => setTimeout(resolve, 550));
+  expect(activeChat.chatId).toBe('active_chat'); expect(header.querySelector('iframe')).toBeNull();
+});
+
 test('chat menu uses icons and owned prompt controls without altering native chat content', async () => {
   start(); await flush();
   const menu = roots.get('chat_header_left')!.querySelector('.jb-chat-menu')!;
@@ -268,8 +374,8 @@ test('Lumiverse tools can be revealed from either menu and the prior attribute i
 
 test('search, sort and favorites reset pagination and send native summary query parameters', async () => {
   start(); await flush();
-  expect(requests[0].url.searchParams.get('sort')).toBe('recent');
-  expect([...document.querySelectorAll('.jb-sort option')].map(option => (option as HTMLOptionElement).value)).toEqual(['recent', 'name', 'created']);
+  expect(requests[0].url.searchParams.get('sort')).toBe('created');
+  expect([...document.querySelectorAll('.jb-sort option')].map(option => (option as HTMLOptionElement).value)).toEqual(['created', 'name']);
   findButton('Next →').click(); await flush();
   expect(requests.at(-1)!.url.searchParams.get('offset')).toBe('24');
   const search = document.querySelector('.jb-search input') as HTMLInputElement;
@@ -323,15 +429,16 @@ test('empty favorites do not request the full library and show a useful empty st
 });
 
 test('untrusted names and creator notes are rendered as text without executable nodes', async () => {
-  previewSurfaces = false;
-  fetchResult = async () => respond([{ id: 'unsafe', name: '<img src=x onerror=alert(1)>', creator: '<svg onload=alert(1)>', creator_notes: '<img src=x onerror=alert(1)>Safe <b>creator note</b>', description: '<img src=x onerror=alert(1)>Safe <b>description</b>', tags: ['<script>alert(1)</script>'] }]);
+  const unsafe = { id: 'unsafe', name: '<img src=x onerror=alert(1)>', creator: '<svg onload=alert(1)>', creator_notes: '<img src=x onerror=alert(1)>Safe <b>creator note</b>', description: '<img src=x onerror=alert(1)>Safe <b>description</b>', tags: ['<script>alert(1)</script>'] };
+  fetchResult = async () => respond([unsafe]); characterResult = async () => unsafe;
   start(); await flush();
   expect(document.querySelector('.jb-card h3')!.textContent).toBe('<img src=x onerror=alert(1)>');
   expect(document.querySelector('.jb-description')!.textContent).toBe('Safe creator note');
   expect(document.querySelectorAll('.jb-grid img, .jb-grid script, .jb-grid svg')).toHaveLength(0);
-  (document.querySelector('.jb-card') as HTMLButtonElement).click();
-  expect(document.querySelector('.jb-preview-body')!.textContent).toBe('Safe description');
-  expect(document.querySelectorAll('.jb-preview img, .jb-preview script, .jb-preview svg')).toHaveLength(0);
+  (document.querySelector('.jb-card') as HTMLElement).click(); await flush();
+  expect(document.querySelector('.jb-preview-body .jb-profile-notes')!.textContent).toContain('Safe creator note');
+  expect(document.querySelectorAll('.jb-preview script, .jb-preview svg, .jb-preview [onerror], .jb-preview [onload]')).toHaveLength(0);
+  expect(document.querySelector('.jb-preview img')!.getAttribute('src')).toBe('/api/v1/characters/unsafe/avatar?size=lg');
 });
 
 test('gallery loads and caches the saved creator note instead of the definition', async () => {
@@ -361,31 +468,37 @@ test('a stale note lookup cannot replace a newly loaded card page', async () => 
   expect(document.querySelector('.jb-grid')!.textContent).not.toContain('Stale creator note');
 });
 
-test('preview uses the host component and forwards native edit and openChat events', async () => {
-  start(); await flush(); (document.querySelector('.jb-card') as HTMLButtonElement).click();
-  expect(document.querySelector('.jb-preview-body')!.textContent).toBe('Native preview for char_0');
-  surfaceHandlers.get('openChat')!({ chatId: 'selected_chat' }); await flush();
-  expect(calls).toContainEqual({ ref: { kind: 'route', id: '/chat/:chatId' }, params: { chatId: 'selected_chat' } });
-  expect(surfaceDestroyed).toBe(1); expect(document.querySelector('[role=dialog]')).toBeNull();
-  (document.querySelector('.jb-card') as HTMLButtonElement).click(); surfaceHandlers.get('edit')!(); await flush();
-  expect(calls).toContainEqual({ ref: { kind: 'modal', id: 'character_editor' }, params: { id: 'char_0' } });
+test('opening an All Characters card shows card details without mounting chat history or starting a conversation', async () => {
+  let chatReads = 0; characterChatsResult = async () => { chatReads++; return []; };
+  characterResult = async id => ({ id, name: 'Selected card', creator_notes: 'Public card introduction', description: 'Private definition' });
+  start(); await flush(); (document.querySelector('.jb-card') as HTMLElement).click(); await flush();
+  expect(document.querySelector('.jb-preview-body .jb-character-profile')).toBeNull();
+  expect(document.querySelector('.jb-preview-body.jb-character-profile')).not.toBeNull();
+  expect(document.querySelector('.jb-preview-body')!.textContent).toContain('Public card introduction');
+  expect(document.querySelector('.jb-preview-body details')!.textContent).toContain('Private definition');
+  expect((document.querySelector('.jb-preview-body details') as HTMLDetailsElement).open).toBe(false);
+  expect(document.querySelector('[data-surface-id="character_preview_panel"]')).toBeNull();
+  expect(surfaceHandlers.size).toBe(0); expect(chatReads).toBe(0); expect(calls).toHaveLength(0);
+  expect([...document.querySelectorAll('.jb-preview button')].some(button => button.textContent === 'Pin')).toBe(false);
+  expect(findButton('Read Creator’s Notes')).not.toBeNull(); expect(findButton('Favorited')).not.toBeNull();
 });
 
-test('main chat action resumes the latest chat while native Start chat explicitly starts a new one', async () => {
-  start(); await flush(); (document.querySelector('.jb-card') as HTMLButtonElement).click();
+test('only the separate explicit chat action resumes a conversation from a character card', async () => {
+  start(); await flush(); (document.querySelector('.jb-card') as HTMLElement).click(); await flush();
+  expect(calls).toHaveLength(0);
   findButton('Chat with this character').click(); await flush();
   expect(calls).toEqual([{ ref: { kind: 'entity_action', id: 'character_chat' }, params: { characterId: 'char_0', mode: 'latest' } }]);
-  (document.querySelector('.jb-card') as HTMLButtonElement).click(); surfaceHandlers.get('openChat')!({}); await flush();
-  expect(calls.at(-1)).toEqual({ ref: { kind: 'entity_action', id: 'character_chat' }, params: { characterId: 'char_0', mode: 'new' } });
-  expect(surfaceDestroyed).toBe(2); expect(document.querySelector('[role=dialog]')).toBeNull();
+  expect(document.querySelector('[role=dialog]')).toBeNull();
+  (document.querySelector('.jb-card') as HTMLElement).click(); await flush();
+  expect(calls).toHaveLength(1); findButton('Close', document.querySelector('.jb-preview')!).click();
 });
 
-test('an unavailable chat action is disabled while native existing-chat navigation still works', async () => {
+test('an unavailable chat action leaves card details and Creator’s Notes usable', async () => {
   chatActionAvailable = false; start(); await flush(); (document.querySelector('.jb-card') as HTMLButtonElement).click();
   expect(findButton('Chat with this character').disabled).toBe(true);
   expect(document.querySelector('.jb-preview')!.textContent).toContain('Chats permission');
-  surfaceHandlers.get('openChat')!({ chatId: 'existing_chat' }); await flush();
-  expect(calls).toEqual([{ ref: { kind: 'route', id: '/chat/:chatId' }, params: { chatId: 'existing_chat' } }]);
+  findButton('Read Creator’s Notes').click(); await flush();
+  expect(document.querySelector('.jb-profile-notes')).not.toBeNull(); expect(calls).toHaveLength(0);
 });
 
 test('missing Chats permission leaves the preview usable and explains how to enable it', async () => {
@@ -393,17 +506,17 @@ test('missing Chats permission leaves the preview usable and explains how to ena
   const chat = findButton('Chat with this character'); chat.click(); await flush();
   expect(chat.disabled).toBe(false); expect(document.querySelector('[role=dialog]')).not.toBeNull();
   expect(document.querySelector('.jb-preview')!.textContent).toContain('Chats permission');
-  findButton('View profile').click(); await flush();
+  findButton('Read Creator’s Notes').click(); await flush();
   expect(document.querySelector('.jb-character-profile h2')!.textContent).toBe('Current character');
   expect(calls.some(call => call.ref.kind === 'route')).toBe(false);
 });
 
-test('View profile stays on Home, renders the selected saved note, and retains working close/edit actions', async () => {
+test('Read Creator’s Notes stays on Home, renders the selected full note, and retains working close/edit actions', async () => {
   characterResult = async id => ({ id, name: 'Selected card', creator_notes: '<h2>Public introduction</h2><p>Full creator note.</p>', description: 'Definition stays in details.' });
   start(); await flush(); (document.querySelector('.jb-card') as HTMLButtonElement).click();
-  findButton('View profile').click(); await flush();
+  findButton('Read Creator’s Notes').click(); await flush();
   expect(location.pathname).toBe('/'); expect(calls).toHaveLength(0);
-  expect(document.querySelectorAll('[role=dialog]')).toHaveLength(1); expect(surfaceDestroyed).toBe(1);
+  expect(document.querySelectorAll('[role=dialog]')).toHaveLength(1); expect(surfaceDestroyed).toBe(0);
   expect(document.querySelector('.jb-profile-notes')!.textContent).toContain('Full creator note.');
   expect(document.querySelector('.jb-profile-details')!.textContent).toContain('Definition stays in details.');
   expect((document.querySelector('.jb-profile-details') as HTMLDetailsElement).open).toBe(false);
@@ -411,16 +524,111 @@ test('View profile stays on Home, renders the selected saved note, and retains w
   findButton('Edit character', document.querySelector('.jb-profile-window')!).click(); await flush();
   expect(calls).toEqual([{ ref: { kind: 'modal', id: 'character_editor' }, params: { id: 'char_0' } }]);
   expect(document.querySelector('[role=dialog]')).toBeNull();
-  (document.querySelector('.jb-card') as HTMLButtonElement).click(); findButton('View profile').click(); await flush();
+  (document.querySelector('.jb-card') as HTMLButtonElement).click(); findButton('Read Creator’s Notes').click(); await flush();
   findButton('Close', document.querySelector('.jb-profile-window')!).click();
   expect(document.querySelector('[role=dialog]')).toBeNull(); expect(document.querySelectorAll('.jb-card')).toHaveLength(24);
+});
+
+test('Favorite persists the native preference and preserves other favorites read immediately before saving', async () => {
+  let saved = ['char_4', 'saved-in-another-surface'];
+  fetchResult = async (url, options) => {
+    if (url.pathname === '/api/v1/settings/favorites') {
+      if (options.method === 'PUT') {
+        saved = JSON.parse(String(options.body)).value; favoriteIds = [...saved];
+        subscriptions.get('characters.favorites')!.forEach(handler => handler());
+      }
+      return { ok: true, status: 200, json: async () => ({ value: [...saved] }) };
+    }
+    return respond(cards);
+  };
+  start(); await flush(); (document.querySelectorAll('.jb-card')[1] as HTMLElement).click(); await flush();
+  const favorite = findButton('Favorite'); favorite.click(); favorite.click(); await flush();
+  expect(saved).toEqual(['char_4', 'saved-in-another-surface', 'char_1']);
+  expect(requests.filter(request => request.url.pathname === '/api/v1/settings/favorites' && request.options.method === 'PUT')).toHaveLength(1);
+  expect(favorite.getAttribute('aria-pressed')).toBe('true'); expect(favorite.textContent).toBe('Favorited');
+  expect(document.querySelector('[data-character-id="char_1"] .jb-favorite')).not.toBeNull();
+  favorite.click(); await flush();
+  expect(saved).toEqual(['char_4', 'saved-in-another-surface']); expect(favorite.getAttribute('aria-pressed')).toBe('false');
+  expect(calls).toHaveLength(0);
+});
+
+test('a failed native Favorite write leaves the card readable and does not pretend it was saved', async () => {
+  fetchResult = async (url, options) => url.pathname === '/api/v1/settings/favorites'
+    ? { ok: options.method !== 'PUT', status: options.method === 'PUT' ? 500 : 200, json: async () => ({ value: [] }) }
+    : respond(cards);
+  start(); await flush(); (document.querySelectorAll('.jb-card')[1] as HTMLElement).click(); await flush();
+  const favorite = findButton('Favorite'); favorite.click(); await flush();
+  expect(favorite.disabled).toBe(false); expect(favorite.getAttribute('aria-pressed')).toBe('false');
+  expect(document.querySelector('.jb-preview .jb-status')!.textContent).toContain('Could not save');
+  expect(document.querySelector('.jb-preview-body')).not.toBeNull(); expect(calls).toHaveLength(0);
+});
+
+test('closing a card while its favorite preference is loading prevents a delayed write', async () => {
+  const pending = deferred<any>();
+  fetchResult = async url => url.pathname === '/api/v1/settings/favorites' ? pending.promise : respond(cards);
+  start(); await flush(); (document.querySelectorAll('.jb-card')[1] as HTMLElement).click(); await flush();
+  findButton('Favorite').click(); await flush();
+  const request = requests.find(request => request.url.pathname === '/api/v1/settings/favorites')!;
+  findButton('Close', document.querySelector('.jb-preview')!).click();
+  expect(request.signal?.aborted).toBe(true);
+  pending.resolve({ ok: true, status: 200, json: async () => ({ value: [] }) }); await flush();
+  expect(requests.some(request => request.options.method === 'PUT')).toBe(false);
+  expect(document.querySelector('[role=dialog]')).toBeNull();
+});
+
+test('favorite writes from replacement card windows wait for a previous native save before merging', async () => {
+  let saved = ['char_4']; const pending = deferred<void>(); let first = true;
+  fetchResult = async (url, options) => {
+    if (url.pathname !== '/api/v1/settings/favorites') return respond(cards);
+    if (options.method === 'PUT') {
+      if (first) { first = false; await pending.promise; }
+      saved = JSON.parse(String(options.body)).value; favoriteIds = [...saved];
+      subscriptions.get('characters.favorites')!.forEach(handler => handler());
+    }
+    return { ok: true, status: 200, json: async () => ({ value: [...saved] }) };
+  };
+  start(); await flush(); (document.querySelectorAll('.jb-card')[1] as HTMLElement).click(); await flush();
+  findButton('Favorite').click(); await flush();
+  findButton('Close', document.querySelector('.jb-preview')!).click();
+  (document.querySelectorAll('.jb-card')[2] as HTMLElement).click(); await flush();
+  findButton('Favorite').click(); await flush();
+  expect(requests.filter(request => request.url.pathname === '/api/v1/settings/favorites' && request.options.method !== 'PUT')).toHaveLength(1);
+  pending.resolve(); await flush(); await flush();
+  expect(saved).toEqual(['char_4', 'char_1', 'char_2']);
+  expect(findButton('Favorited').getAttribute('aria-pressed')).toBe('true'); expect(calls).toHaveLength(0);
+});
+
+test('a named summary hydrates missing creator provenance and retains its cached profile link when Home rerenders', async () => {
+  fetchResult = async () => respond([{ id: 'imported', name: 'Imported card', creator: 'Original Author ✨', creator_notes: 'A public introduction', updated_at: 1 }]);
+  let reads = 0;
+  characterResult = async id => { reads++; return { id, name: 'Imported card', creator: 'Original Author ✨', creator_notes: 'A public introduction', extensions: { jar_bridge: { source: 'janitorai', creator_name: 'Original Author ✨', creator_id: '12345678-1234-4234-8234-123456789abc' } } }; };
+  start(); await flush();
+  const creator = document.querySelector<HTMLAnchorElement>('.jb-card .jb-creator a')!;
+  expect(creator.textContent).toBe('@Original Author ✨');
+  expect(creator.href).toBe('https://janitorai.com/profiles/12345678-1234-4234-8234-123456789abc');
+  expect(creator.closest('button')).toBeNull(); expect(creator.target).toBe('_blank');
+  creator.addEventListener('click', event => event.preventDefault()); creator.click(); await flush();
+  expect(document.querySelector('[role=dialog]')).toBeNull(); expect(calls).toHaveLength(0);
+  expect(reads).toBe(1);
+  findButton('Home', roots.get('landing_header')!).click(); await flush(); expect(reads).toBe(1);
+  expect(document.querySelector('.jb-creator')!.textContent).toBe('@Original Author ✨');
+  expect(document.querySelector<HTMLAnchorElement>('.jb-card .jb-creator a')!.href).toBe('https://janitorai.com/profiles/12345678-1234-4234-8234-123456789abc');
+});
+
+test('creator provenance lookup failure preserves a creator note already supplied by the summary', async () => {
+  fetchResult = async () => respond([{ id: 'recorded-author', name: 'Card', creator: 'Recorded author', creator_notes: 'Available public introduction', updated_at: 1 }]);
+  characterResult = async () => { throw new Error('Read unavailable'); };
+  start(); await flush();
+  expect(document.querySelector('.jb-description')!.textContent).toBe('Available public introduction');
+  expect(document.querySelector('.jb-creator')!.textContent).toBe('@Recorded author');
+  expect(document.querySelector('.jb-creator a')).toBeNull();
 });
 
 test('disable cleans owned UI/styles/subscriptions, closes preview and restores the original marker', async () => {
   start(); await flush(); (document.querySelector('.jb-card') as HTMLButtonElement).click();
   expect(document.querySelectorAll('style').length).toBeGreaterThan(0); stop!(); stop = undefined;
   expect(document.querySelectorAll('style')).toHaveLength(0); expect(document.querySelector('[role=dialog]')).toBeNull();
-  expect(surfaceDestroyed).toBe(1); expect([...roots.values()].every(root => root.childNodes.length === 0)).toBe(true);
+  expect(surfaceDestroyed).toBe(0); expect([...roots.values()].every(root => root.childNodes.length === 0)).toBe(true);
   expect([...subscriptions.values()].every(handlers => handlers.size === 0)).toBe(true);
   expect(document.documentElement.getAttribute('data-janitor-bridge-view')).toBe('previous');
   expect(document.documentElement.getAttribute('data-jb-tools')).toBe('saved');
@@ -445,6 +653,7 @@ test('import shortcuts discover the installed JAR extension by both unique keywo
     ] : []),
   ];
   start(); await flush();
+  findButton('Next idea').click();
   findButton('Start guided import').click(); await flush();
   findButton('Import characters', roots.get('landing_header')!).click(); await flush();
   expect(calls).toEqual([
@@ -464,6 +673,7 @@ test('the guided JAR capability opens its assistant directly through the shared 
   ctx.events = { emit: (name: string, payload: unknown) => emitted.push({ name, payload }) };
   start(); await flush();
   const priorRequests = requests.length;
+  findButton('Next idea').click();
   findButton('Start guided import').click(); await flush();
   expect(emitted).toEqual([{ name: 'jar_bridge:open_import', payload: {} }]);
   expect(calls).toHaveLength(0); expect(requests).toHaveLength(priorRequests);
@@ -479,6 +689,7 @@ test('without an invocable JAR drawer import opens the card file/link modal with
   ctx.permissions.getGranted = async () => { permissionsRead++; return []; };
   ctx.permissions.request = async () => { permissionRequests++; return []; };
   start(); await flush(); const priorRequests = requests.length;
+  findButton('Next idea').click();
   findButton('Start guided import').click(); await flush();
   const modal = document.querySelector('[role=dialog]')!;
   expect(modal.getAttribute('aria-label')).toBe('Import character');
