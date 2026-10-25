@@ -1,0 +1,119 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { JSDOM } from 'jsdom';
+import { createChatMemory } from '../src/memory';
+
+const originalFetch = globalThis.fetch;
+let window: JSDOM['window'];
+let memory: ReturnType<typeof createChatMemory>;
+let roots: HTMLElement[];
+let granted: string[];
+let checks: number;
+let calls: Array<{ url: string; options?: RequestInit }>;
+let respond: (url: string, options?: RequestInit) => Promise<Response>;
+
+const settle = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
+const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
+const saveButton = (root = roots.at(-1)!) => root.querySelector<HTMLButtonElement>('.jb-primary')!;
+const textarea = (root = roots.at(-1)!) => root.querySelector<HTMLTextAreaElement>('textarea')!;
+
+beforeEach(() => {
+  window = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost:11113' }).window;
+  globalThis.document = window.document;
+  roots = []; granted = ['chats']; checks = 0; calls = [];
+  respond = async (_url, options) => options?.method === 'PATCH' ? json({}) : json({ metadata: {} });
+  globalThis.fetch = (async (url, options) => {
+    calls.push({ url: String(url), options });
+    return respond(String(url), options);
+  }) as typeof fetch;
+  memory = createChatMemory({
+    ui: { showModal: () => {
+      const root = document.createElement('div'); document.body.append(root); roots.push(root);
+      const callbacks: Array<() => void> = [];
+      let dismissed = false;
+      return { root, modalId: String(roots.length), setTitle() {},
+        dismiss() { if (!dismissed) { dismissed = true; root.remove(); callbacks.forEach(fn => fn()); } },
+        onDismiss(fn: () => void) { callbacks.push(fn); return () => {}; },
+      };
+    } },
+    permissions: { async getGranted() { checks++; return [...granted]; } },
+  } as any);
+});
+
+afterEach(() => { memory.destroy(); globalThis.fetch = originalFetch; window.close(); });
+
+describe('native chat memory integration', () => {
+  test('a suggested summary remains an unsaved review draft and preserves native insertion settings on Save', async () => {
+    respond = async (_url, options) => options?.method === 'PATCH' ? json({}) : json({ metadata: {
+      authors_note: { content: 'Existing memory', depth: 8, role: 'user', custom: 'keep' },
+    } });
+    memory.open('review-chat', 'Suggested summary'); await settle();
+    expect(textarea().value).toBe('Suggested summary');
+    expect(calls.every(call => call.options?.method !== 'PATCH')).toBe(true);
+    saveButton().click(); await settle();
+    expect(JSON.parse(String(calls[1].options?.body))).toEqual({ authors_note: {
+      content: 'Suggested summary', depth: 8, role: 'user', custom: 'keep',
+    } });
+  });
+
+  test('saves one metadata key atomically and preserves advanced note fields', async () => {
+    respond = async (_url, options) => options?.method === 'PATCH' ? json({}) : json({ metadata: {
+      authors_note: { content: 'Before', depth: 7, role: 'user', position: 2, custom: 'preserve' }, unrelated: 'keep',
+    } });
+    memory.open('captured/chat'); await settle();
+    expect(textarea().value).toBe('Before');
+    expect(roots[0].querySelector<HTMLSelectElement>('select')!.value).toBe('user');
+    textarea().value = 'After'; saveButton().click(); await settle();
+    expect(checks).toBe(1);
+    expect(calls[1].url).toBe('/api/v1/chats/captured%2Fchat/metadata');
+    expect(calls[1].options?.method).toBe('PATCH');
+    expect(JSON.parse(String(calls[1].options?.body))).toEqual({ authors_note: {
+      content: 'After', depth: 7, role: 'user', position: 2, custom: 'preserve',
+    } });
+    expect(roots[0].isConnected).toBe(false);
+  });
+
+  test('checks permission on every Save and keeps denied edits available', async () => {
+    granted = []; memory.open('chat'); await settle();
+    textarea().value = 'User facts'; saveButton().click(); await settle();
+    expect(calls).toHaveLength(1);
+    expect(textarea().value).toBe('User facts'); expect(saveButton().disabled).toBe(false);
+    expect(roots[0].textContent).toContain('Chats permission');
+    granted = ['chats']; saveButton().click(); await settle();
+    expect(checks).toBe(2); expect(calls).toHaveLength(2);
+    expect(JSON.parse(String(calls[1].options?.body))).toEqual({ authors_note: { content: 'User facts', depth: 4, role: 'system' } });
+  });
+
+  test('clears only the note and retains edits when the server rejects Save', async () => {
+    respond = async (_url, options) => options?.method === 'PATCH' ? json({}, 500) : json({ metadata: { authors_note: { content: 'Before', depth: 3, role: 'assistant' } } });
+    memory.open('chat'); await settle(); textarea().value = '   '; saveButton().click(); await settle();
+    expect(JSON.parse(String(calls[1].options?.body))).toEqual({ authors_note: null });
+    expect(roots[0].isConnected).toBe(true); expect(saveButton().disabled).toBe(false);
+    expect(roots[0].textContent).toContain('Could not save'); expect(textarea().value).toBe('   ');
+  });
+
+  test('Cancel never writes and late loads cannot alter a replacement modal', async () => {
+    let resolveFirst: (response: Response) => void = () => {};
+    respond = async (url) => url.includes('/first?') ? new Promise(resolve => { resolveFirst = resolve; }) : json({ metadata: { authors_note: { content: 'Second' } } });
+    memory.open('first'); const firstSignal = calls[0].options?.signal;
+    memory.open('second'); await settle();
+    expect(firstSignal?.aborted).toBe(true);
+    resolveFirst(json({ metadata: { authors_note: { content: 'Stale first' } } })); await settle();
+    expect(textarea().value).toBe('Second');
+    Array.from(roots[1].querySelectorAll<HTMLButtonElement>('button')).find(node => node.textContent === 'Cancel')!.click();
+    expect(calls.every(call => call.options?.method !== 'PATCH')).toBe(true);
+    expect(roots[1].isConnected).toBe(false);
+  });
+
+  test('destroy during permission check prevents a pending write', async () => {
+    let resolveGrant: (grant: string[]) => void = () => {};
+    memory.destroy();
+    memory = createChatMemory({ ui: { showModal: () => {
+      const root = document.createElement('div'); document.body.append(root); roots.push(root);
+      let dismissed = false; const callbacks: Array<() => void> = [];
+      return { root, modalId: 'pending', setTitle() {}, dismiss() { if (!dismissed) { dismissed = true; root.remove(); callbacks.forEach(fn => fn()); } }, onDismiss(fn: () => void) { callbacks.push(fn); return () => {}; } };
+    } }, permissions: { getGranted: () => new Promise(resolve => { resolveGrant = resolve; }) } } as any);
+    memory.open('chat'); await settle(); textarea().value = 'Facts'; saveButton().click(); memory.destroy();
+    resolveGrant(['chats']); await settle();
+    expect(calls).toHaveLength(1);
+  });
+});
