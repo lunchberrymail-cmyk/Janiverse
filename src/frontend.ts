@@ -28,6 +28,7 @@ import { createSettingsWindow } from './settings-window';
 import { creatorAttribution, type CreatorAttribution } from './creator-attribution';
 import { createCharacterCreate } from './character-create';
 import { createHone } from './hone';
+import { honeScreenshots } from './hone-screenshots';
 import { openFeatureTutorial, type TutorialFeature } from './feature-tutorials';
 import { tutorialScreenshots } from './tutorial-screenshots';
 
@@ -79,7 +80,7 @@ export function setup(ctx: SpindleFrontendContext) {
     },
   });
   const composerActions = createComposerActions(ctx, { openMemoryDraft: (chatId, text) => openMemory(chatId, text) });
-  const hone = createHone(ctx, { revealTools: () => {
+  const hone = createHone(ctx, { screenshots: honeScreenshots, revealTools: () => {
     document.documentElement.setAttribute('data-jb-tools', 'true');
     toolsToggle.setAttribute('aria-pressed', 'true'); homeToolsToggle.setAttribute('aria-pressed', 'true');
   } });
