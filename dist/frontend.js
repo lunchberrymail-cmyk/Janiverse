@@ -114,7 +114,6 @@ html[data-janitor-bridge-view=chats] .jb-home-masthead>.jb-search{display:none}
   --lumiverse-modal-backdrop: #191a20b8 !important;
   --lumiverse-gradient-modal: linear-gradient(150deg, #383a42, #292b31) !important;
 }
-\r
 `;var Xt=`/* Native layout only. CSS-module fragments are scoped to public components. */
 [data-component="LandingPage"], [data-component="ChatView"] { background: #303238; }
 [data-component="LandingPage"] [data-landing-background-glow], [data-component="LandingPage"] [data-landing-background-grid] { opacity: 0; }
@@ -233,7 +232,6 @@ html[data-jb-tools="false"] [data-component="InputArea"] > [class*="_actionBar_"
   [data-component="MinimalMessage"][data-part] { grid-template-columns: 36px minmax(0, 1fr); column-gap: 12px; }
   [data-component="InputArea"] { padding-inline: 7px; }
 }
-\r
 `;var Qt=`/* Extension-owned settings. The host modal supplies its close button and scrolling. */
 .jb-settings {
   --jb-settings-gutter: 24px;
