@@ -340,14 +340,28 @@ test('leaving a chat unloads its SoundCloud frame even when the native active ch
   dom.window.history.replaceState({}, '', '/chat/active_chat'); activeChat = { chatId: 'active_chat', characterId: 'char_current' };
   characterResult = async id => ({ id, name: 'Soundtrack character', extensions: { jar_bridge: { soundcloud_track_id: '123456789' } } });
   start(); await flush();
-  const header = roots.get('chat_header_left')!; findButton('Play in chat', header).click();
+  const header = roots.get('chat_header_left')!;
+  expect(header.querySelector('iframe')).toBeNull(); expect(document.querySelector('script')).toBeNull();
+  findButton('Play', header).click();
+  const controller = document.querySelector<HTMLScriptElement>('script[src="https://w.soundcloud.com/player/api.js"]')!;
+  expect(controller).not.toBeNull(); expect(header.querySelector('iframe')).toBeNull();
+  // Simulate the official controller becoming available without loading its network script.
+  const bindings: Array<Set<string>> = [];
+  const widget = Object.assign(() => {
+    const events = new Set<string>(); bindings.push(events);
+    return { bind: (name: string) => { events.add(name); }, unbind: (name: string) => { events.delete(name); }, play() {}, pause() {}, getCurrentSound() {} };
+  }, { Events: { READY: 'ready', PLAY: 'play', PAUSE: 'pause', FINISH: 'finish', ERROR: 'error' } });
+  dom.window.SC = { Widget: widget }; controller.dispatchEvent(new dom.window.Event('load')); await flush();
   expect(header.querySelector('iframe')).not.toBeNull();
+  findButton('Stop', header).click(); expect(header.querySelector('iframe')).toBeNull(); expect(bindings[0].size).toBe(0);
+  findButton('Play', header).click(); await flush(); expect(header.querySelector('iframe')).not.toBeNull();
   findButton('‹ Back', header).click(); expect(header.querySelector('iframe')).toBeNull();
-  findButton('Play in chat', header).click(); const frame = header.querySelector('iframe')!;
+  findButton('Play', header).click(); await flush(); const frame = header.querySelector('iframe')!; expect(frame).not.toBeNull();
   subscriptions.get('chat.active')!.forEach(handler => handler()); await flush();
   expect(header.querySelector('iframe')).toBe(frame);
   dom.window.history.replaceState({}, '', '/'); await new Promise(resolve => setTimeout(resolve, 550));
   expect(activeChat.chatId).toBe('active_chat'); expect(header.querySelector('iframe')).toBeNull();
+  expect(bindings.every(events => events.size === 0)).toBe(true); expect(document.querySelectorAll('script')).toHaveLength(1);
 });
 
 test('chat menu uses icons and owned prompt controls without altering native chat content', async () => {
@@ -400,7 +414,7 @@ test('favorites changes reset the page when the filtered collection shrinks', as
   subscriptions.get('characters.favorites')!.forEach(handler => handler()); await flush();
   expect(requests.at(-1)!.url.searchParams.get('offset')).toBe('0');
   expect(requests.at(-1)!.url.searchParams.get('favorite_ids')).toBe('char_0');
-  expect(document.querySelector('.jb-count')!.textContent).toBe('1 character in favorites');
+  expect(document.querySelector('.jb-count')!.textContent).toBe('1 favorite character card');
   expect(document.querySelector('.jb-paging span')!.textContent).toBe('1–1 of 1');
   expect((document.querySelector('.jb-paging') as HTMLElement).hidden).toBe(true);
 });
@@ -413,7 +427,7 @@ test('a stale library response cannot replace newer results even if transport ig
   fresh.resolve(respond([{ id: 'new', name: 'Fresh result' }])); await flush();
   old.resolve(respond([{ id: 'old', name: 'Stale result' }])); await flush();
   expect(document.querySelector('.jb-grid')!.textContent).toContain('Fresh result'); expect(document.querySelector('.jb-grid')!.textContent).not.toContain('Stale result');
-  expect(document.querySelector('.jb-count')!.textContent).toBe('1 character in your library');
+  expect(document.querySelector('.jb-count')!.textContent).toBe('1 saved character card');
 });
 
 test('recent chats invoke the native route with the exact chat id', async () => {
@@ -424,7 +438,7 @@ test('recent chats invoke the native route with the exact chat id', async () => 
 test('empty favorites do not request the full library and show a useful empty state', async () => {
   start(); await flush(); favoriteIds = []; const previousRequests = requests.length;
   findButton('♥ Favorites').click(); await flush();
-  expect(requests.length).toBe(previousRequests); expect(document.querySelector('.jb-empty')!.textContent).toContain('Characters you favorite');
+  expect(requests.length).toBe(previousRequests); expect(document.querySelector('.jb-empty')!.textContent).toContain('Character cards you favorite');
   expect((document.querySelector('.jb-paging') as HTMLElement).hidden).toBe(true);
 });
 
@@ -468,7 +482,21 @@ test('a stale note lookup cannot replace a newly loaded card page', async () => 
   expect(document.querySelector('.jb-grid')!.textContent).not.toContain('Stale creator note');
 });
 
-test('opening an All Characters card shows card details without mounting chat history or starting a conversation', async () => {
+test('All Characters includes saved cards with no chats and never builds the library from chat results', async () => {
+  const savedCards = [cards[0], { id: 'unused-card', name: 'Never chatted with', creator_notes: 'A card kept for later.' }];
+  fetchResult = async () => respond(savedCards);
+  let chatReads = 0; characterChatsResult = async () => { chatReads++; return []; };
+  start(); await flush();
+  expect([...document.querySelectorAll('.jb-card')].map(card => card.getAttribute('data-character-id'))).toEqual(['char_0', 'unused-card']);
+  expect(document.querySelector('.jb-count')!.textContent).toBe('2 saved character cards');
+  const summary = requests.find(request => request.url.pathname === '/api/v1/characters/summary')!;
+  expect(summary.url.searchParams.get('sort')).toBe('created'); expect(summary.url.searchParams.has('filter')).toBe(false);
+  expect(groupedQueries).toHaveLength(0); expect(chatReads).toBe(0);
+  (document.querySelector('[data-character-id="unused-card"] .jb-card-title') as HTMLButtonElement).click(); await flush();
+  expect(document.querySelector('.jb-profile-window')).not.toBeNull(); expect(calls).toHaveLength(0); expect(chatReads).toBe(0);
+});
+
+test('opening an All Characters card goes directly to full Creator’s Notes without mounting chat history or starting a conversation', async () => {
   let chatReads = 0; characterChatsResult = async () => { chatReads++; return []; };
   characterResult = async id => ({ id, name: 'Selected card', creator_notes: 'Public card introduction', description: 'Private definition' });
   start(); await flush(); (document.querySelector('.jb-card') as HTMLElement).click(); await flush();
@@ -480,14 +508,18 @@ test('opening an All Characters card shows card details without mounting chat hi
   expect(document.querySelector('[data-surface-id="character_preview_panel"]')).toBeNull();
   expect(surfaceHandlers.size).toBe(0); expect(chatReads).toBe(0); expect(calls).toHaveLength(0);
   expect([...document.querySelectorAll('.jb-preview button')].some(button => button.textContent === 'Pin')).toBe(false);
-  expect(findButton('Read Creator’s Notes')).not.toBeNull(); expect(findButton('Favorited')).not.toBeNull();
+  expect(document.querySelector('.jb-card-cta')!.textContent).toBe('Read Creator’s Notes →');
+  expect(findButton('Favorited')).not.toBeNull(); expect(findButton('Edit card')).not.toBeNull();
+  expect(document.querySelector('.jb-profile-window')!.firstElementChild!.classList.contains('jb-character-profile')).toBe(true);
+  expect(findButton('Start new chat').closest('.jb-profile-chat-actions')).not.toBeNull();
+  expect(findButton('Start new chat').classList.contains('jb-primary')).toBe(false);
 });
 
-test('only the separate explicit chat action resumes a conversation from a character card', async () => {
+test('the separate explicit chat action starts a new chat rather than resuming the existing conversation', async () => {
   start(); await flush(); (document.querySelector('.jb-card') as HTMLElement).click(); await flush();
   expect(calls).toHaveLength(0);
-  findButton('Chat with this character').click(); await flush();
-  expect(calls).toEqual([{ ref: { kind: 'entity_action', id: 'character_chat' }, params: { characterId: 'char_0', mode: 'latest' } }]);
+  findButton('Start new chat').click(); await flush();
+  expect(calls).toEqual([{ ref: { kind: 'entity_action', id: 'character_chat' }, params: { characterId: 'char_0', mode: 'new' } }]);
   expect(document.querySelector('[role=dialog]')).toBeNull();
   (document.querySelector('.jb-card') as HTMLElement).click(); await flush();
   expect(calls).toHaveLength(1); findButton('Close', document.querySelector('.jb-preview')!).click();
@@ -495,38 +527,74 @@ test('only the separate explicit chat action resumes a conversation from a chara
 
 test('an unavailable chat action leaves card details and Creator’s Notes usable', async () => {
   chatActionAvailable = false; start(); await flush(); (document.querySelector('.jb-card') as HTMLButtonElement).click();
-  expect(findButton('Chat with this character').disabled).toBe(true);
+  expect(findButton('Start new chat').disabled).toBe(true);
   expect(document.querySelector('.jb-preview')!.textContent).toContain('Chats permission');
-  findButton('Read Creator’s Notes').click(); await flush();
+  await flush();
   expect(document.querySelector('.jb-profile-notes')).not.toBeNull(); expect(calls).toHaveLength(0);
 });
 
 test('missing Chats permission leaves the preview usable and explains how to enable it', async () => {
   allowChats = false; start(); await flush(); (document.querySelector('.jb-card') as HTMLButtonElement).click();
-  const chat = findButton('Chat with this character'); chat.click(); await flush();
+  const chat = findButton('Start new chat'); chat.click(); await flush();
   expect(chat.disabled).toBe(false); expect(document.querySelector('[role=dialog]')).not.toBeNull();
   expect(document.querySelector('.jb-preview')!.textContent).toContain('Chats permission');
-  findButton('Read Creator’s Notes').click(); await flush();
   expect(document.querySelector('.jb-character-profile h2')!.textContent).toBe('Current character');
   expect(calls.some(call => call.ref.kind === 'route')).toBe(false);
 });
 
 test('Read Creator’s Notes stays on Home, renders the selected full note, and retains working close/edit actions', async () => {
-  characterResult = async id => ({ id, name: 'Selected card', creator_notes: '<h2>Public introduction</h2><p>Full creator note.</p>', description: 'Definition stays in details.' });
-  start(); await flush(); (document.querySelector('.jb-card') as HTMLButtonElement).click();
-  findButton('Read Creator’s Notes').click(); await flush();
+  characterResult = async id => ({ id, name: 'Selected card', creator_notes: `<h2>Public introduction</h2><p>${'An introduction. '.repeat(30)}Full creator note.</p>`, description: 'Definition stays in details.' });
+  start(); await flush(); (document.querySelector('.jb-card-cta')!.closest('button') as HTMLButtonElement).click(); await flush();
   expect(location.pathname).toBe('/'); expect(calls).toHaveLength(0);
   expect(document.querySelectorAll('[role=dialog]')).toHaveLength(1); expect(surfaceDestroyed).toBe(0);
   expect(document.querySelector('.jb-profile-notes')!.textContent).toContain('Full creator note.');
+  expect(document.querySelector('.jb-profile-notes .jb-profile-rich h2')!.textContent).toBe('Public introduction');
   expect(document.querySelector('.jb-profile-details')!.textContent).toContain('Definition stays in details.');
   expect((document.querySelector('.jb-profile-details') as HTMLDetailsElement).open).toBe(false);
   expect(native.outerHTML).toBe(nativeMarkup);
-  findButton('Edit character', document.querySelector('.jb-profile-window')!).click(); await flush();
+  findButton('Edit card', document.querySelector('.jb-profile-window')!).click(); await flush();
   expect(calls).toEqual([{ ref: { kind: 'modal', id: 'character_editor' }, params: { id: 'char_0' } }]);
   expect(document.querySelector('[role=dialog]')).toBeNull();
-  (document.querySelector('.jb-card') as HTMLButtonElement).click(); findButton('Read Creator’s Notes').click(); await flush();
+  (document.querySelector('.jb-card') as HTMLElement).click(); await flush();
   findButton('Close', document.querySelector('.jb-profile-window')!).click();
   expect(document.querySelector('[role=dialog]')).toBeNull(); expect(document.querySelectorAll('.jb-card')).toHaveLength(24);
+});
+
+test('the inline Favorite button saves the native card preference without opening notes or starting a chat', async () => {
+  let saved = ['char_4', 'another-native-favorite'];
+  fetchResult = async (url, options) => {
+    if (url.pathname !== '/api/v1/settings/favorites') return respond(cards);
+    if (options.method === 'PUT') saved = JSON.parse(String(options.body)).value;
+    return { ok: true, status: 200, json: async () => ({ value: [...saved] }) };
+  };
+  start(); await flush();
+  const inline = document.querySelector<HTMLButtonElement>('[data-character-id="char_1"] .jb-card-favorite')!;
+  expect(inline.tagName).toBe('BUTTON'); expect(inline.parentElement!.closest('button')).toBeNull();
+  expect(inline.getAttribute('aria-label')).toBe('Favorite Character 1'); expect(inline.getAttribute('aria-pressed')).toBe('false');
+  inline.click(); inline.click(); await flush();
+  expect(saved).toEqual(['char_4', 'another-native-favorite', 'char_1']);
+  expect(requests.filter(request => request.url.pathname === '/api/v1/settings/favorites' && request.options.method === 'PUT')).toHaveLength(1);
+  const updated = document.querySelector<HTMLButtonElement>('[data-character-id="char_1"] .jb-card-favorite')!;
+  expect(updated.getAttribute('aria-pressed')).toBe('true'); expect(updated.getAttribute('aria-label')).toBe('Remove Character 1 from favorites');
+  expect(document.querySelector('[role=dialog]')).toBeNull(); expect(calls).toHaveLength(0);
+  updated.click(); await flush();
+  expect(saved).toEqual(['char_4', 'another-native-favorite']);
+  expect(document.querySelector('[data-character-id="char_1"] .jb-card-favorite')!.getAttribute('aria-pressed')).toBe('false');
+});
+
+test('replacing a gallery page disposes its Favorite controls and prevents a delayed preference write', async () => {
+  const pending = deferred<any>();
+  fetchResult = async url => url.pathname === '/api/v1/settings/favorites' ? pending.promise : respond(cards, 72);
+  start(); await flush();
+  const subscriptionCount = subscriptions.get('characters.favorites')!.size;
+  const inline = document.querySelector<HTMLButtonElement>('[data-character-id="char_1"] .jb-card-favorite')!;
+  inline.click(); await flush();
+  const favoriteRead = requests.find(request => request.url.pathname === '/api/v1/settings/favorites')!;
+  findButton('Next →').click(); await flush();
+  expect(favoriteRead.signal!.aborted).toBe(true); expect(inline.isConnected).toBe(false);
+  expect(subscriptions.get('characters.favorites')!.size).toBe(subscriptionCount);
+  pending.resolve({ ok: true, status: 200, json: async () => ({ value: [] }) }); await flush();
+  expect(requests.some(request => request.options.method === 'PUT')).toBe(false); expect(calls).toHaveLength(0);
 });
 
 test('Favorite persists the native preference and preserves other favorites read immediately before saving', async () => {
@@ -546,7 +614,7 @@ test('Favorite persists the native preference and preserves other favorites read
   expect(saved).toEqual(['char_4', 'saved-in-another-surface', 'char_1']);
   expect(requests.filter(request => request.url.pathname === '/api/v1/settings/favorites' && request.options.method === 'PUT')).toHaveLength(1);
   expect(favorite.getAttribute('aria-pressed')).toBe('true'); expect(favorite.textContent).toBe('Favorited');
-  expect(document.querySelector('[data-character-id="char_1"] .jb-favorite')).not.toBeNull();
+  expect(document.querySelector('[data-character-id="char_1"] .jb-card-favorite')!.getAttribute('aria-pressed')).toBe('true');
   favorite.click(); await flush();
   expect(saved).toEqual(['char_4', 'saved-in-another-surface']); expect(favorite.getAttribute('aria-pressed')).toBe('false');
   expect(calls).toHaveLength(0);

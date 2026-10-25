@@ -59,6 +59,7 @@ test('introduces one optional feature and opens it directly without changing con
   expect([...picks.querySelectorAll('a')].map(link => link.href)).toEqual([
     'https://github.com/patatasbravasch-arch/Choir', 'https://github.com/AMousePad/LumiBooks',
     'https://github.com/japolino/cue-living-novel', 'https://github.com/kittyafterdark/Pocket',
+    'https://github.com/kittyafterdark/Prism',
   ]);
   expect(invoked).toHaveLength(6);
   find('Open Extensions').click(); await flush();
@@ -104,7 +105,7 @@ test('Lunch native setup failures keep the recommendations and show local recove
   invokeResult = async () => { throw new Error('unavailable'); };
   find('Open Extensions').click(); await flush();
   expect(panel.textContent).toContain('Could not open Extensions');
-  expect(panel.querySelectorAll('.jb-lunch-pick')).toHaveLength(4);
+  expect(panel.querySelectorAll('.jb-lunch-pick')).toHaveLength(5);
 });
 
 test('a late result from replaced Lunch picks cannot close or rewrite its replacement', async () => {

@@ -4,12 +4,14 @@ import { openFeatureTutorial, type TutorialFeature } from '../src/feature-tutori
 
 let dom: any, oldDocument: any, ctx: any, handles: any[], invoked: unknown[], imports: number;
 let result: (ref: unknown) => Promise<boolean>;
+let oldSetTimeout: typeof globalThis.setTimeout, oldClearTimeout: typeof globalThis.clearTimeout;
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 const pixel = 'data:image/png;base64,iVBORw0KGgo=';
 const find = (name: string) => [...document.querySelectorAll('button')].find(node => node.textContent === name)! as HTMLButtonElement;
 const options = () => ({ invoke: async (ref: unknown) => { invoked.push(ref); return result(ref); }, openImport: () => { imports++; } });
 beforeEach(() => {
-  oldDocument = globalThis.document; dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost:7860/' }); globalThis.document = dom.window.document;
+  oldDocument = globalThis.document; dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost:7860/', pretendToBeVisual: true }); globalThis.document = dom.window.document;
+  oldSetTimeout = globalThis.setTimeout; oldClearTimeout = globalThis.clearTimeout;
   handles = []; invoked = []; imports = 0; result = async () => true;
   ctx = { ui: { showModal: (request: unknown) => {
     const root = document.createElement('div'); document.body.append(root);
@@ -18,116 +20,166 @@ beforeEach(() => {
     handles.push(handle); return handle;
   } } };
 });
-afterEach(() => { handles.forEach(handle => handle.dismiss()); dom.window.close(); globalThis.document = oldDocument; });
+afterEach(() => { handles.forEach(handle => handle.dismiss()); globalThis.setTimeout = oldSetTimeout; globalThis.clearTimeout = oldClearTimeout; dom.window.close(); globalThis.document = oldDocument; });
+function demoClock() {
+  const pending = new Map<number, () => void>(); let serial = 0;
+  globalThis.setTimeout = ((callback: any, delay?: number, ...args: any[]) => {
+    if (delay !== 6500) return oldSetTimeout(callback, delay, ...args);
+    const id = ++serial; pending.set(id, () => callback(...args)); return id;
+  }) as any;
+  globalThis.clearTimeout = ((id: any) => { if (!pending.delete(id)) oldClearTimeout(id); }) as any;
+  return { pending, tick() { const entry = pending.entries().next().value as [number, () => void] | undefined; if (!entry) throw new Error('No demo timer'); pending.delete(entry[0]); entry[1](); } };
+}
 
-test('the group walkthrough explains actual creation, API, persona and turn controls without performing them', () => {
-  const tutorial = openFeatureTutorial(ctx, 'group', { ...options(), screenshots: {
-    'group-select': { src: pixel, alt: 'Select Characters with two selected demonstration cards' },
-    'group-greeting': { src: pixel, alt: 'Choose Opening Greeting in the native creator' },
-    'group-settings': { src: pixel, alt: 'Native Group Settings before creating the conversation' },
-  } });
-  expect(tutorial.root.getAttribute('role')).toBe('dialog');
-  expect(tutorial.root.getAttribute('aria-label')).toBe('Your first group chat');
-  for (const instruction of ['Select Characters', 'Choose Opening Greeting', 'Create Group Chat', 'Save & Use', 'This chat', 'Connection Profile', 'persona picker', 'immediately requests a reply', 'Direct mentions respond first', 'long-press', 'at least two members']) expect(tutorial.root.textContent).toContain(instruction);
-  expect(tutorial.root.querySelectorAll('.jb-tutorial-step')).toHaveLength(8);
-  expect([...tutorial.root.querySelectorAll('img')].map(image => image.alt)).toEqual([
-    'Select Characters with two selected demonstration cards', 'Choose Opening Greeting in the native creator', 'Native Group Settings before creating the conversation',
-  ]);
+test('the group demo shows the entry point then one cast, greeting, settings or chat scene at a time', () => {
+  const screenshots = Object.fromEntries(['group-start', 'group-select', 'group-greeting', 'group-settings', 'group-chat', 'group-mention', 'group-member-menu'].map(key => [key, { src: pixel, alt: key }]));
+  const tutorial = openFeatureTutorial(ctx, 'group', { ...options(), screenshots });
+  expect(tutorial.root.getAttribute('role')).toBe('dialog'); expect(tutorial.root.getAttribute('aria-label')).toBe('Your first group chat');
+  expect(tutorial.root.querySelectorAll('.jb-tutorial-scene')).toHaveLength(1);
+  expect(tutorial.root.querySelectorAll('details[open]')).toHaveLength(0);
+  expect(tutorial.root.querySelector('.jb-tutorial-instruction')!.textContent).toContain('New Group Chat');
+  expect(find('Back').disabled).toBe(true);
+  const seen: string[] = [];
+  for (let scene = 0; scene < 7; scene++) {
+    expect(tutorial.root.querySelectorAll('img')).toHaveLength(1); seen.push(tutorial.root.querySelector('img')!.alt);
+    expect(tutorial.root.querySelector('.jb-tutorial-progress')!.getAttribute('aria-label')).toBe(`Scene ${scene + 1} of 7`);
+    if (scene < 6) find('Next').click();
+  }
+  expect(seen).toEqual(['group-start', 'group-select', 'group-greeting', 'group-settings', 'group-chat', 'group-mention', 'group-member-menu']);
+  expect(tutorial.root.querySelector('.jb-tutorial-instruction')!.textContent).toContain('long-press');
+  expect(tutorial.root.querySelector('.jb-tutorial-result')!.textContent).toContain('immediately requests a reply');
+  expect(find('Next').disabled).toBe(true); find('Next').click(); expect(tutorial.root.dataset.scene).toBe('7');
+  find('Back').click(); expect(tutorial.root.dataset.screenshot).toBe('group-mention');
   expect(invoked).toEqual([]); expect(imports).toBe(0);
 });
 
-test('native setup opens only on the named shortcut and successful opening closes the tutorial', async () => {
-  openFeatureTutorial(ctx, 'group', options());
-  expect(invoked).toEqual([]);
+test('native controls open only on the explicit shortcut and successful opening closes the demo', async () => {
+  const tutorial = openFeatureTutorial(ctx, 'group', options());
+  find('Next').click(); find('Back').click(); expect(invoked).toEqual([]);
   find('Open Character Browser').click(); await flush();
-  expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'characters' }]);
-  expect(document.querySelector('.jb-feature-tutorial')).toBeNull();
+  expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'characters' }]); expect(tutorial.root.isConnected).toBe(false);
 });
 
-test('unavailable or rejected native shortcuts retain the tutorial with actionable guidance', async () => {
+test('voice connection setup remains optional and opens the native Connections drawer only when chosen', async () => {
+  const tutorial = openFeatureTutorial(ctx, 'voice', options());
+  const before = tutorial.root.querySelector<HTMLDetailsElement>('.jb-tutorial-before')!;
+  expect(before.open).toBe(false); expect(invoked).toEqual([]);
+  before.open = true; find('Open Connections').click(); await flush();
+  expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'connections' }]); expect(tutorial.root.isConnected).toBe(false);
+});
+
+test('unavailable or rejected shortcuts retain the scene and show actionable recovery', async () => {
   const tutorial = openFeatureTutorial(ctx, 'memory', options());
-  result = async () => false;
-  find('Open Memory Cortex settings').click(); await flush();
-  expect(invoked).toEqual([{ kind: 'settings_tab', id: 'memoryCortex' }]);
-  expect(tutorial.root.isConnected).toBe(true);
+  for (let step = 0; step < 3; step++) find('Next').click();
+  result = async () => false; find('Open Memory Cortex settings').click(); await flush();
+  expect(invoked).toEqual([{ kind: 'settings_tab', id: 'memoryCortex' }]); expect(tutorial.root.dataset.scene).toBe('4');
   expect(tutorial.root.textContent).toContain('This shortcut is unavailable. Open Lumiverse Settings → Memory Cortex.');
-  result = async () => { throw new Error('not available'); };
-  find('Open Summary').click(); await flush();
-  expect(tutorial.root.textContent).toContain('Could not open that tool. Open Summary');
-  expect(find('Open Summary').disabled).toBe(false);
+  for (let step = 0; step < 3; step++) find('Back').click();
+  result = async () => { throw new Error('not available'); }; find('Open Summary').click(); await flush();
+  expect(tutorial.root.textContent).toContain('Could not open that tool. Open Summary'); expect(find('Open Summary').disabled).toBe(false);
 });
 
-test('closing during an explicit pending action stops late UI writes and suppresses duplicate opens', async () => {
-  let resolve!: (value: boolean) => void;
-  result = () => new Promise<boolean>(r => { resolve = r; });
-  let closed = 0;
-  const tutorial = openFeatureTutorial(ctx, 'voice', { ...options(), onClose: () => { closed++; } });
-  const status = tutorial.root.querySelector('[role=status]')!;
-  find('Open Voice & Speech').click(); find('Open Voice & Speech').click(); await flush();
-  expect(invoked).toEqual([{ kind: 'settings_tab', id: 'voice' }]);
-  find('Close tutorial').click(); resolve(false); await flush();
-  expect(closed).toBe(1); expect(status.textContent).toBe('');
+test('closing during a pending shortcut suppresses duplicate dispatch and late UI writes', async () => {
+  let resolve!: (value: boolean) => void; result = () => new Promise<boolean>(r => { resolve = r; }); let closed = 0;
+  const tutorial = openFeatureTutorial(ctx, 'voice', { ...options(), onClose: () => { closed++; } }); const status = tutorial.root.querySelector('[role=status]')!;
+  find('Open Voice & Speech').click(); find('Open Voice & Speech').click(); find('Next').click(); await flush();
+  expect(tutorial.root.dataset.scene).toBe('1'); expect(invoked).toEqual([{ kind: 'settings_tab', id: 'voice' }]);
+  find('Close tutorial').click(); resolve(false); await flush(); expect(closed).toBe(1); expect(status.textContent).toBe('');
   tutorial.destroy(); expect(closed).toBe(1);
 });
 
-test('closing immediately cancels a shortcut before its deferred dispatch', async () => {
-  const tutorial = openFeatureTutorial(ctx, 'extensions', options());
-  find('Open Extensions').click(); tutorial.destroy(); await flush();
-  expect(invoked).toEqual([]);
+test('closing immediately cancels a shortcut before deferred dispatch and old controls become inert', async () => {
+  const tutorial = openFeatureTutorial(ctx, 'extensions', options()); const action = find('Open Extensions'), next = find('Next');
+  action.click(); tutorial.destroy(); action.click(); next.click(); await flush(); expect(invoked).toEqual([]); expect(tutorial.root.dataset.scene).toBe('1');
 });
 
-test('keyboard close restores the banner focus and tab navigation stays inside the tutorial', () => {
+test('keyboard close restores launcher focus and Tab stays inside visible controls', () => {
   const launcher = document.createElement('button'); launcher.textContent = 'Full tutorial'; document.body.append(launcher); launcher.focus();
-  const tutorial = openFeatureTutorial(ctx, 'lorebooks', options());
-  expect(document.activeElement).toBe(find('Close tutorial'));
-  find('Close tutorial').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }));
-  expect(document.activeElement).toBe(find('Back to banner'));
-  find('Back to banner').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
-  expect(document.activeElement).toBe(find('Close tutorial'));
-  tutorial.root.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-  expect(document.activeElement).toBe(launcher);
-  expect(tutorial.root.isConnected).toBe(false); expect(invoked).toEqual([]);
+  const tutorial = openFeatureTutorial(ctx, 'group', options()); expect(document.activeElement?.textContent).toBe('Close tutorial');
+  find('Close tutorial').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })); expect(document.activeElement?.textContent).toBe('Back to banner');
+  find('Back to banner').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })); expect(document.activeElement?.textContent).toBe('Close tutorial');
+  tutorial.root.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); expect(document.activeElement === launcher).toBe(true); expect(tutorial.root.isConnected).toBe(false);
 });
 
-test('screenshots are inert local rasters, can enlarge for reading, and fail without losing the written steps', () => {
+test('screenshots, scene overrides and normalized highlights render safely; failures preserve instructions', () => {
   const tutorial = openFeatureTutorial(ctx, 'group', { ...options(), screenshots: {
-    'group-select': { src: pixel, alt: '<img src=x onerror=alert(1)>', caption: '<b>literal screenshot caption</b>' },
-    'group-greeting': { src: 'https://remote.example/track.png', alt: 'Remote image' },
-    'group-settings': { src: 'javascript:alert(1)', alt: 'Invalid image' },
-    'group-chat': { src: 'data:image/svg+xml;base64,PHN2Zz4=', alt: 'Not a raster screenshot' },
+    'group-start': { src: pixel, alt: '<img src=x onerror=alert(1)>', caption: '<b>literal caption</b>', highlight: { x: 10, y: 20, width: 30, height: 10 }, instruction: 'Click the named control.', result: '<i>A real next screen.</i>' },
+    'group-select': { src: 'https://remote.example/track.png', alt: 'Remote image' },
+    'group-greeting': { src: 'javascript:alert(1)', alt: 'Invalid image' },
+    'group-settings': { src: 'data:image/svg+xml;base64,PHN2Zz4=', alt: 'Not a raster screenshot' },
+    'group-chat': { src: pixel, alt: 'Native group chat', highlight: { x: 90, y: 20, width: 30, height: 10 } },
   } });
-  expect(tutorial.root.querySelectorAll('img')).toHaveLength(1);
-  expect(tutorial.root.querySelector('figcaption')!.textContent).toBe('<b>literal screenshot caption</b>');
-  expect(tutorial.root.querySelector('figcaption b,script,iframe')).toBeNull();
-  find('Enlarge screenshot').click(); expect(tutorial.root.querySelector('.jb-tutorial-image-expanded')).not.toBeNull();
-  expect(find('Fit screenshot').getAttribute('aria-pressed')).toBe('true');
-  tutorial.root.querySelector('img')!.dispatchEvent(new dom.window.Event('error'));
-  expect((tutorial.root.querySelector('.jb-tutorial-image-error') as HTMLElement).hidden).toBe(false);
-  expect(tutorial.root.textContent).toContain('Select Characters');
-  expect(invoked).toEqual([]);
+  expect(tutorial.root.querySelector('figcaption')!.textContent).toBe('<b>literal caption</b>'); expect(tutorial.root.querySelector('figcaption b,script,iframe,i')).toBeNull();
+  expect(tutorial.root.querySelector('.jb-tutorial-instruction')!.textContent).toBe('Click the named control.');
+  expect((tutorial.root.querySelector('.jb-tutorial-highlight') as HTMLElement).style.left).toBe('10%'); expect(tutorial.root.querySelector('.jb-tutorial-pointer')).not.toBeNull();
+  find('Enlarge screenshot').click(); expect(tutorial.root.querySelector('.jb-tutorial-image-expanded')).not.toBeNull(); expect(find('Fit screenshot').getAttribute('aria-pressed')).toBe('true');
+  tutorial.root.querySelector('img')!.dispatchEvent(new dom.window.Event('error')); expect((tutorial.root.querySelector('.jb-tutorial-image-error') as HTMLElement).hidden).toBe(false); expect(tutorial.root.textContent).toContain('Click the named control.');
+  for (let scene = 0; scene < 3; scene++) { find('Next').click(); expect(tutorial.root.querySelector('img')).toBeNull(); }
+  find('Next').click(); expect(tutorial.root.querySelector('img')).not.toBeNull(); expect(tutorial.root.querySelector('.jb-tutorial-highlight')).toBeNull(); expect(invoked).toEqual([]);
 });
 
-test('summary and recall guidance includes the prompt placement required to make saved content usable', () => {
-  const tutorial = openFeatureTutorial(ctx, 'memory', options());
-  for (const instruction of ['{{loomSummary}}', '{{memories}}', 'Vectorise chat messages', 'Recompile Memories', 'per-chat Cortex toggle', 'sidecar LLM is optional']) expect(tutorial.root.textContent).toContain(instruction);
-  expect(invoked).toEqual([]);
+test('overview fallbacks never reuse a different scene’s pointer or instruction override', () => {
+  const tutorial = openFeatureTutorial(ctx, 'group', { ...options(), screenshots: { 'group-chat': { src: pixel, alt: 'Chat overview', highlight: { x: 10, y: 20, width: 30, height: 10 }, instruction: 'Choose your persona.' } } });
+  for (let scene = 0; scene < 4; scene++) find('Next').click(); expect(tutorial.root.querySelector('.jb-tutorial-instruction')!.textContent).toBe('Choose your persona.');
+  find('Next').click(); expect(tutorial.root.querySelector('img')!.alt).toBe('Chat overview'); expect(tutorial.root.querySelector('.jb-tutorial-highlight')).toBeNull(); expect(tutorial.root.querySelector('.jb-tutorial-instruction')!.textContent).toContain('Type @');
 });
 
-test('all feature guides are optional reads and missing screenshots leave a complete written guide', () => {
+test('every feature has a short navigable path; memory retains prompt placement and optional help', () => {
   for (const feature of ['import', 'memory', 'lorebooks', 'group', 'voice', 'extensions'] satisfies TutorialFeature[]) {
-    const tutorial = openFeatureTutorial(ctx, feature, options());
-    expect(tutorial.root.querySelectorAll('.jb-tutorial-step').length).toBeGreaterThanOrEqual(4);
-    expect(tutorial.root.querySelector('img')).toBeNull();
+    const tutorial = openFeatureTutorial(ctx, feature, options()); const instructions: string[] = [];
+    expect(tutorial.root.querySelectorAll('details[open]')).toHaveLength(0);
+    while (true) { instructions.push(tutorial.root.querySelector('.jb-tutorial-instruction')!.textContent!); if (find('Next').disabled) break; find('Next').click(); }
+    expect(instructions.length).toBeGreaterThanOrEqual(4);
+    if (feature === 'memory') { expect(instructions.join(' ')).toContain('{{loomSummary}}'); expect(instructions.join(' ')).toContain('Vectorize chat messages'); expect(instructions.join(' ')).toContain('Recompile Memories'); expect(tutorial.root.querySelector('.jb-tutorial-help')!.textContent).toContain('{{memories}}'); }
     find('Back to banner').click(); expect(tutorial.root.isConnected).toBe(false);
   }
   expect(invoked).toEqual([]); expect(imports).toBe(0);
 });
 
-test('the importer opens only when requested and a missing importer callback keeps recovery guidance', async () => {
-  openFeatureTutorial(ctx, 'import', options());
-  expect(imports).toBe(0); find('Open import assistant').click(); await flush();
-  expect(imports).toBe(1); expect(document.querySelector('.jb-feature-tutorial')).toBeNull();
-  const tutorial = openFeatureTutorial(ctx, 'import', { invoke: options().invoke });
-  find('Open import assistant').click(); await flush();
-  expect(tutorial.root.isConnected).toBe(true); expect(tutorial.root.textContent).toContain('Start guided import');
+test('Play is opt-in, advances screenshots only, stops at the last scene, and can pause or replay', () => {
+  const clock = demoClock(), tutorial = openFeatureTutorial(ctx, 'group', options());
+  expect(clock.pending.size).toBe(0); find('Play demo').click(); expect(clock.pending.size).toBe(1); expect(find('Pause demo').getAttribute('aria-pressed')).toBe('true');
+  clock.tick(); expect(tutorial.root.dataset.scene).toBe('2'); find('Pause demo').click(); expect(clock.pending.size).toBe(0);
+  find('Play demo').click(); find('Next').click(); expect(clock.pending.size).toBe(0); expect(tutorial.root.dataset.scene).toBe('3');
+  find('Play demo').click(); while (clock.pending.size) clock.tick(); expect(tutorial.root.dataset.scene).toBe('7'); expect(find('Replay demo').getAttribute('aria-pressed')).toBe('false');
+  find('Replay demo').click(); expect(tutorial.root.dataset.scene).toBe('1'); expect(clock.pending.size).toBe(1); tutorial.destroy(); expect(clock.pending.size).toBe(0);
+  expect(invoked).toEqual([]); expect(imports).toBe(0);
+});
+
+test('changed scenes reveal their start without stealing focus or resetting same-scene work', async () => {
+  const clock = demoClock(), scrolls: Array<{ scene: string | undefined; options: unknown }> = [];
+  dom.window.HTMLElement.prototype.scrollIntoView = function(settings: unknown) {
+    scrolls.push({ scene: this.closest('.jb-feature-tutorial')?.getAttribute('data-scene') ?? undefined, options: settings });
+  };
+  const tutorial = openFeatureTutorial(ctx, 'group', { ...options(), screenshots: { 'group-start': { src: pixel, alt: 'Native character browser' } } });
+  expect(scrolls).toHaveLength(0);
+  const next = find('Next'); next.focus(); next.click();
+  expect(scrolls.at(-1)).toEqual({ scene: '2', options: { block: 'start', inline: 'nearest', behavior: 'instant' } });
+  expect(document.activeElement === next).toBe(true);
+  find('Back').click(); expect(scrolls.at(-1)?.scene).toBe('1');
+  const beforeSameScene = scrolls.length; result = async () => false;
+  find('Open Character Browser').click(); await flush();
+  tutorial.root.querySelector('img')!.dispatchEvent(new dom.window.Event('load'));
+  tutorial.root.querySelector('img')!.dispatchEvent(new dom.window.Event('error'));
+  expect(scrolls).toHaveLength(beforeSameScene);
+  find('Play demo').click(); clock.tick(); expect(scrolls.at(-1)?.scene).toBe('2');
+  while (clock.pending.size) clock.tick(); expect(scrolls.at(-1)?.scene).toBe('7');
+  find('Replay demo').click(); expect(scrolls.at(-1)?.scene).toBe('1');
+  tutorial.destroy(); expect(clock.pending.size).toBe(0);
+});
+
+test('hidden pages and reduced motion pause playback without restarting; close removes listeners', () => {
+  const clock = demoClock(), listeners = new Set<() => void>(); let reduced = false;
+  dom.window.matchMedia = () => ({ get matches() { return reduced; }, addEventListener(_type: string, listener: () => void) { listeners.add(listener); }, removeEventListener(_type: string, listener: () => void) { listeners.delete(listener); } });
+  const tutorial = openFeatureTutorial(ctx, 'voice', options()); find('Play demo').click(); expect(clock.pending.size).toBe(1);
+  Object.defineProperty(document, 'hidden', { configurable: true, value: true }); document.dispatchEvent(new dom.window.Event('visibilitychange')); expect(clock.pending.size).toBe(0);
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false }); document.dispatchEvent(new dom.window.Event('visibilitychange')); expect(clock.pending.size).toBe(0);
+  find('Play demo').click(); reduced = true; [...listeners].forEach(listener => listener()); expect(clock.pending.size).toBe(0); expect(find('Play demo').disabled).toBe(true); find('Play demo').click(); expect(clock.pending.size).toBe(0);
+  find('Next').click(); expect(tutorial.root.dataset.scene).toBe('2'); reduced = false; [...listeners].forEach(listener => listener()); expect(find('Play demo').disabled).toBe(false); expect(clock.pending.size).toBe(0);
+  tutorial.destroy(); expect(listeners.size).toBe(0);
+});
+
+test('the importer opens only on request and a missing callback gives recovery', async () => {
+  openFeatureTutorial(ctx, 'import', options()); expect(imports).toBe(0); find('Open import assistant').click(); await flush(); expect(imports).toBe(1); expect(document.querySelector('.jb-feature-tutorial')).toBeNull();
+  const tutorial = openFeatureTutorial(ctx, 'import', { invoke: options().invoke }); find('Open import assistant').click(); await flush(); expect(tutorial.root.isConnected).toBe(true); expect(tutorial.root.textContent).toContain('Start guided import');
 });
