@@ -1,0 +1,118 @@
+/* Native layout only. CSS-module fragments are scoped to public components. */
+[data-component="LandingPage"], [data-component="ChatView"] { background: #303238; }
+[data-component="LandingPage"] [data-landing-background-glow], [data-component="LandingPage"] [data-landing-background-grid] { opacity: 0; }
+[data-component="LandingPageCharacters"] { max-width: 1480px !important; padding: 12px 32px 28px !important; }
+[data-component="LandingPageHeader"] { min-height: 62px; gap: 18px; margin: 0 0 24px !important; padding: 0 0 12px !important; border-bottom: 1px solid #ffffff12; }
+[data-component="LandingPageHeader"] [class*="_logo_"] { order: 0; flex: 0 0 auto; min-width: 0; gap: 8px; }
+[data-component="LandingPageHeader"] [class*="_logoIcon_"] { width: 32px; height: 32px; border-radius: 8px; background: transparent; box-shadow: none; }
+[data-component="LandingPageHeader"] [class*="_logoIcon_"] svg { width: 25px; height: 25px; }
+[data-component="LandingPageHeader"] h1 { margin: 0; color: #d9c6f4; font-size: calc(23px * var(--lumiverse-font-scale, 1)); font-weight: 700; line-height: 1.2; letter-spacing: -.7px; }
+html[data-janitor-bridge-view] [data-component="LandingPageHeader"] [class*="_taglineBtn_"] { display: none; }
+[data-component="LandingPageHeader"] [class*="_headerActions_"] { order: 2; flex: 0 0 auto; gap: 6px; margin-left: auto; }
+/* The stamped extension root sits between the native logo and account. */
+[data-component="LandingPageHeader"] > [data-spindle-ext-id="janitor_bridge"][data-spindle-mount-point="landing_header"] { order: 1; display: flex; flex: 1 1 auto; min-width: 0; justify-content: center; }
+[data-component="LandingPageHeader"] [class*="_accountBtn_"] { min-height: 32px; border-color: #ffffff20; border-radius: 7px; background: #ffffff08; }
+html[data-jb-tools="false"] [data-component="LandingPageHeader"] [class*="_tempChatWrap_"],
+html[data-jb-tools="false"] [data-component="LandingPageHeader"] button[aria-label="Open Lumiverse guides"] { display: none !important; }
+[data-component="LandingPageMain"], .jb-home { width: 100%; min-width: 0; }
+html[data-janitor-bridge-view] [data-component="LandingPageTabs"],
+html[data-janitor-bridge-view] [data-component="LandingPageChats"],
+html[data-janitor-bridge-view] [data-component="LandingPageMain"] > [class*="_emptyState_"],
+html[data-janitor-bridge-view] [data-component="LandingPageMain"] > [class*="_errorState_"],
+html[data-janitor-bridge-view] [data-component="LandingPageMain"] > [class*="_gridCards_"],
+html[data-janitor-bridge-view] [data-component="LandingPageMain"] > [class*="_compactList_"],
+html[data-janitor-bridge-view] [data-component="LandingPageMain"] > [class*="_loadMoreSentinel_"] { display: none !important; }
+html[data-janitor-bridge-view="chats"] .jb-home { display: none !important; }
+html[data-janitor-bridge-view="browse"] .jb-my-chats { display: none !important; }
+[data-component="LandingPageTabs"] { padding: 6px 0 14px; margin-bottom: 14px; border-bottom: 1px solid #ffffff12; flex-wrap: wrap; }
+[data-component="LandingPageTabs"] input { min-height: 36px; font-size: calc(13px * var(--lumiverse-font-scale, 1)); }
+[data-component="LandingPageChats"] [class*="_card_"], [data-component="LandingPageChats"] [class*="_listItem_"] { border-radius: 10px; border-color: #ffffff20; box-shadow: none; }
+[data-component="LandingPageChats"] [class*="_cardContent_"] { background: linear-gradient(0deg, #26272ef5, #26272e00); }
+[data-component="LandingPageChats"] [class*="_listItem_"] { background: #292b31; }
+
+/* Keep native scroll, portrait docks, keyboard insets and virtual row geometry. */
+[data-component="ChatView"] [data-lumiverse-surface="chat-column-inner"] { max-width: min(100%, 672px); border: 0; background: transparent; }
+[data-component="ChatView"] [data-spindle-ext-id="janitor_bridge"][data-spindle-mount-point="chat_header_left"] { flex: 0 0 auto; min-width: 0; width: 100%; }
+[data-component="ChatView"] .jb-chat-header { box-sizing: border-box; width: auto; margin-inline: 12px; padding-inline: 0; }
+[data-component="ChatView"] [data-spindle-mount="chat_top_dock"] { min-height: 32px; padding: 2px 16px; border: 0; background: transparent; }
+/* Only hide tools when the extension's accessible More menu owns their reveal.
+   Without this attribute every native control stays visible. */
+html[data-jb-tools="false"] [data-component="ChatView"] [data-spindle-mount="chat_top_dock"],
+html[data-jb-tools="false"] [data-component="InputArea"] > [class*="_actionBar_"] { display: none !important; }
+[data-component="MessageList"] { padding-inline: 12px; }
+
+/* Both native message modes become quiet, borderless left-avatar rows. */
+[data-component="BubbleMessage"][data-part], [data-component="MinimalMessage"][data-part] {
+  --long-message-fade-color: #303238;
+  border: 0 !important; border-radius: 0; background: transparent !important; box-shadow: none !important;
+  backdrop-filter: none !important; font-family: Arial, Helvetica, sans-serif;
+}
+[data-component="BubbleMessage"]::before, [data-component="BubbleMessage"]::after,
+[data-component="MinimalMessage"]::before,
+[data-component="BubbleMessage"] [class*="_avatarBg_"],
+[data-component="BubbleMessage"] [class*="_avatarBgScrim_"] { display: none; }
+/* Bubble's avatar is nested in its header. Anchor it on its existing card. */
+[data-component="BubbleMessage"][data-part] { display: block; padding: 19px 0 13px; overflow: visible; contain: layout style; }
+[data-component="BubbleMessage"][data-part] > [class*="_bubble_"] { position: static; margin-left: 62px; }
+[data-component="BubbleMessage"][data-part] > [class*="_bubble_"] > [class*="_header_"] { flex-direction: row; padding: 0; margin: 0 0 7px; gap: 8px; }
+[data-component="BubbleMessage"][data-part] [class*="_headerLeft_"] { flex-direction: row; max-width: 100%; gap: 8px; }
+[data-component="BubbleMessage"][data-part] [class*="_avatar_"] { position: absolute; top: 19px; left: 0; width: 46px; height: 46px; border: 0; border-radius: 50%; box-shadow: none; }
+[data-component="BubbleMessage"][data-part] [class*="_metaWrap_"] { align-items: flex-start; gap: 3px; }
+[data-component="BubbleMessage"][data-part] > [class*="_bubble_"] > [class*="_content_"] { padding: 0 0 10px; text-align: left; }
+[data-component="BubbleMessage"][data-part] > [data-component="BubbleActions"] { position: static; inset: auto; margin: 0 0 0 62px; opacity: .7; }
+/* Minimal already separates avatar and body; place its native actions below. */
+[data-component="MinimalMessage"][data-part] { display: grid; grid-template-columns: 46px minmax(0, 1fr); align-items: start; gap: 5px 16px; padding: 19px 0 13px; }
+[data-component="MinimalMessage"][data-part] > [class*="_avatar_"] { grid-column: 1; grid-row: 1; width: 46px; height: 46px; border: 0; border-radius: 50%; }
+[data-component="MinimalMessage"][data-part] > [class*="_bubble_"] { grid-column: 2; grid-row: 1; max-width: 100%; }
+[data-component="MinimalMessage"][data-part] > [class*="_actionsWrap_"] { grid-column: 2; position: static; inset: auto; opacity: .7; }
+[data-component="MinimalMessage"][data-part] [class*="_header_"] { flex-direction: row; align-items: center; margin-bottom: 9px; }
+[data-component="BubbleMessage"][data-part] [class*="_name_"],
+[data-component="MinimalMessage"][data-part] [class*="_name_"] { color: #dedde1; font-family: Arial, Helvetica, sans-serif; font-size: calc(16px * var(--lumiverse-font-scale, 1)); font-weight: 600; text-shadow: none; letter-spacing: 0; }
+[data-component="BubbleMessage"][data-part] [class*="_metaPill_"],
+[data-component="MinimalMessage"][data-part] [class*="_metaPill_"] { align-self: flex-start; margin-top: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: #97989f; font-family: Arial, Helvetica, sans-serif; font-size: calc(10px * var(--lumiverse-font-scale, 1)); line-height: 1.4; }
+[data-component="MessageContent"] { color: #e4e3e7; font-family: Arial, Helvetica, sans-serif; font-size: calc(15px * var(--lumiverse-font-scale, 1)); line-height: 1.65; }
+[data-component="BubbleActions"],
+[data-component="MinimalMessage"] [class*="_actions_"],
+[data-component="SwipeControls"] { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; gap: 4px; }
+[data-component="BubbleActions"] > button,
+[data-component="MinimalMessage"] [class*="_actionsWrap_"] button,
+[data-component="SwipeControls"] > button { width: 25px; min-width: 25px; height: 25px; padding: 4px; border: 0; border-radius: 5px; background: transparent; color: #b5b4bb; box-shadow: none; }
+[data-component="BubbleMessage"] [data-component="SwipeControls"] { align-self: flex-end; margin: 0 0 5px; }
+
+/* Restyle composer in its measured safe-area position. Its textarea and mirror
+   metrics stay identical to the native IME-aware implementation. */
+[data-component="InputArea"] { gap: 6px; padding: 9px 11px; border: 1px solid #a78bce; border-radius: 8px; background: #27292f !important; box-shadow: none !important; backdrop-filter: none !important; }
+[data-component="InputArea"] [class*="_actionBar_"] { padding: 0 0 6px; border-bottom: 1px solid #ffffff18; gap: 4px; }
+[data-component="InputArea"] [class*="_actionBtn_"] { color: #c2bdc9; border-radius: 5px; }
+[data-component="InputArea"] [class*="_inputRow_"] { align-items: flex-end; gap: 7px; }
+[data-component="InputArea"] [class*="_inputWrapper_"] { border-radius: 4px; background: transparent; box-shadow: none; }
+[data-component="InputArea"] [class*="_sendBtn_"] { border: 0; border-radius: 6px; background: transparent; color: #cbb0ef; box-shadow: none; }
+[data-lumiverse-surface="viewport-drawer"] { background: #292b31; }
+[data-spindle-mount="sidebar"] [data-tab-id] { border-radius: 8px; }
+
+/* At desktop widths the centered 672px column is also the shared header and
+   composer measure. Narrow screens keep the host's horizontal edge inset.
+   Composer bottom, keyboard/safe-area rules and virtual rows stay native. */
+@media (min-width: 704px) {
+  [data-component="ChatView"] .jb-chat-header { margin-inline: 0; }
+  [data-component="ChatView"] [data-component="InputArea"] { left: 0; right: 0; }
+  [data-component="ChatView"] [data-component="MessageList"] { padding-inline: 0; }
+}
+
+@media (max-width: 1000px) {
+  [data-component="LandingPageCharacters"] { padding-inline: 20px !important; }
+  [data-component="LandingPageHeader"] { flex-wrap: wrap; gap: 10px; }
+  [data-component="LandingPageHeader"] [class*="_headerActions_"] { order: 1; }
+  [data-component="LandingPageHeader"] > [data-spindle-ext-id="janitor_bridge"][data-spindle-mount-point="landing_header"] { order: 2; flex: 1 0 100%; justify-content: flex-start; }
+}
+@media (max-width: 600px) {
+  [data-component="LandingPageCharacters"] { padding: 10px 12px 20px !important; }
+  [data-component="LandingPageHeader"] h1 { font-size: calc(21px * var(--lumiverse-font-scale, 1)); }
+  [data-component="MessageList"] { padding-inline: 12px; }
+  [data-component="BubbleMessage"][data-part] [class*="_avatar_"],
+  [data-component="MinimalMessage"][data-part] > [class*="_avatar_"] { width: 36px; height: 36px; }
+  [data-component="BubbleMessage"][data-part] > [class*="_bubble_"],
+  [data-component="BubbleMessage"][data-part] > [data-component="BubbleActions"] { margin-left: 48px; }
+  [data-component="MinimalMessage"][data-part] { grid-template-columns: 36px minmax(0, 1fr); column-gap: 12px; }
+  [data-component="InputArea"] { padding-inline: 7px; }
+}

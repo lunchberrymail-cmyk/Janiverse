@@ -1,0 +1,42 @@
+.jb-card-import .jb-import-panel { min-width: 0; }
+.jb-card-import .jb-import-drop { display: flex; align-items: center; flex-direction: column; gap: 12px; padding: 28px 20px; border: 1px dashed #8e769d; border-radius: 12px; background: #b992cf09; text-align: center; transition: background .15s, border-color .15s; }
+.jb-card-import .jb-import-drop.jb-import-dragging { border-color: #d2ace9; background: #b992cf22; }
+.jb-card-import .jb-import-drop[aria-busy="true"] { opacity: .65; }
+.jb-card-import .jb-import-drop-icon { display: grid; width: 48px; height: 48px; place-items: center; border: 1px solid #b992cf44; border-radius: 14px; background: #b992cf15; color: #d0aae7; }
+.jb-card-import .jb-import-drop strong { font-size: 16px; font-weight: 600; color: #ece4f1; }
+.jb-card-import .jb-import-drop p { margin: -5px 0 3px; }
+.jb-card-import .jb-import-file { display: none; }
+.jb-card-import .jb-import-file-hint { margin-top: 12px; }
+.jb-card-import .jb-import-url-row { display: flex; align-items: flex-start; gap: 10px; }
+.jb-card-import .jb-import-url-row > label { flex: 1; min-width: 0; }
+.jb-card-import .jb-import-url-row > button { flex: 0 0 auto; margin-top: 25px; }
+.jb-card-import .jb-import-panel > .jb-settings-help { margin-top: 13px; }
+.jb-card-import .jb-import-queue-section { margin-top: 22px; }
+.jb-card-import .jb-import-queue-header { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; margin-bottom: 10px; }
+.jb-card-import .jb-import-queue-header h3 { margin: 0; font-size: 14px; }
+.jb-card-import .jb-import-queue { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.jb-card-import .jb-import-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 1px solid #67616d; border-radius: 8px; background: #27292f; }
+.jb-card-import .jb-import-thumb { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 54px; border-radius: 6px; background: #b992cf15; color: #cdb4dc; overflow: hidden; font-size: 10px; font-weight: 700; }
+.jb-card-import .jb-import-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.jb-card-import .jb-import-item-info { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
+.jb-card-import .jb-import-item-name { color: #eee6f2; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.jb-card-import .jb-import-item-detail { color: #a9a2b0; font-size: 11px; overflow-wrap: anywhere; }
+.jb-card-import .jb-import-item-status { color: #bfb2cb; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.jb-card-import .jb-import-success { border-color: #627b70; }
+.jb-card-import .jb-import-success .jb-import-item-status { color: #b3d9c0; }
+.jb-card-import .jb-import-error { border-color: #a16b77; }
+.jb-card-import .jb-import-error .jb-import-item-status { color: #ecb0bc; }
+.jb-card-import .jb-import-uncertain { border-color: #998158; }
+.jb-card-import .jb-import-uncertain .jb-import-item-status { color: #e2c591; }
+.jb-card-import .jb-import-item-actions { display: flex; align-items: flex-end; flex-direction: column; gap: 2px; }
+.jb-card-import .jb-import-remove { min-height: 28px; padding: 4px 0 4px 8px; border: 0; background: transparent; color: #b2aab8; font: inherit; font-size: 11px; cursor: pointer; }
+.jb-card-import .jb-import-remove:hover:not(:disabled) { color: #f1c3ce; }
+.jb-card-import .jb-import-item-actions .jb-settings-link { min-height: 28px; font-size: 11px; text-align: right; }
+.jb-card-import .jb-import-close-note { margin-top: 18px; font-size: 11px; color: #a9a0b1; }
+@media (max-width: 600px) {
+  .jb-card-import .jb-import-drop { padding: 23px 16px; }
+  .jb-card-import .jb-import-url-row { align-items: stretch; flex-direction: column; }
+  .jb-card-import .jb-import-url-row > button { margin: 0; }
+  .jb-card-import .jb-import-item { flex-wrap: wrap; gap: 10px; }
+  .jb-card-import .jb-import-item-actions { width: 100%; align-items: center; flex-direction: row; justify-content: flex-end; gap: 14px; padding-left: 54px; }
+}

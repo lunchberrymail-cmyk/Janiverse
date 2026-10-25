@@ -1,0 +1,391 @@
+import type { SpindleFrontendContext, SpindleHostSurfaceRef, SpindleModalHandle } from 'lumiverse-spindle-types';
+import uiCSS from './ui.css' with { type: 'text' };
+import themeCSS from './theme.css' with { type: 'text' };
+import layoutCSS from './layout.css' with { type: 'text' };
+import settingsCSS from './settings.css' with { type: 'text' };
+import composerCSS from './composer.css' with { type: 'text' };
+import homeBannerCSS from './home-banner.css' with { type: 'text' };
+import cardImportCSS from './card-import.css' with { type: 'text' };
+import myChatsCSS from './my-chats.css' with { type: 'text' };
+import soundCloudCSS from './soundcloud.css' with { type: 'text' };
+import customizeCSS from './customize.css' with { type: 'text' };
+import { createChatMemory } from './memory';
+import { createApiSettings } from './api-settings';
+import { createPromptSettings } from './prompt-settings';
+import { icon } from './icons';
+import { createComposer } from './composer';
+import { createComposerActions } from './composer-actions';
+import { createHomeBanner } from './home-banner';
+import { createCardImport } from './card-import';
+import { createMyChats } from './my-chats';
+import { createSoundCloud } from './soundcloud';
+import { mountCharacterProfile } from './character-profile';
+import { createCustomize } from './customize';
+
+type Character = { id: string; name: string; creator?: string; creator_notes?: string; description?: string; preview_description?: string; image_id?: string; tags?: string[]; updated_at?: number };
+type View = 'browse' | 'chats';
+const pageSize = 24;
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') {
+  const node = document.createElement(tag); node.className = cls; node.textContent = text; return node;
+}
+function button(text: string, action: () => void, cls = 'jb-button') {
+  const node = el('button', cls, text); node.type = 'button'; node.addEventListener('click', action); return node;
+}
+function plain(value = '') { return value.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim(); }
+function payload(value: unknown): Record<string, unknown> { return value && typeof value === 'object' ? value as Record<string, unknown> : {}; }
+
+/** A visual home/navigation layer using public extension slots. Native chat rendering stays mounted. */
+export function setup(ctx: SpindleFrontendContext) {
+  let disposed = false, view: View = 'browse', offset = 0, total = 0, filter = 'all', request = 0;
+  let searchTimer: ReturnType<typeof setTimeout> | undefined, controller: AbortController | undefined;
+  let libraryRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+  let modal: SpindleModalHandle | undefined;
+  const cleanups: Array<() => void> = [];
+  const notePreviews = new Map<string, { revision: number | undefined; text: string }>();
+  const mounts = [ctx.ui.mount('landing_header'), ctx.ui.mount('chat_header_left'), ctx.ui.mount('landing_hero')];
+  const oldView = document.documentElement.getAttribute('data-janitor-bridge-view');
+  const oldTools = document.documentElement.getAttribute('data-jb-tools');
+  document.documentElement.setAttribute('data-jb-tools', 'false');
+  const memory = createChatMemory(ctx);
+  const composerActions = createComposerActions(ctx, { openMemoryDraft: (chatId, text) => memory.open(chatId, text) });
+  const composer = createComposer(ctx, {
+    onEnhanceDraft: () => composerActions.enhanceDraft(),
+    onWriteForMe: () => composerActions.writeForMe(),
+    onSummarize: () => composerActions.summarizeChat(),
+  });
+  const promptSettings = createPromptSettings(ctx, { openConnection: () => apiSettings.open() });
+  const apiSettings = createApiSettings(ctx, {
+    openInstructions: () => promptSettings.open('prompt'),
+    openGeneration: () => promptSettings.open('generation'),
+    onApplied: () => { void refreshConnection(); },
+  });
+  const customize = createCustomize(ctx, { settings: () => promptSettings.open('generation'), memory: chatId => memory.open(chatId) });
+  const cardImport = createCardImport(ctx, {
+    onImported: () => { offset = 0; void loadCharacters(); },
+    openCharacter: id => {
+      void ctx.characters.get(id).then(value => {
+        const character = payload(value);
+        if (!disposed && typeof character.id === 'string' && typeof character.name === 'string') preview(character as Character);
+      }).catch(() => { if (!disposed) status.textContent = 'Could not open the imported character. It is saved in your character library.'; });
+    },
+  });
+  cleanups.push(ctx.dom.addStyle(themeCSS), ctx.dom.addStyle(layoutCSS), ctx.dom.addStyle(uiCSS), ctx.dom.addStyle(settingsCSS), ctx.dom.addStyle(composerCSS), ctx.dom.addStyle(homeBannerCSS), ctx.dom.addStyle(cardImportCSS), ctx.dom.addStyle(myChatsCSS), ctx.dom.addStyle(soundCloudCSS), ctx.dom.addStyle(customizeCSS));
+  const status = el('p', 'jb-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+  const navButtons: Array<{ node: HTMLButtonElement; view: View }> = [];
+  async function invoke(ref: SpindleHostSurfaceRef, params?: Record<string, string>) {
+    if (!ctx.host.surfaces?.list([ref.kind]).some(s => s.id === ref.id && s.invocable !== false)) {
+      status.textContent = 'This shortcut is unavailable. Open the same tool from Lumiverse’s sidebar.'; return false;
+    }
+    try { await ctx.host.surfaces.invoke(ref, params); return true; }
+    catch { if (!disposed) status.textContent = 'Could not open that tool. Please try again from the sidebar.'; return false; }
+  }
+  function openImport() {
+    const jar = ctx.host.surfaces?.list(['drawer_tab']).find(surface => surface.invocable !== false && surface.keywords?.includes('jar_bridge') && surface.keywords?.includes('jar-bridge-import'));
+    if (jar && jar.keywords?.includes('jar-bridge-guided-import') && ctx.events?.emit) ctx.events.emit('jar_bridge:open_import', {});
+    else if (jar) void invoke({ kind: 'drawer_tab', id: jar.id });
+    else cardImport.open();
+  }
+  function setView(next: View, navigate = true) {
+    view = next; document.documentElement.setAttribute('data-janitor-bridge-view', view);
+    navButtons.forEach(({ node, view: target }) => {
+      node.classList.toggle('jb-selected', target === view); node.setAttribute('aria-current', target === view ? 'page' : 'false');
+    });
+    if (navigate && location.pathname !== '/') void invoke({ kind: 'route', id: '/' });
+    if (next === 'chats' && location.pathname === '/') myChats.activate(); else myChats.deactivate();
+    if (next === 'browse') { void loadCharacters(); void loadRecent(); }
+  }
+  const masthead = el('div', 'jb-home-masthead');
+  const nav = el('nav', 'jb-nav'); nav.setAttribute('aria-label', 'Main navigation');
+  for (const [text, target] of [['Home', 'browse'], ['My Chats', 'chats']] as const) {
+    const node = button(text, () => setView(target), 'jb-nav-link'); navButtons.push({ node, view: target }); nav.append(node);
+  }
+  const more = el('details', 'jb-more'); const moreLabel = el('summary', '', 'More'); const menu = el('div', 'jb-more-menu');
+  for (const [label, action] of [
+    ['Import characters', openImport],
+    ['Import card file or link', () => cardImport.open()],
+    ['API Settings', () => apiSettings.open()],
+    ['Prompt', () => promptSettings.open('prompt')],
+    ['Generation Settings', () => promptSettings.open('generation')],
+  ] as const) menu.append(button(label, () => { more.open = false; action(); }, 'jb-menu-link'));
+  for (const [label, id] of [['My Personas', 'personas'], ['Advanced Presets', 'loom'], ['Lorebooks', 'lorebook'], ['Extensions', 'spindle']]) {
+    menu.append(button(label, () => { more.open = false; void invoke({ kind: 'drawer_tab', id }); }, 'jb-menu-link'));
+  }
+  function toggleTools() {
+    const visible = document.documentElement.getAttribute('data-jb-tools') !== 'true';
+    document.documentElement.setAttribute('data-jb-tools', String(visible));
+    toolsToggle.setAttribute('aria-pressed', String(visible)); homeToolsToggle.setAttribute('aria-pressed', String(visible));
+  }
+  const homeToolsToggle = button('Lumiverse tools', toggleTools, 'jb-menu-link'); homeToolsToggle.setAttribute('aria-pressed', 'false'); menu.append(homeToolsToggle);
+  more.append(moreLabel, menu);
+  const create = button('Create a Character', () => { void invoke({ kind: 'drawer_tab', id: 'characters' }); }, 'jb-create-link');
+  masthead.append(nav); mounts[0].append(masthead);
+
+  const chatHeader = el('header', 'jb-chat-header');
+  const chatBar = el('div', 'jb-chat-bar'); const chatRight = el('div', 'jb-chat-right');
+  const back = button('‹ Back', () => setView('chats'), 'jb-back');
+  const api = button('API Settings', () => apiSettings.open(), 'jb-api-status'); api.setAttribute('aria-label', 'API Settings');
+  const memoryButton = button('Chat Memory', () => { const chatId = ctx.getActiveChat()?.chatId; if (chatId) memory.open(chatId); }, 'jb-memory-button');
+  const chatMenu = el('details', 'jb-more jb-chat-menu'); const chatMenuLabel = el('summary', '', '☰'); chatMenuLabel.setAttribute('aria-label', 'Chat menu');
+  chatMenuLabel.replaceChildren(icon('menu'));
+  const chatMenuItems = el('div', 'jb-more-menu');
+  const chatAction = (label: string, action: () => void, picture: Parameters<typeof icon>[0]) => {
+    const item = button(label, () => { chatMenu.open = false; action(); }, 'jb-menu-link'); item.prepend(icon(picture)); chatMenuItems.append(item);
+  };
+  chatAction('Settings', () => promptSettings.open('generation'), 'settings');
+  chatAction('Chat Memory', () => { const chatId = ctx.getActiveChat()?.chatId; if (chatId) memory.open(chatId); }, 'memory');
+  chatAction('Customize', () => customize.open(), 'customize');
+  chatAction('New Chat', () => { const characterId = ctx.getActiveChat()?.characterId; if (characterId) void invoke({ kind: 'entity_action', id: 'character_chat' }, { characterId, mode: 'new' }); }, 'new-chat');
+  chatAction('All Chats', () => setView('chats'), 'all-chats');
+  chatAction('Prompt', () => promptSettings.open('prompt'), 'prompt');
+  chatAction('My Persona', () => { void invoke({ kind: 'drawer_tab', id: 'personas' }); }, 'persona');
+  const toolsToggle = button('Lumiverse tools', () => { toggleTools(); chatMenu.open = false; }, 'jb-menu-link'); toolsToggle.prepend(icon('tools')); toolsToggle.setAttribute('aria-pressed', 'false'); chatMenuItems.append(toolsToggle);
+  chatMenu.append(chatMenuLabel, chatMenuItems); chatRight.append(api, memoryButton, chatMenu); chatBar.append(back, chatRight);
+  const chatTitle = button('Conversation', () => { void invoke({ kind: 'drawer_tab', id: 'profile' }); }, 'jb-chat-title');
+  const soundCloud = createSoundCloud(ctx);
+  chatHeader.append(chatBar, chatTitle, soundCloud.root); mounts[1].append(chatHeader);
+  let titleRequest = 0;
+  async function refreshChatHeader() {
+    const active = ctx.getActiveChat(); const generation = ++titleRequest;
+    memoryButton.disabled = !active?.chatId;
+    chatTitle.textContent = 'Conversation';
+    if (active?.characterId) {
+      try { const character = payload(await ctx.characters.get(active.characterId)); if (!disposed && generation === titleRequest && typeof character.name === 'string') chatTitle.textContent = character.name; } catch { /* Native profile stays available. */ }
+    }
+  }
+  let connectionRequest = 0;
+  function renderConnection(connection: Record<string, unknown>) {
+    const model = typeof connection.model === 'string' ? connection.model : '';
+    const provider = typeof connection.provider === 'string' ? connection.provider : '';
+    const providerNames: Record<string, string> = { custom: 'proxy', openai: 'OpenAI', openrouter: 'OpenRouter', google_vertex: 'Vertex', google: 'Gemini', anthropic: 'Claude' };
+    api.textContent = model || provider ? `using ${providerNames[provider] || provider || 'API'}` : 'API not ready · Set up';
+    api.classList.toggle('jb-api-missing', !model && !provider);
+    api.title = model || provider ? `API Settings: ${provider}${model ? ` / ${model}` : ''}` : 'Choose a provider and model';
+  }
+  async function refreshConnection() {
+    const generation = ++connectionRequest;
+    const connection = payload(ctx.state?.get('connections.active'));
+    const active = ctx.getActiveChat();
+    renderConnection(connection);
+    if (!active?.chatId) return;
+    try {
+      const chatResponse = await fetch(`/api/v1/chats/${encodeURIComponent(active.chatId)}?messages=false`, { credentials: 'same-origin' });
+      if (!chatResponse.ok || disposed || generation !== connectionRequest) return;
+      const metadata = payload(payload(await chatResponse.json()).metadata);
+      if (disposed || generation !== connectionRequest) return;
+      const profileId = typeof metadata.connection_profile_id === 'string' ? metadata.connection_profile_id : '';
+      const model = typeof metadata.connection_model === 'string' ? metadata.connection_model : '';
+      if (!profileId) { if (model) renderConnection({ ...connection, model }); return; }
+      const response = await fetch(`/api/v1/connections/${encodeURIComponent(profileId)}`, { credentials: 'same-origin' });
+      if (!response.ok) return;
+      const profile = payload(await response.json());
+      if (!disposed && generation === connectionRequest) renderConnection({ ...profile, ...(model ? { model } : {}) });
+    } catch { /* The settings dialog reports unavailable saved configurations. */ }
+  }
+  const home = el('section', 'jb-home'); home.setAttribute('aria-label', 'Character browsing');
+  const homeBanner = createHomeBanner(ctx, { invoke, openImport }); home.append(homeBanner.root);
+  const recentSection = el('section', 'jb-recent-section'); const recentHeading = el('div', 'jb-section-heading');
+  recentHeading.append(el('h2', '', 'My chats'), button('View all →', () => setView('chats'), 'jb-text-button'));
+  const recent = el('div', 'jb-recent'); recentSection.append(recentHeading, recent); home.append(recentSection);
+  const heading = el('div', 'jb-browse-heading'); const title = el('div');
+  const browseTitle = el('h2', '', 'All Characters'); title.append(el('div', 'jb-eyebrow', 'CHARACTERS'), browseTitle);
+  heading.append(title);
+  const tools = el('div', 'jb-tools'); const filters = el('div', 'jb-filters'); filters.setAttribute('role', 'group'); filters.setAttribute('aria-label', 'Filter characters');
+  const allButton = button('All characters', () => chooseFilter('all'), 'jb-filter jb-selected');
+  const favoriteButton = button('♥ Favorites', () => chooseFilter('favorites'), 'jb-filter');
+  allButton.setAttribute('aria-pressed', 'true'); favoriteButton.setAttribute('aria-pressed', 'false'); filters.append(allButton, favoriteButton);
+  const searchLabel = el('label', 'jb-search'); searchLabel.append(el('span', 'jb-sr-only', 'Search characters'));
+  const search = el('input'); search.type = 'search'; search.placeholder = 'Search for characters or creators…'; search.maxLength = 256; searchLabel.append(search);
+  const sort = el('select', 'jb-sort'); sort.setAttribute('aria-label', 'Sort characters');
+  for (const [value, text] of [['recent', 'Recently active'], ['name', 'Name A–Z'], ['created', 'Newest added']]) { const option = el('option', '', text); option.value = value; sort.append(option); }
+  masthead.append(searchLabel, create, more); heading.append(sort); tools.append(filters); home.append(tools, heading);
+  const grid = el('div', 'jb-grid'); const count = el('p', 'jb-count');
+  const paging = el('div', 'jb-paging'); const pageLabel = el('span');
+  const previous = button('← Previous', () => { offset = Math.max(0, offset - pageSize); void loadCharacters(); });
+  const next = button('Next →', () => { offset += pageSize; void loadCharacters(); }); paging.append(previous, pageLabel, next);
+  home.append(status, count, grid, paging); mounts[2].append(home);
+  const myChats = createMyChats(ctx, {
+    invoke,
+    openCharacter: id => openProfile(id),
+    startChat: characterId => invoke({ kind: 'entity_action', id: 'character_chat' }, { characterId, mode: 'new' }),
+  });
+  mounts[2].append(myChats.root);
+  function chooseFilter(nextFilter: string) {
+    filter = nextFilter; offset = 0;
+    browseTitle.textContent = filter === 'favorites' ? 'Favorites' : 'All Characters';
+    for (const [node, value] of [[allButton, 'all'], [favoriteButton, 'favorites']] as const) {
+      node.classList.toggle('jb-selected', filter === value); node.setAttribute('aria-pressed', String(filter === value));
+    }
+    void loadCharacters();
+  }
+  const favorites = () => { const value = ctx.state?.get('characters.favorites'); return Array.isArray(value) ? value as string[] : []; };
+  function notePreview(value: string) {
+    const text = plain(value.replace(/<\/?(?:p|div|h[1-6]|br|li|ul|ol|blockquote|hr)\b[^>]*>/gi, ' '));
+    return text ? text.slice(0, 230) + (text.length > 230 ? '…' : '') : 'No creator’s note.';
+  }
+  function renderCards(characters: Character[], generation = request) {
+    grid.replaceChildren();
+    const pending: Array<{ character: Character; node: HTMLElement }> = [];
+    for (const character of characters) {
+      const card = button('', () => preview(character), 'jb-card'); card.setAttribute('aria-label', `View ${character.name}`);
+      const portrait = el('div', 'jb-portrait');
+      if (character.image_id) { const img = el('img'); img.src = `/api/v1/images/${encodeURIComponent(character.image_id)}?size=lg`; img.alt = ''; img.loading = 'lazy'; img.addEventListener('error', () => img.remove()); portrait.append(img); }
+      portrait.append(el('span', 'jb-avatar-fallback', character.name.slice(0, 1).toUpperCase()));
+      if (favorites().includes(character.id)) portrait.append(el('span', 'jb-favorite', '♥'));
+      portrait.append(el('span', 'jb-card-cta', 'View character →'));
+      const cardTitle = el('h3', 'jb-card-name', character.name);
+      const info = el('div', 'jb-card-info'); info.append(el('p', 'jb-creator', character.creator ? `@${character.creator}` : 'Your library'));
+      const cached = notePreviews.get(character.id);
+      const note = el('p', 'jb-description');
+      note.setAttribute('aria-label', 'Creator’s note');
+      if (typeof character.creator_notes === 'string') note.textContent = notePreview(character.creator_notes);
+      else if (cached && cached.revision === character.updated_at) note.textContent = cached.text;
+      else { note.textContent = 'Loading creator’s note…'; pending.push({ character, node: note }); }
+      info.append(note);
+      const tags = el('div', 'jb-tags'); for (const tag of (character.tags || []).slice(0, 4)) tags.append(el('span', '', tag)); info.append(tags);
+      card.append(cardTitle, portrait, info); grid.append(card);
+    }
+    if (!characters.length) {
+      const empty = el('div', 'jb-empty'); empty.append(el('h3', '', 'No characters found'), el('p', '', filter === 'favorites' ? 'Characters you favorite in Lumiverse appear here.' : search.value ? 'Try another name, creator, or description.' : 'Add a character to start your first conversation.'), button('Open character library', () => { void invoke({ kind: 'drawer_tab', id: 'characters' }); })); grid.append(empty);
+    }
+    // The native summary DTO omits creator_notes. Read only this page, with a
+    // bounded pool, and retain short previews until a revision/library change.
+    const current = () => !disposed && generation === request && view === 'browse';
+    void Promise.all(Array.from({ length: Math.min(4, pending.length) }, async () => {
+      while (current()) {
+        const item = pending.shift(); if (!item) return;
+        try {
+          const value = payload(await ctx.characters.get(item.character.id));
+          if (!current()) return;
+          if (value.id !== item.character.id) throw new Error('Wrong character');
+          const text = notePreview(typeof value.creator_notes === 'string' ? value.creator_notes : '');
+          notePreviews.set(item.character.id, { revision: item.character.updated_at, text });
+          if (notePreviews.size > 200) notePreviews.delete(notePreviews.keys().next().value!);
+          if (item.node.isConnected) item.node.textContent = text;
+        } catch { if (current() && item.node.isConnected) item.node.textContent = 'Creator’s note unavailable.'; }
+      }
+    }));
+  }
+  async function loadCharacters() {
+    const generation = ++request; controller?.abort(); controller = new AbortController(); grid.setAttribute('aria-busy', 'true'); status.textContent = '';
+    previous.disabled = true; next.disabled = true;
+    const params = new URLSearchParams({ limit: String(pageSize), offset: String(offset), search: search.value.trim(), sort: sort.value, direction: sort.value === 'name' ? 'asc' : 'desc' });
+    if (filter === 'favorites') { params.set('filter', 'favorites'); params.set('favorite_ids', favorites().join(',')); }
+    try {
+      if (filter === 'favorites' && !favorites().length) { total = 0; renderCards([]); }
+      else {
+        const response = await fetch(`/api/v1/characters/summary?${params}`, { credentials: 'same-origin', signal: controller.signal });
+        if (!response.ok) throw new Error('Character library unavailable');
+        const result = await response.json(); if (disposed || generation !== request) return;
+        const characters = Array.isArray(result.data) ? result.data.filter((c: Character) => c && typeof c.id === 'string' && typeof c.name === 'string') : [];
+        total = typeof result.total === 'number' ? result.total : characters.length; renderCards(characters);
+      }
+      if (disposed || generation !== request) return;
+      count.textContent = `${total} character${total === 1 ? '' : 's'}${filter === 'favorites' ? ' in favorites' : ' in your library'}`;
+      pageLabel.textContent = total ? `${offset + 1}–${Math.min(offset + pageSize, total)} of ${total}` : '0 characters';
+      paging.hidden = total <= pageSize; previous.disabled = offset === 0; next.disabled = offset + pageSize >= total;
+    } catch (error) {
+      if (disposed || generation !== request || (error as Error).name === 'AbortError') return;
+      grid.replaceChildren(); status.replaceChildren(document.createTextNode('Could not load characters. '), button('Retry', () => { void loadCharacters(); })); count.textContent = ''; paging.hidden = true;
+    } finally { if (!disposed && generation === request) grid.setAttribute('aria-busy', 'false'); }
+  }
+  let recentRequest = 0;
+  async function loadRecent() {
+    const generation = ++recentRequest;
+    if (!ctx.chats.listRecent) { recentSection.hidden = true; return; }
+    try {
+      const result = await ctx.chats.listRecent({ limit: 5, offset: 0, sort: 'recent', direction: 'desc' });
+      if (disposed || generation !== recentRequest) return;
+      recent.replaceChildren(); recentSection.hidden = !result.data.length;
+      for (const chat of result.data) {
+        const node = button('', () => { void invoke({ kind: 'route', id: '/chat/:chatId' }, { chatId: chat.id }); }, 'jb-recent-card');
+        node.append(el('strong', 'jb-recent-name', chat.character_name || chat.name || 'Untitled chat'));
+        const row = el('span', 'jb-recent-body');
+        if (chat.character_image_id) { const image = el('img'); image.src = `/api/v1/images/${encodeURIComponent(chat.character_image_id)}?size=sm`; image.alt = ''; image.loading = 'lazy'; row.append(image); }
+        else row.append(el('span', 'jb-recent-avatar', (chat.character_name || chat.name || 'C').slice(0, 1)));
+        row.append(el('span', 'jb-recent-preview', plain(chat.last_message_preview || '').slice(0, 150) || 'Your conversation is ready to continue.'));
+        const count = chat.message_count ?? 0;
+        const footer = el('span', 'jb-recent-footer'); footer.append(el('small', '', `${count} ${count === 1 ? 'message' : 'messages'}`), el('span', 'jb-continue', 'Continue'));
+        node.append(row, footer); recent.append(node);
+      }
+    } catch { if (!disposed && generation === recentRequest) recentSection.hidden = true; }
+  }
+  function openProfile(characterId: string, name = 'Character profile') {
+    modal?.dismiss(); modal = ctx.ui.showModal({ title: name, width: 720, maxHeight: 800 });
+    const current = modal; current.root.classList.add('jb-preview', 'jb-profile-window');
+    const actions = el('div', 'jb-preview-actions'); const localStatus = el('p', 'jb-status'); localStatus.setAttribute('role', 'status');
+    const chat = button('Chat with this character', () => {
+      chat.disabled = true;
+      void invoke({ kind: 'entity_action', id: 'character_chat' }, { characterId, mode: 'latest' }).then(ok => {
+        chat.disabled = false; if (ok) current.dismiss(); else localStatus.textContent = 'Enable the extension’s Chats permission in Extensions to start chats here.';
+      });
+    }, 'jb-button jb-primary');
+    chat.disabled = !ctx.host.surfaces?.list(['entity_action']).some(s => s.id === 'character_chat' && s.invocable !== false);
+    const edit = button('Edit character', () => {
+      edit.disabled = true;
+      void invoke({ kind: 'modal', id: 'character_editor' }, { id: characterId }).then(ok => {
+        edit.disabled = false; if (ok) current.dismiss(); else localStatus.textContent = 'Could not open the character editor. Your profile is still available here.';
+      });
+    });
+    edit.disabled = !ctx.host.surfaces?.list(['modal']).some(s => s.id === 'character_editor' && s.invocable !== false);
+    actions.append(chat, edit, button('Close', () => current.dismiss()));
+    const body = el('div'); current.root.append(actions, localStatus, body);
+    const cleanup = mountCharacterProfile(ctx, body, characterId);
+    current.onDismiss(() => { cleanup(); if (modal === current) modal = undefined; });
+  }
+  function preview(character: Character) {
+    modal?.dismiss(); modal = ctx.ui.showModal({ title: character.name, width: 620, maxHeight: 760 });
+    const current = modal; current.root.classList.add('jb-preview');
+    const actions = el('div', 'jb-preview-actions'); const previewStatus = el('p', 'jb-status'); previewStatus.setAttribute('role', 'status');
+    const canStartChat = ctx.host.surfaces?.list(['entity_action']).some(s => s.id === 'character_chat' && s.invocable !== false) ?? false;
+    function openChat(mode: 'latest' | 'new') {
+      if (!canStartChat || chat.disabled) return;
+      chat.disabled = true;
+      void invoke({ kind: 'entity_action', id: 'character_chat' }, { characterId: character.id, mode }).then(ok => {
+        chat.disabled = false; if (ok) current.dismiss(); else previewStatus.textContent = 'Enable the extension’s Chats permission in Extensions to start chats here.';
+      });
+    }
+    const chat = button('Chat with this character', () => openChat('latest'), 'jb-button jb-primary');
+    if (!canStartChat) { chat.disabled = true; previewStatus.textContent = 'Opening a new chat here needs the extension’s Chats permission. Existing chats below remain available.'; }
+    actions.append(chat, button('View profile', () => openProfile(character.id, character.name)));
+    const body = el('div', 'jb-preview-body'); current.root.append(actions, previewStatus, body);
+    if (ctx.components.listHostSurfaces().some(s => s.id === 'character_preview_panel')) {
+      const surface = ctx.components.mountHostSurface(body, 'character_preview_panel', { characterId: character.id, imageHeight: 280 });
+      surface.on('close', () => current.dismiss());
+      surface.on('edit', () => { void invoke({ kind: 'modal', id: 'character_editor' }, { id: character.id }).then(ok => { if (ok) current.dismiss(); else previewStatus.textContent = 'Could not open the character editor.'; }); });
+      surface.on('openChat', value => { const data = payload(value); if (typeof data.chatId === 'string') { current.dismiss(); void invoke({ kind: 'route', id: '/chat/:chatId' }, { chatId: data.chatId }); } else openChat('new'); });
+      surface.on('openWorldBook', () => { current.dismiss(); void invoke({ kind: 'drawer_tab', id: 'lorebook' }); });
+      current.onDismiss(() => surface.destroy());
+    } else body.append(el('p', '', plain(character.description) || 'No description.'));
+    current.onDismiss(() => { if (modal === current) modal = undefined; });
+  }
+  search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { offset = 0; void loadCharacters(); }, 200); });
+  sort.addEventListener('change', () => { offset = 0; void loadCharacters(); });
+  if (ctx.events?.on) {
+    for (const event of ['CHARACTER_CREATED', 'CHARACTER_EDITED', 'CHARACTER_DELETED', 'CHARACTER_LIBRARY_CHANGED', 'CHARACTER_AVATAR_CHANGED', 'jar_bridge:imported'] as const) {
+      cleanups.push(ctx.events.on(event, () => {
+        notePreviews.clear(); request++; controller?.abort();
+        clearTimeout(libraryRefreshTimer);
+        libraryRefreshTimer = setTimeout(() => { if (!disposed) { offset = 0; if (view === 'browse') void loadCharacters(); else myChats.refresh(); } }, 300);
+      }));
+    }
+  }
+  if (ctx.state) cleanups.push(ctx.state.subscribe('characters.favorites', () => { offset = 0; if (view === 'browse') void loadCharacters(); }));
+  if (ctx.state) cleanups.push(ctx.state.subscribe('chat.active', () => { void refreshChatHeader(); void refreshConnection(); }), ctx.state.subscribe('connections.active', () => { void refreshConnection(); }));
+  let lastHome = location.pathname === '/';
+  const routeTimer = setInterval(() => {
+    const atHome = location.pathname === '/';
+    if (atHome && !lastHome) {
+      if (view === 'chats') myChats.activate();
+      else { void loadRecent(); void loadCharacters(); }
+    } else if (!atHome && lastHome) myChats.deactivate();
+    lastHome = atHome;
+  }, 500);
+  setView('browse', false);
+  void refreshChatHeader(); refreshConnection();
+  return () => {
+    disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; notePreviews.clear(); controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); composerActions.destroy(); memory.destroy(); apiSettings.destroy(); promptSettings.destroy();
+    cleanups.reverse().forEach(cleanup => cleanup()); mounts.forEach(root => root.replaceChildren());
+    if (oldView === null) document.documentElement.removeAttribute('data-janitor-bridge-view'); else document.documentElement.setAttribute('data-janitor-bridge-view', oldView);
+    if (oldTools === null) document.documentElement.removeAttribute('data-jb-tools'); else document.documentElement.setAttribute('data-jb-tools', oldTools);
+  };
+}
