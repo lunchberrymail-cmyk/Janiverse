@@ -11,6 +11,7 @@ import myChatsCSS from './my-chats.css' with { type: 'text' };
 import soundCloudCSS from './soundcloud.css' with { type: 'text' };
 import customizeCSS from './customize.css' with { type: 'text' };
 import characterCreateCSS from './character-create.css' with { type: 'text' };
+import personaCreateCSS from './persona-create.css' with { type: 'text' };
 import tutorialCSS from './feature-tutorials.css' with { type: 'text' };
 import welcomeCSS from './welcome.css' with { type: 'text' };
 import visualCSS from './visual-style.css' with { type: 'text' };
@@ -32,6 +33,7 @@ import { createCustomize } from './customize';
 import { createSettingsWindow } from './settings-window';
 import { creatorAttribution, type CreatorAttribution } from './creator-attribution';
 import { createCharacterCreate } from './character-create';
+import { createPersonaCreate, consumePersonaSetupHandoff, reloadForPersonaSetup } from './persona-create';
 import { openFeatureTutorial, type TutorialFeature } from './feature-tutorials';
 import { tutorialScreenshots } from './tutorial-screenshots';
 import { readOptionalState, subscribeOptionalState } from './optional-state';
@@ -168,7 +170,11 @@ export function setup(ctx: SpindleFrontendContext) {
       }).catch(() => { if (!disposed) status.textContent = 'Your character is saved. Open it from the character library.'; });
     },
   });
-  cleanups.push(ctx.dom.addStyle(characterCreateCSS), ctx.dom.addStyle(tutorialCSS), ctx.dom.addStyle(welcomeCSS), ctx.dom.addStyle(chatToolsCSS));
+  const personaCreate = createPersonaCreate(ctx, {
+    openPersonas: () => invoke({ kind: 'drawer_tab', id: 'personas' }),
+    finishSetup: () => reloadForPersonaSetup(window.sessionStorage, () => window.location.reload()),
+  });
+  cleanups.push(ctx.dom.addStyle(characterCreateCSS), ctx.dom.addStyle(personaCreateCSS), ctx.dom.addStyle(tutorialCSS), ctx.dom.addStyle(welcomeCSS), ctx.dom.addStyle(chatToolsCSS));
   cleanups.push(ctx.dom.addStyle(themeCSS), ctx.dom.addStyle(layoutCSS), ctx.dom.addStyle(uiCSS), ctx.dom.addStyle(settingsCSS), ctx.dom.addStyle(composerCSS), ctx.dom.addStyle(homeBannerCSS), ctx.dom.addStyle(cardImportCSS), ctx.dom.addStyle(myChatsCSS), ctx.dom.addStyle(soundCloudCSS), ctx.dom.addStyle(customizeCSS));
   cleanups.push(ctx.dom.addStyle(visualCSS.replace('__JB_FRAUNCES__', frauncesFont).replace('__JB_JURA__', juraFont)));
   const status = el('p', 'jb-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
@@ -296,7 +302,7 @@ export function setup(ctx: SpindleFrontendContext) {
     } catch { /* The settings dialog reports unavailable saved configurations. */ }
   }
   const home = el('section', 'jb-home'); home.setAttribute('aria-label', 'Character browsing');
-  const homeBanner = createHomeBanner(ctx, { invoke, openApi: openConnections, openImport, openPrompt: () => openPrompt('prompt'), openTutorial }); home.append(homeBanner.root);
+  const homeBanner = createHomeBanner(ctx, { invoke, openApi: openConnections, openImport, openPersona: () => personaCreate.open(), openPrompt: () => openPrompt('prompt'), openTutorial }); home.append(homeBanner.root);
   const recentSection = el('section', 'jb-recent-section'); const recentHeading = el('div', 'jb-section-heading');
   recentHeading.append(el('h2', '', 'My chats'), button('View all →', () => setView('chats'), 'jb-text-button'));
   const recent = el('div', 'jb-recent'); recentSection.append(recentHeading, recent); home.append(recentSection);
@@ -601,8 +607,10 @@ export function setup(ctx: SpindleFrontendContext) {
   setView('browse', false);
   void refreshChatHeader(); refreshConnection();
   void welcome.maybeOpen();
+  try { if (consumePersonaSetupHandoff(window.sessionStorage)) void invoke({ kind: 'drawer_tab', id: 'personas' }); }
+  catch { /* Storage can be unavailable; ordinary setup still works. */ }
   return () => {
-    disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); tutorialWindow?.destroy(); characterCreate.destroy(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); apiSettings.destroy(); promptSettings.destroy(); settingsWindow.destroy();
+    disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); tutorialWindow?.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); apiSettings.destroy(); promptSettings.destroy(); settingsWindow.destroy();
     cleanups.reverse().forEach(cleanup => cleanup()); mounts.forEach(root => root.replaceChildren());
     if (oldView === null) document.documentElement.removeAttribute('data-janitor-bridge-view'); else document.documentElement.setAttribute('data-janitor-bridge-view', oldView);
     chatTools.destroy();

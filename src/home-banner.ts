@@ -7,6 +7,7 @@ type Options = {
   invoke: (ref: SpindleHostSurfaceRef) => Promise<boolean>;
   openApi: () => void;
   openImport: () => void;
+  openPersona: () => void;
   openPrompt: () => void;
   openTutorial?: (feature: TutorialFeature) => void;
 };
@@ -207,11 +208,7 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
     catch { status.textContent = 'Could not open this setup step. Please try again from Janiverse’s More menu.'; }
   }
   cardButton.addEventListener('click', () => openBasicStep(options.openImport));
-  personaButton.addEventListener('click', () => openBasicStep(() => {
-    void options.invoke({ kind: 'drawer_tab', id: 'personas' }).then(ok => {
-      if (!disposed && index === 0 && !ok) status.textContent = 'Personas is unavailable right now. Open it from Lumiverse’s sidebar.';
-    }).catch(() => { if (!disposed && index === 0) status.textContent = 'Could not open Personas. Please try again from Lumiverse’s sidebar.'; });
-  }));
+  personaButton.addEventListener('click', () => openBasicStep(options.openPersona));
   promptButton.addEventListener('click', () => openBasicStep(options.openPrompt));
   render();
   return { root, destroy() { disposed = true; picksModal?.dismiss(); root.remove(); } };

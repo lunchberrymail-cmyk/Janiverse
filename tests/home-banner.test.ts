@@ -2,21 +2,21 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 import { createHomeBanner, createMemoryPromo, createPresetPromo } from '../src/home-banner';
 
-let dom: any, oldDocument: any, banner: ReturnType<typeof createHomeBanner>, imports: number, apiOpens: number, promptOpens: number;
+let dom: any, oldDocument: any, banner: ReturnType<typeof createHomeBanner>, imports: number, apiOpens: number, promptOpens: number, personaOpens: number, personaError: boolean;
 let invoked: Array<{kind: string; id: string}>;
 let ctx: any, modals: any[], tutorials: string[], invokeResult: () => Promise<boolean>;
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 const find = (name: string) => [...document.querySelectorAll('button')].find(button => button.textContent === name)! as HTMLButtonElement;
 beforeEach(() => {
   oldDocument = globalThis.document; dom = new JSDOM('<!doctype html><html><body></body></html>'); globalThis.document = dom.window.document;
-  imports = 0; apiOpens = 0; promptOpens = 0; invoked = []; modals = []; tutorials = []; invokeResult = async () => true;
+  imports = 0; apiOpens = 0; promptOpens = 0; personaOpens = 0; personaError = false; invoked = []; modals = []; tutorials = []; invokeResult = async () => true;
   ctx = { ui: { showModal: ({ title }: { title: string }) => {
     const root = document.createElement('div'); root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', title); document.body.append(root);
     const listeners = new Set<() => void>(); let closed = false;
     const modal = { root, dismiss() { if (closed) return; closed = true; root.remove(); [...listeners].forEach(listener => listener()); listeners.clear(); }, onDismiss(listener: () => void) { listeners.add(listener); return () => listeners.delete(listener); } };
     modals.push(modal); return modal;
   } } };
-  banner = createHomeBanner(ctx, { invoke: async ref => { invoked.push(ref); return invokeResult(); }, openApi: () => { apiOpens++; }, openImport: () => { imports++; }, openPrompt: () => { promptOpens++; }, openTutorial: feature => { tutorials.push(feature); } });
+  banner = createHomeBanner(ctx, { invoke: async ref => { invoked.push(ref); return invokeResult(); }, openApi: () => { apiOpens++; }, openImport: () => { imports++; }, openPersona: () => { if (personaError) throw new Error('Unavailable'); personaOpens++; }, openPrompt: () => { promptOpens++; }, openTutorial: feature => { tutorials.push(feature); } });
   document.body.append(banner.root);
 });
 afterEach(() => { banner.destroy(); modals.forEach(modal => modal.dismiss()); dom.window.close(); globalThis.document = oldDocument; });
@@ -71,25 +71,26 @@ test('introduces one optional feature and opens it directly without changing con
 
 test('basics opens connection, card import, persona and optional prompt setup only when selected', async () => {
   const api = find('1. Add API connection'), card = find('2. Add a card'), persona = find('3. Create a persona'), prompt = find('4. Preset or prompt (optional)');
-  expect(apiOpens + imports + promptOpens).toBe(0);
+  expect(apiOpens + imports + personaOpens + promptOpens).toBe(0);
   expect(banner.root.textContent).toContain('A preset or prompt is optional.');
   expect(card.hidden || persona.hidden || prompt.hidden).toBe(false);
   api.click(); await flush(); card.click(); persona.click(); prompt.click(); await flush();
-  expect([apiOpens, imports, promptOpens]).toEqual([1, 1, 1]);
-  expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'personas' }]); expect(modals).toEqual([]);
+  expect([apiOpens, imports, personaOpens, promptOpens]).toEqual([1, 1, 1, 1]);
+  expect(invoked).toEqual([]); expect(modals).toEqual([]);
   find('Next idea').click();
   expect(card.hidden && persona.hidden && prompt.hidden).toBe(true);
   card.click(); persona.click(); prompt.click();
-  expect([apiOpens, imports, promptOpens]).toEqual([1, 1, 1]);
+  expect([apiOpens, imports, personaOpens, promptOpens]).toEqual([1, 1, 1, 1]);
   banner.destroy(); api.click(); card.click(); persona.click(); prompt.click(); await flush();
-  expect([apiOpens, imports, promptOpens]).toEqual([1, 1, 1]);
-  expect(invoked).toHaveLength(1);
+  expect([apiOpens, imports, personaOpens, promptOpens]).toEqual([1, 1, 1, 1]);
+  expect(invoked).toHaveLength(0);
 });
 
-test('persona setup reports an unavailable native drawer without creating anything', async () => {
-  invokeResult = async () => false;
+test('persona setup reports a failed creator without falling through to an empty drawer', async () => {
+  personaError = true;
   find('3. Create a persona').click(); await flush();
-  expect(banner.root.querySelector('[role=status]')!.textContent).toContain('Personas is unavailable');
+  expect(banner.root.querySelector('[role=status]')!.textContent).toContain('Could not open this setup step');
+  expect(invoked).toEqual([]);
   expect(modals).toHaveLength(0);
 });
 
@@ -160,7 +161,7 @@ test('banner opens the import review window without importing or requesting acce
 
 test('unavailable memory destinations give an actionable fallback without selecting another feature', async () => {
   banner.destroy();
-  banner = createHomeBanner({} as any, { invoke: async ref => { invoked.push(ref); return false; }, openApi: () => {}, openImport: () => { imports++; }, openPrompt: () => {} });
+  banner = createHomeBanner({} as any, { invoke: async ref => { invoked.push(ref); return false; }, openApi: () => {}, openImport: () => { imports++; }, openPersona: () => {}, openPrompt: () => {} });
   document.body.append(banner.root);
   find('Next idea').click();
   find('Explore Memory Cortex').click(); await flush();

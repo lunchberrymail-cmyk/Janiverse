@@ -896,16 +896,24 @@ test('opening native Connections from Settings closes the Janiverse window', asy
   expect(requests.every(request => !request.options.method || request.options.method === 'GET')).toBe(true);
 });
 
-test('Create a persona opens the native Personas drawer without requesting permission or saving', async () => {
+test('Create a persona opens a writing guide and form without requesting permission or saving', async () => {
   let permissionRequests = 0;
   ctx.permissions.request = async () => { permissionRequests++; return []; };
   start(); await flush();
   const previousRequests = requests.length;
   findButton('3. Create a persona', roots.get('landing_hero')!).click(); await flush();
-  expect(calls).toEqual([{ ref: { kind: 'drawer_tab', id: 'personas' }, params: undefined }]);
+  expect(calls).toEqual([]);
   expect(requests).toHaveLength(previousRequests);
   expect(permissionRequests).toBe(0);
-  expect(document.querySelector('[role=dialog]')).toBeNull();
+  const creator = document.querySelector('.jb-persona-create')!;
+  expect(creator.getAttribute('aria-label')).toBe('Create a persona');
+  expect(creator.textContent).toContain('your persona is who you play');
+  expect(creator.querySelector('input[name=name]')).not.toBeNull();
+  expect(creator.querySelector('textarea[name=description]')).not.toBeNull();
+  expect(creator.textContent).toContain('A simple example');
+  findButton('Open existing personas', creator).click(); await flush();
+  expect(calls).toEqual([{ ref: { kind: 'drawer_tab', id: 'personas' }, params: undefined }]);
+  expect(creator.isConnected).toBe(false);
 });
 
 test('the optional preset or prompt shortcut opens its editor without saving settings or requesting access', async () => {
