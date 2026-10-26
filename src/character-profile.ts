@@ -10,8 +10,10 @@ function text(value: unknown): string { return typeof value === 'string' ? value
 /** Read a selected card without leaving the home view or changing the active chat. */
 export function mountCharacterProfile(ctx: SpindleFrontendContext, root: HTMLElement, characterId: string, options: { notesPreview?: boolean } = {}) {
   let disposed = false, request = 0, injection: Element | undefined;
+  let stopNotes: (() => void) | undefined;
   root.classList.add('jb-character-profile');
   function clear() {
+    stopNotes?.(); stopNotes = undefined;
     if (injection) {
       try { ctx.dom.uninject(injection); } catch { injection.remove(); }
       injection = undefined;
@@ -44,17 +46,24 @@ export function mountCharacterProfile(ctx: SpindleFrontendContext, root: HTMLEle
       const tags = el('div', 'jb-profile-tags'); tags.setAttribute('aria-label', 'Character tags');
       if (Array.isArray(character.tags)) for (const tag of character.tags.slice(0, 64)) if (typeof tag === 'string') tags.append(el('span', '', tag));
       identity.append(tags); header.append(identity); root.append(header);
-      const notes = el('section', 'jb-profile-notes'); notes.setAttribute('aria-label', 'Creator’s Note');
-      notes.append(el('h3', '', 'Creator’s Note'));
+      const notes = el('details', 'jb-profile-notes'); notes.setAttribute('aria-label', 'Creator’s Note');
+      notes.append(el('summary', '', 'Creator’s Note'));
       const content = el('div', 'jb-profile-rich'); notes.append(content); root.append(notes);
       const note = text(character.creator_notes);
-      if (note.trim() && options.notesPreview) {
-        const preview = note.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-        content.textContent = preview.slice(0, 350) + (preview.length > 350 ? '…' : '');
-      } else if (note.trim()) {
-        try { injection = ctx.dom.inject(content, profileMarkup(note)); }
-        catch { content.textContent = note; }
-      } else content.append(el('p', '', 'No creator’s note.'));
+      let notesLoaded = false;
+      const showNotes = () => {
+        if (!notes.open || notesLoaded || disposed || generation !== request) return;
+        notesLoaded = true;
+        if (note.trim() && options.notesPreview) {
+          const preview = note.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+          content.textContent = preview.slice(0, 350) + (preview.length > 350 ? '…' : '');
+        } else if (note.trim()) {
+          try { injection = ctx.dom.inject(content, profileMarkup(note)); }
+          catch { content.textContent = note; }
+        } else content.append(el('p', '', 'No creator’s note.'));
+      };
+      notes.addEventListener('toggle', showNotes);
+      stopNotes = () => notes.removeEventListener('toggle', showNotes);
       const details = el('details', 'jb-profile-details'); details.append(el('summary', '', 'Character details'));
       for (const [key, label] of [
         ['description', 'Description'], ['personality', 'Personality'], ['scenario', 'Scenario'],

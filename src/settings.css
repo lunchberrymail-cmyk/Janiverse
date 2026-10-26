@@ -217,7 +217,7 @@
 .jb-settings-window-tabs > button[aria-selected="true"] { background: #44444e; color: #fff; font-weight: 600; }
 .jb-settings-window-root button:disabled { cursor: default; opacity: .45; }
 .jb-settings-window-root :is(button, a, input, select, textarea, summary):focus-visible { outline: 2px solid #c7a0df; outline-offset: 2px; }
-.jb-settings-window-content { flex: 1 1 auto; min-height: 0; min-width: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.jb-settings-window-content { flex: 1 1 auto; min-height: 0; min-width: 0; overflow: auto; overscroll-behavior: contain; overflow-anchor: none; scrollbar-width: thin; }
 .jb-settings-window-editor.jb-settings { --jb-settings-gutter: 16px; width: 100%; max-width: none; padding: 16px; }
 .jb-settings-window-editor > .jb-settings-tabs { position: sticky; top: -16px; z-index: 6; margin: -16px -16px 18px; padding: 3px 12px 0; border-bottom-color: #4c4d56; background: #303238; }
 .jb-settings-window-editor .jb-settings-tab { flex: 1 1 0; padding: 11px 7px; font-size: 13px; }

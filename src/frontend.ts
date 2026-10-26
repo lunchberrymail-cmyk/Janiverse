@@ -12,6 +12,7 @@ import customizeCSS from './customize.css' with { type: 'text' };
 import characterCreateCSS from './character-create.css' with { type: 'text' };
 import honeCSS from './hone.css' with { type: 'text' };
 import tutorialCSS from './feature-tutorials.css' with { type: 'text' };
+import welcomeCSS from './welcome.css' with { type: 'text' };
 import { createChatMemory } from './memory';
 import { createApiSettings } from './api-settings';
 import { createPromptSettings } from './prompt-settings';
@@ -31,6 +32,8 @@ import { createHone } from './hone';
 import { honeScreenshots } from './hone-screenshots';
 import { openFeatureTutorial, type TutorialFeature } from './feature-tutorials';
 import { tutorialScreenshots } from './tutorial-screenshots';
+import { readOptionalState, subscribeOptionalState } from './optional-state';
+import { createWelcome } from './welcome';
 
 type Character = { id: string; name: string; creator?: string; creator_notes?: string; description?: string; preview_description?: string; image_id?: string; tags?: string[]; updated_at?: number };
 type View = 'browse' | 'chats';
@@ -156,7 +159,7 @@ export function setup(ctx: SpindleFrontendContext) {
       }).catch(() => { if (!disposed) status.textContent = 'Your character is saved. Open it from the character library.'; });
     },
   });
-  cleanups.push(ctx.dom.addStyle(characterCreateCSS), ctx.dom.addStyle(honeCSS), ctx.dom.addStyle(tutorialCSS));
+  cleanups.push(ctx.dom.addStyle(characterCreateCSS), ctx.dom.addStyle(honeCSS), ctx.dom.addStyle(tutorialCSS), ctx.dom.addStyle(welcomeCSS));
   cleanups.push(ctx.dom.addStyle(themeCSS), ctx.dom.addStyle(layoutCSS), ctx.dom.addStyle(uiCSS), ctx.dom.addStyle(settingsCSS), ctx.dom.addStyle(composerCSS), ctx.dom.addStyle(homeBannerCSS), ctx.dom.addStyle(cardImportCSS), ctx.dom.addStyle(myChatsCSS), ctx.dom.addStyle(soundCloudCSS), ctx.dom.addStyle(customizeCSS));
   const status = el('p', 'jb-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   const navButtons: Array<{ node: HTMLButtonElement; view: View }> = [];
@@ -197,6 +200,7 @@ export function setup(ctx: SpindleFrontendContext) {
   }
   const more = el('details', 'jb-more'); const moreLabel = el('summary', '', 'More'); const menu = el('div', 'jb-more-menu');
   for (const [label, action] of [
+    ['Start here', () => welcome.open()],
     ['Import characters', openImport],
     ['Import card file or link', () => cardImport.open()],
     ['API Settings', openApi],
@@ -259,7 +263,7 @@ export function setup(ctx: SpindleFrontendContext) {
   }
   async function refreshConnection() {
     const generation = ++connectionRequest;
-    const connection = payload(ctx.state?.get('connections.active'));
+    const connection = payload(readOptionalState(ctx, 'connections.active', null));
     const active = ctx.getActiveChat();
     renderConnection(connection);
     if (!active?.chatId) return;
@@ -318,7 +322,7 @@ export function setup(ctx: SpindleFrontendContext) {
     void loadCharacters();
   }
   const favorites = () => {
-    const value = ctx.state?.get('characters.favorites'); const ids = new Set<string>(Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []);
+    const value = readOptionalState<unknown>(ctx, 'characters.favorites', []); const ids = new Set<string>(Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []);
     for (const [id, added] of favoriteWrites) { if (added) ids.add(id); else ids.delete(id); }
     return [...ids];
   };
@@ -471,7 +475,7 @@ export function setup(ctx: SpindleFrontendContext) {
       } catch { if (current()) localStatus.textContent = 'Could not save this favorite. Please try again.'; }
       finally { release(); busy = false; if (current()) render(); }
     }
-    const stop = ctx.state?.subscribe('characters.favorites', render);
+    const stop = subscribeOptionalState(ctx, 'characters.favorites', render);
     owner.onDispose(() => { closed = true; abort.abort(); stop?.(); });
     render(); return toggle;
   }
@@ -518,8 +522,8 @@ export function setup(ctx: SpindleFrontendContext) {
       }));
     }
   }
-  if (ctx.state) cleanups.push(ctx.state.subscribe('characters.favorites', () => { favoriteWrites.clear(); offset = 0; if (view === 'browse') void loadCharacters(); }));
-  if (ctx.state) cleanups.push(ctx.state.subscribe('chat.active', () => { void refreshChatHeader(); void refreshConnection(); }), ctx.state.subscribe('connections.active', () => { void refreshConnection(); }));
+  cleanups.push(subscribeOptionalState(ctx, 'characters.favorites', () => { favoriteWrites.clear(); offset = 0; if (view === 'browse') void loadCharacters(); }));
+  cleanups.push(subscribeOptionalState(ctx, 'chat.active', () => { void refreshChatHeader(); void refreshConnection(); }), subscribeOptionalState(ctx, 'connections.active', () => { void refreshConnection(); }));
   let lastPath = location.pathname, lastHome = lastPath === '/';
   const routeTimer = setInterval(() => {
     if (location.pathname !== lastPath) { settingsWindow.syncRoute(); if (!location.pathname.startsWith('/chat/')) soundCloud.close(); lastPath = location.pathname; }
@@ -530,8 +534,18 @@ export function setup(ctx: SpindleFrontendContext) {
     } else if (!atHome && lastHome) myChats.deactivate();
     lastHome = atHome;
   }, 500);
+  const welcome = createWelcome(ctx, {
+    openHome: async () => {
+      if (location.pathname !== '/' && !await invoke({ kind: 'route', id: '/' })) return false;
+      setView('browse', false); return true;
+    },
+    openApi,
+    openImport,
+  });
+  cleanups.push(() => welcome.destroy());
   setView('browse', false);
   void refreshChatHeader(); refreshConnection();
+  void welcome.maybeOpen();
   return () => {
     disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); tutorialWindow?.destroy(); characterCreate.destroy(); hone.destroy(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); composerActions.destroy(); memory.destroy(); apiSettings.destroy(); promptSettings.destroy(); settingsWindow.destroy();
     cleanups.reverse().forEach(cleanup => cleanup()); mounts.forEach(root => root.replaceChildren());

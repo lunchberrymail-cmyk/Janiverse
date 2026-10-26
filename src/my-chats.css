@@ -102,9 +102,15 @@
 .jb-my-chats .jb-mc-expanded { padding: 10px 10px 23px; background: linear-gradient(180deg, #3d3844, #34323a); }
 .jb-my-chats .jb-mc-profile { padding: 19px 20px 16px; border: 1px solid #6b626f; border-radius: 14px; background: #7062771c; }
 .jb-my-chats .jb-mc-creator { margin: 0; padding: 0 0 16px; border-bottom: 1px solid #ffffff16; color: #c4b6ef; font-size: 15px; }
-.jb-my-chats .jb-mc-description { margin: 22px 0; color: #ededf3; font-size: 16px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.jb-my-chats .jb-mc-note { min-width: 0; margin: 20px 0 16px; }
+.jb-my-chats .jb-mc-note-title { margin: 0 0 12px; color: #ded8e7; font-size: 14px; font-weight: 600; }
+.jb-my-chats .jb-mc-description { margin: 0; color: #ededf3; font-size: 16px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.jb-my-chats .jb-mc-description[data-expanded='false'] { max-height: 360px; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .jb-my-chats .jb-mc-description p { margin: 0 0 1em; }
 .jb-my-chats .jb-mc-description img { display: block; max-width: 100%; max-height: 520px; width: auto; height: auto; margin: 16px auto; border-radius: 8px; object-fit: contain; }
+.jb-my-chats .jb-mc-description :is(pre,table) { max-width: 100%; overflow: auto; }
+.jb-my-chats .jb-mc-description a { color: #dbb6f3; }
+.jb-my-chats .jb-mc-note-toggle { display: block; margin-top: 10px; padding: 5px 0; border: 0; background: transparent; color: #d7b5ee; font: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .jb-my-chats .jb-mc-character-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding-top: 16px; border-top: 1px solid #ffffff16; }
 .jb-my-chats .jb-mc-character-actions button { min-height: 38px; border: 1px solid #76707d; border-radius: 8px; padding: 8px 13px; background: #4b4651; color: #ece9f0; font: inherit; font-size: 13px; }
 .jb-my-chats .jb-mc-character-actions .jb-primary { border-color: #e59de9; background: linear-gradient(180deg, #ea8de7, #d570dc); color: #211328; font-weight: 600; }
@@ -174,6 +180,7 @@
   .jb-my-chats .jb-mc-chat-count { font-size: 14px; }
   .jb-my-chats .jb-mc-profile { padding: 14px; }
   .jb-my-chats .jb-mc-description { font-size: 14px; }
+  .jb-my-chats .jb-mc-description[data-expanded='false'] { max-height: 240px; }
   .jb-my-chats .jb-mc-conversation-card { padding: 14px 12px; column-gap: 10px; }
   .jb-my-chats .jb-mc-conversation-preview { font-size: 14px; }
 }

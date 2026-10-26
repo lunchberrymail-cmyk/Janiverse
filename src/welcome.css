@@ -1,0 +1,12 @@
+.jb-welcome { color: #e8e4ee; font-size: 14px; line-height: 1.6; }
+.jb-welcome .jb-welcome-lead { margin: 0 0 16px; color: #f1eaf7; font-size: 20px; font-weight: 600; }
+.jb-welcome .jb-welcome-steps { margin: 0 0 20px; padding-left: 24px; }
+.jb-welcome .jb-welcome-steps li { margin-bottom: 10px; padding-left: 4px; }
+.jb-welcome .jb-welcome-hint { margin: 10px 0; color: #c7bfd0; font-size: 13px; }
+.jb-welcome .jb-welcome-data { margin: 18px 0; padding-top: 14px; border-top: 1px solid #ffffff1c; color: #d8c5e7; font-size: 13px; }
+.jb-welcome .jb-welcome-status { margin: 12px 0; color: #e8bed3; }
+.jb-welcome .jb-welcome-status:empty { display: none; }
+.jb-welcome .jb-welcome-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.jb-welcome .jb-welcome-actions > button:first-child { flex-basis: 100%; }
+.jb-welcome .jb-welcome-actions > button:last-child { margin-left: auto; }
+.jb-welcome button:focus-visible { outline: 2px solid #d4acf0; outline-offset: 3px; }
