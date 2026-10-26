@@ -149,9 +149,11 @@ export function createApiSettings(ctx: SpindleFrontendContext, navigation: ApiSe
     modelRow.append(remoteActions); grid.append(modelRow);
     const remoteHelp = node('p', 'jb-settings-help', 'Load models and Test connection contact your selected provider only when clicked. Testing uses the saved connection.');
     const details = node('details', 'jb-settings-advanced jb-settings-details jb-settings-connection-details');
+    details.open = true;
     const detailsLabel = node('summary', '', 'Connection details');
     details.append(detailsLabel, connectionGrid);
     const about = node('details', 'jb-settings-advanced jb-settings-details jb-settings-connection-help');
+    about.open = true;
     about.append(node('summary', '', 'Connection tools and help'), scopeHelp, remoteHelp, test);
     const access = node('div', 'jb-settings-section');
     access.append(node('p', 'jb-settings-help', 'Allow access to save and use API connections.'));
@@ -242,7 +244,7 @@ export function createApiSettings(ctx: SpindleFrontendContext, navigation: ApiSe
       key.value = '';
       model.value = scope.value === 'chat' && selected?.id === boundId && boundModel ? boundModel : selected?.model ?? '';
       modelOptions.replaceChildren(); saved.value = selected?.id ?? '';
-      details.open = !selected && providerId === 'custom';
+      details.open = true;
       savedFields = fieldsSignature(); renderProvider(); renderScope(); status.textContent = '';
     }
     function savedOptions() {
@@ -259,7 +261,7 @@ export function createApiSettings(ctx: SpindleFrontendContext, navigation: ApiSe
       // provider-specific metadata remain attached to their original profile.
       selected = undefined; saved.value = ''; providerId = provider.id;
       name.value = provider.label; url.value = provider.url; key.value = ''; model.value = ''; modelOptions.replaceChildren();
-      details.open = provider.id === 'custom'; savedFields = fieldsSignature(); renderProvider(); renderScope(); status.textContent = '';
+      details.open = true; savedFields = fieldsSignature(); renderProvider(); renderScope(); status.textContent = '';
     });
     key.addEventListener('input', renderSummary);
     scope.addEventListener('change', () => {

@@ -127,7 +127,7 @@ export function setup(ctx: SpindleFrontendContext) {
         }
       }
       const promo = createPresetPromo(ctx);
-      target.prepend(promo.root);
+      target.parentElement?.prepend(promo.root);
       return { refresh() { preferences.refresh(); }, destroy() { footerObserver?.disconnect(); preferences.destroy(); promo.destroy(); footer?.remove(); } };
     },
     onApplied: () => { void refreshConnection(); },

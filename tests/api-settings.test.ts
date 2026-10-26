@@ -286,11 +286,11 @@ describe('API settings preserve native connection and chat scope', () => {
     expect(updates).toHaveLength(0); expect(activeSwitches).toHaveLength(0); expect(modelLoads).toHaveLength(0);
   });
 
-  test('a saved API keeps model and destination visible while connection details and help are optional', async () => {
+  test('a saved API opens connection details and tools by default without contacting its provider', async () => {
     api.open(); await settle();
     const details = root().querySelector<HTMLDetailsElement>('.jb-settings-connection-details')!;
     const help = root().querySelector<HTMLDetailsElement>('.jb-settings-connection-help')!;
-    expect(details.open).toBe(false); expect(help.open).toBe(false);
+    expect(details.open).toBe(true); expect(help.open).toBe(true);
     expect(details.contains(control('api-model'))).toBe(false);
     expect(details.contains(control('api-connection'))).toBe(false);
     expect(details.contains(control('api-scope'))).toBe(false);
@@ -299,7 +299,7 @@ describe('API settings preserve native connection and chat scope', () => {
     expect(root().querySelector('.jb-settings-connection-summary')!.textContent).toBe('OpenRouter · Saved credentials');
     expect(help.contains(button('Test connection'))).toBe(true);
     expect(help.contains(button('Load models'))).toBe(false);
-    details.open = true; help.open = true; await settle();
+    details.open = false; help.open = false; await settle();
     expect(calls.map(call => call.url)).toEqual(['/api/v1/chats/chat%2Fone?messages=false', '/api/v1/providers']);
     expect(updates).toHaveLength(0); expect(activeSwitches).toHaveLength(0); expect(modelLoads).toHaveLength(0);
   });
@@ -307,7 +307,7 @@ describe('API settings preserve native connection and chat scope', () => {
   test('new connections expose provider setup and invalid hidden connection fields reopen before saving', async () => {
     api.open(); await settle(); choose('api-connection', '');
     const details = root().querySelector<HTMLDetailsElement>('.jb-settings-connection-details')!;
-    expect(details.open).toBe(false);
+    expect(details.open).toBe(true);
     expect(control('api-provider').disabled).toBe(false);
     choose('api-provider', 'custom');
     control('api-base-url').value = 'not a URL';
@@ -399,7 +399,7 @@ describe('API settings preserve native connection and chat scope', () => {
     expect(control('api-base-url').value).toBe('https://nano-gpt.com/api/v1');
     expect(control('api-key').value).toBe(''); expect(control('api-model').value).toBe('');
     expect(control('api-key').placeholder).toBe('Enter your API key');
-    expect(root().querySelector<HTMLDetailsElement>('.jb-settings-connection-details')!.open).toBe(false);
+    expect(root().querySelector<HTMLDetailsElement>('.jb-settings-connection-details')!.open).toBe(true);
     expect(button('Test connection').disabled).toBe(true);
     expect(profiles).toEqual(original); expect(updates).toHaveLength(0); expect(calls).toHaveLength(2);
     control('api-model').value = 'new-nano-model'; button('Save & Use').click(); await settle();
