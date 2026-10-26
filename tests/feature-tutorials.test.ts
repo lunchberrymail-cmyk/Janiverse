@@ -181,5 +181,5 @@ test('hidden pages and reduced motion pause playback without restarting; close r
 
 test('the importer opens only on request and a missing callback gives recovery', async () => {
   openFeatureTutorial(ctx, 'import', options()); expect(imports).toBe(0); find('Open import assistant').click(); await flush(); expect(imports).toBe(1); expect(document.querySelector('.jb-feature-tutorial')).toBeNull();
-  const tutorial = openFeatureTutorial(ctx, 'import', { invoke: options().invoke }); find('Open import assistant').click(); await flush(); expect(tutorial.root.isConnected).toBe(true); expect(tutorial.root.textContent).toContain('Start guided import');
+  const tutorial = openFeatureTutorial(ctx, 'import', { invoke: options().invoke }); find('Open import assistant').click(); await flush(); expect(tutorial.root.isConnected).toBe(true); expect(tutorial.root.textContent).toContain('Add a card');
 });

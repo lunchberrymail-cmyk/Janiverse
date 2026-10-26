@@ -867,6 +867,20 @@ test('an in-flight response after disable cannot restore removed cards', async (
   expect(document.querySelector('.jb-card')).toBeNull(); expect(document.querySelectorAll('style')).toHaveLength(0);
 });
 
+test.each([
+  ['1. Add API connection', '.jb-api-settings'],
+  ['3. Preset or prompt (optional)', '.jb-settings-prompt'],
+])('basics shortcut %s opens its editor without saving settings or requesting access', async (label, selector) => {
+  let permissionRequests = 0;
+  ctx.permissions.request = async () => { permissionRequests++; return []; };
+  start(); await flush();
+  findButton(label, roots.get('landing_hero')!).click(); await flush();
+  expect(document.querySelector(selector)).not.toBeNull();
+  expect(permissionRequests).toBe(0);
+  expect(requests.every(request => !request.options.method || request.options.method === 'GET')).toBe(true);
+  expect(calls).toEqual([]);
+});
+
 test('import shortcuts discover the installed JAR extension by both unique keywords and invoke its dynamic drawer ID', async () => {
   const nativeList = ctx.host.surfaces.list;
   const dynamicId = 'extension:instance-uuid-73:jar-import';
@@ -879,7 +893,7 @@ test('import shortcuts discover the installed JAR extension by both unique keywo
     ] : []),
   ];
   start(); await flush();
-  findButton('Start guided import').click(); await flush();
+  findButton('2. Add a card').click(); await flush();
   findButton('Import characters', roots.get('landing_header')!).click(); await flush();
   expect(calls).toEqual([
     { ref: { kind: 'drawer_tab', id: dynamicId }, params: undefined },
@@ -898,7 +912,7 @@ test('the guided JAR capability opens its assistant directly through the shared 
   ctx.events = { emit: (name: string, payload: unknown) => emitted.push({ name, payload }) };
   start(); await flush();
   const priorRequests = requests.length;
-  findButton('Start guided import').click(); await flush();
+  findButton('2. Add a card').click(); await flush();
   expect(emitted).toEqual([{ name: 'jar_bridge:open_import', payload: {} }]);
   expect(calls).toHaveLength(0); expect(requests).toHaveLength(priorRequests);
 });
@@ -913,7 +927,7 @@ test('without an invocable JAR drawer import opens the card file/link modal with
   ctx.permissions.getGranted = async () => { permissionsRead++; return []; };
   ctx.permissions.request = async () => { permissionRequests++; return []; };
   start(); await flush(); const priorRequests = requests.length;
-  findButton('Start guided import').click(); await flush();
+  findButton('2. Add a card').click(); await flush();
   const modal = document.querySelector('[role=dialog]')!;
   expect(modal.getAttribute('aria-label')).toBe('Import character');
   expect(findButton('File', modal).getAttribute('aria-selected')).toBe('true');

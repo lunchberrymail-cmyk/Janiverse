@@ -5,7 +5,9 @@ import type { TutorialFeature } from './feature-tutorials';
 
 type Options = {
   invoke: (ref: SpindleHostSurfaceRef) => Promise<boolean>;
+  openApi: () => void;
   openImport: () => void;
+  openPrompt: () => void;
   openTutorial?: (feature: TutorialFeature) => void;
 };
 type MemoryOptions = Pick<Options, 'invoke'>;
@@ -71,8 +73,10 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
   const description = make('p', 'jb-discover-description');
   const actions = make('div', 'jb-discover-actions');
   const tryButton = make('button', 'jb-discover-primary'); tryButton.type = 'button';
+  const cardButton = make('button', 'jb-discover-import', '2. Add a card'); cardButton.type = 'button'; cardButton.prepend(icon('import'));
+  const promptButton = make('button', 'jb-discover-import', '3. Preset or prompt (optional)'); promptButton.type = 'button'; promptButton.prepend(icon('prompt'));
   const cortexButton = make('button', 'jb-discover-import', 'Explore Memory Cortex'); cortexButton.type = 'button'; cortexButton.prepend(icon('embeddings'));
-  actions.append(tryButton, cortexButton);
+  actions.append(tryButton, cardButton, promptButton, cortexButton);
   const footer = make('div', 'jb-discover-footer');
   const progress = make('span', 'jb-discover-progress'); progress.setAttribute('aria-live', 'polite');
   const next = make('button', 'jb-discover-next', 'Next idea'); next.type = 'button'; next.append(icon('arrow'));
@@ -110,11 +114,11 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
   }
   const ideas = [
     {
-      name: 'Import', title: 'Import your old chats and cards.',
-      description: 'Bring your JanitorAI characters and conversations into Lumiverse with a guided JAR import.',
-      action: 'Start guided import', picture: 'import',
+      name: 'Basics', title: 'Let’s do the basics.',
+      description: 'Add an AI connection and a character card to get chatting. A preset or prompt is optional.',
+      action: '1. Add API connection', picture: 'settings',
       tutorial: 'import',
-      open: async () => { options.openImport(); return true; },
+      open: async () => { options.openApi(); return true; },
     },
     {
       name: 'Memory', title: 'Keep the important moments.',
@@ -161,9 +165,13 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
   function render() {
     const idea = ideas[index];
     const isLunch = idea.name === 'Lunch’s picks';
-    eyebrow.textContent = isLunch ? 'LUNCH’S PICKS' : idea.name === 'Memory' ? 'HELP YOUR CHARACTERS REMEMBER MORE' : idea.name === 'Import' ? 'PICK UP WHERE YOU LEFT OFF' : 'A LITTLE MORE LUMIVERSE';
+    const isBasics = idea.name === 'Basics';
+    eyebrow.textContent = isLunch ? 'LUNCH’S PICKS' : idea.name === 'Memory' ? 'HELP YOUR CHARACTERS REMEMBER MORE' : isBasics ? 'START HERE' : 'A LITTLE MORE LUMIVERSE';
     tutorial.hidden = isLunch;
+    tutorial.textContent = isBasics ? 'Card import guide' : 'Full tutorial';
     root.classList.toggle('jb-discover-lunch', isLunch);
+    root.classList.toggle('jb-discover-basics', isBasics);
+    cardButton.hidden = promptButton.hidden = !isBasics;
     cortexButton.hidden = idea.name !== 'Memory';
     root.dataset.idea = idea.name.toLowerCase(); title.textContent = idea.title; description.textContent = idea.description;
     tryButton.replaceChildren(icon(idea.picture), document.createTextNode(idea.action));
@@ -191,6 +199,14 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
       if (!disposed && !ok) status.textContent = 'Memory Cortex is unavailable right now. You can still try Summary.';
     }).catch(() => { if (!disposed) status.textContent = 'Could not open Memory Cortex. Please try again from Lumiverse’s sidebar.'; });
   });
+  function openBasicStep(action: () => void) {
+    if (disposed || index !== 0) return;
+    status.textContent = '';
+    try { action(); }
+    catch { status.textContent = 'Could not open this setup step. Please try again from Janiverse’s More menu.'; }
+  }
+  cardButton.addEventListener('click', () => openBasicStep(options.openImport));
+  promptButton.addEventListener('click', () => openBasicStep(options.openPrompt));
   render();
   return { root, destroy() { disposed = true; picksModal?.dismiss(); root.remove(); } };
 }

@@ -59,6 +59,16 @@
 .jb-lunch-panel .jb-lunch-picks{max-width:none}
 @media(max-width:500px){.jb-discover{height:470px;min-height:470px}.jb-discover-content{padding:24px 21px}.jb-discover-title{max-width:100%;font-size:28px}.jb-discover-description{font-size:14px;line-height:1.5;margin-bottom:16px}.jb-discover-eyebrow{margin-bottom:9px;letter-spacing:1.3px}.jb-discover-footer{gap:2px 18px;width:100%}.jb-discover-progress{flex-basis:100%}}
 
+/* The first idea gives setup steps the full banner width and grows on phones. */
+.jb-discover-basics{height:auto;min-height:350px}
+.jb-discover-basics .jb-discover-content{height:auto;min-height:350px;max-width:none;padding:24px 28px}
+.jb-discover-basics .jb-discover-art{display:none}
+.jb-discover-basics .jb-discover-title{max-width:none}
+.jb-discover-basics .jb-discover-description{max-width:680px;margin-bottom:16px}
+.jb-discover-basics .jb-discover-actions{gap:8px 20px}
+.jb-discover-basics .jb-discover-footer{margin-top:16px;padding-top:0}
+@media(max-width:500px){.jb-discover-basics{min-height:0}.jb-discover-basics .jb-discover-content{min-height:0;padding:24px 21px}.jb-discover-basics .jb-discover-actions{align-items:flex-start;flex-direction:column;gap:4px}.jb-discover-basics .jb-discover-import{text-align:left}}
+
 /* The same memory invitation can sit inside chat settings without the large home art. */
 .jb-memory-promo{box-sizing:border-box;min-width:0;margin:0;padding:16px;border:1px solid #8d6dad70;border-radius:12px;background:radial-gradient(ellipse at top right,#7f5ba32c,transparent 75%),#292633;color:#f0e9f7}
 .jb-memory-promo h3{margin:0 0 8px;font:600 19px/1.25 Georgia,'Times New Roman',serif;color:#f4eafa}
