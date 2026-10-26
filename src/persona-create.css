@@ -2,12 +2,11 @@
 .jb-persona-intro { margin-bottom: 22px; }
 .jb-persona-intro > p:last-child { margin: 10px 0 0; color: var(--jb-settings-muted); }
 .jb-persona-eyebrow { margin: 0 0 8px; color: #ddbded; font-size: 11px; font-weight: 700; letter-spacing: .14em; }
-.jb-persona-fields { min-width: 0; margin: 0; padding: 0; border: 0; }
-.jb-persona-create textarea { min-height: 130px; resize: vertical; }
-.jb-persona-example { margin: 18px 0; padding: 16px; border: 1px solid #ae99ff40; border-radius: 12px; background: #ae99ff0a; }
+.jb-persona-fields { display: grid; gap: 16px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.jb-persona-create textarea { resize: vertical; }
+.jb-persona-example { margin: 0; padding: 16px; border: 1px solid #ae99ff40; border-radius: 12px; background: #ae99ff0a; }
 .jb-persona-example p { margin: 8px 0 10px; color: #d9d6e2; }
 .jb-persona-example .jb-settings-help { margin-top: 5px; display: block; }
-.jb-persona-form > .jb-settings-actions { margin-top: 20px; }
 .jb-persona-status:empty { display: none; }
 .jb-persona-status { margin: 14px 0; overflow-wrap: anywhere; }
 .jb-persona-status[data-kind="error"] { color: #ffb8be; }

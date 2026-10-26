@@ -69,6 +69,14 @@ test('a name is required, description is optional, and validation happens before
   expect(JSON.parse(String(requests[0].init.body))).toEqual({ name: 'Alex', description: '' });
 });
 
+test('the separate sticky footer submits its associated form and hides after saving', async () => {
+  draft(); const create = button('Create persona');
+  expect(create.form).toBe(root().querySelector('form'));
+  expect(create.parentElement!.parentElement).toBe(root());
+  create.click(); await settle();
+  expect(requests).toHaveLength(1); expect(create.parentElement!.hidden).toBe(true);
+});
+
 test('permission denial keeps the draft, does not repeat prompts, and enabling alone never saves', async () => {
   draft(); grants = []; permissionResult = async () => [];
   submit(); await settle(); submit(); await settle();

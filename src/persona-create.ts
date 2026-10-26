@@ -37,7 +37,7 @@ export function createPersonaCreate(ctx: SpindleFrontendContext, options: Option
     const intro = el('div', 'jb-persona-intro');
     intro.append(el('p', 'jb-persona-eyebrow', 'YOU IN THE STORY'), el('h2', '', 'Who will you chat as?'),
       el('p', '', 'A persona tells the AI who you are in the story. The character card is who you talk to; your persona is who you play.'));
-    const form = el('form', 'jb-persona-form'); form.noValidate = true;
+    const form = el('form', 'jb-persona-form'); form.noValidate = true; form.id = `${prefix}-form`;
     const fields = el('fieldset', 'jb-persona-fields');
     function field(label: string, name: string, hint: string, multiline = false) {
       const wrap = el('label', 'jb-settings-field');
@@ -51,6 +51,7 @@ export function createPersonaCreate(ctx: SpindleFrontendContext, options: Option
     const name = field('Persona name', 'name', 'The name the AI should call you. It can be a fictional name.');
     name.input.required = true; name.input.maxLength = 200; name.input.placeholder = 'e.g. Alex';
     const description = field('About your persona (optional)', 'description', 'Tell the AI your pronouns, appearance, personality, or background. A few sentences are enough.', true);
+    (description.input as HTMLTextAreaElement).rows = 4;
     description.input.maxLength = 10_000; description.input.placeholder = 'Who are you in this story? What should the character know about you?';
     const example = el('aside', 'jb-persona-example'); example.setAttribute('aria-label', 'Persona example');
     const exampleText = (who: string) => `${who} uses they/them pronouns and has short dark hair. They are a curious, quick-witted traveler who asks too many questions and always helps a friend.`;
@@ -67,9 +68,9 @@ export function createPersonaCreate(ctx: SpindleFrontendContext, options: Option
     example.append(useExample, el('small', 'jb-settings-help', 'Fills blank fields. Change anything to make it yours.'));
     fields.append(name.wrap, description.wrap, example, el('p', 'jb-settings-help', 'You can add a portrait and edit more details in Personas later.'));
     const actions = el('div', 'jb-settings-actions');
-    const create = el('button', 'jb-button jb-primary', 'Create persona'); create.type = 'submit';
-    const cancel = button('Cancel', () => modal.dismiss()); actions.append(create, cancel);
-    form.append(fields, actions);
+    const create = el('button', 'jb-button jb-primary', 'Create persona'); create.type = 'submit'; create.setAttribute('form', form.id);
+    const cancel = button('Cancel', () => modal.dismiss()); actions.append(cancel, create);
+    form.append(fields);
     const status = el('p', 'jb-persona-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
     function message(text: string, kind = '') { status.textContent = text; status.dataset.kind = kind; }
     const enable = button('Enable Personas permission', () => { void enablePermission(); }, 'jb-settings-link'); enable.hidden = true;
@@ -98,13 +99,13 @@ export function createPersonaCreate(ctx: SpindleFrontendContext, options: Option
       try { options.finishSetup(); }
       catch { message('Reload Janiverse and check Personas before creating this persona again.', 'warning'); }
     }, 'jb-settings-link'); check.hidden = true;
-    modal.root.append(intro, form, status, enable, success, manage, check);
+    modal.root.append(intro, form, status, enable, success, manage, check, actions);
     function sync() {
       fields.disabled = busy || saved || uncertain; create.disabled = busy || saved || uncertain;
       cancel.disabled = busy; manage.disabled = busy; enable.disabled = busy;
       useExample.disabled = !!name.input.value.trim() && !!description.input.value.trim();
       form.setAttribute('aria-busy', String(busy));
-      form.hidden = saved; success.hidden = !saved; manage.hidden = saved || uncertain; check.hidden = !uncertain;
+      form.hidden = saved; actions.hidden = saved; success.hidden = !saved; manage.hidden = saved || uncertain; check.hidden = !uncertain;
       if (saved || uncertain) enable.hidden = true;
     }
     async function permission(request = false) {
