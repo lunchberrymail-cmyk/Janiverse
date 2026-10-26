@@ -366,7 +366,7 @@ test('inline refresh loads a newly available first API connection without requir
   dom.reconfigure({ url: 'http://localhost/' }); chatId = null; let connected = false;
   const state = ctx.state.get;
   ctx.state.get = (key: string) => !connected && ['connections.active', 'connections.profiles'].includes(key) ? null : state(key);
-  const { session } = await mount(); expect(input('global-prompt').disabled).toBe(true); expect(root.textContent).toContain('Add or select an API configuration above');
+  const { session } = await mount(); expect(input('global-prompt').disabled).toBe(true); expect(root.textContent).toContain('Open API Settings to add or select a connection');
   connected = true; session.refresh(); await settle();
   expect(input('prompt-preset').disabled).toBe(false); expect(input('global-prompt').disabled).toBe(true); expect(input('temperature').value).toBe('0.8'); expect(root.textContent).toContain('This API configuration · My model');
   expect(writes()).toHaveLength(0); change('global-prompt', 'Instructions for the first connection'); await save();
@@ -630,3 +630,104 @@ test('instruction saving works without secure-context crypto APIs', async () => 
 });
 
 test('editing one sampler preserves untouched native values outside simplified bounds', async()=>{presets.get('original')!.parameters.samplerOverrides.topK=700;await start();change('temperature','1.2');await save();expect(count).toBe(1);expect(presets.get('copy-1')!.parameters.samplerOverrides).toMatchObject({temperature:1.2,topK:700});});
+
+test('a custom prompt saves its entered name, reopens with it, and is reusable in another chat by native ID', async () => {
+  await start(); await choose('prompt-source', 'custom');
+  change('prompt-name', '  Quiet evenings  '); change('global-prompt', 'Write a gentle scene and leave room for {{user}}.'); await save();
+  const saved = structuredClone(presets.get('copy-1')!);
+  expect(saved.name).toBe('Quiet evenings'); expect(saved.prompt_order[0].content).toContain('gentle scene');
+  expect(root.textContent).toContain('Saved as “Quiet evenings”');
+  expect([...input('prompt-preset').querySelectorAll('option')].some(option => option.value === 'copy-1' && option.textContent === 'Quiet evenings')).toBe(true);
+  await start(); expect(input('prompt-name').value).toBe('Quiet evenings');
+  chatId = 'chat-2'; dom.reconfigure({ url: 'http://localhost/chat/chat-2' });
+  const fetchSaved = globalThis.fetch;
+  globalThis.fetch = (async (url: any, init: RequestInit = {}) => {
+    const path = new URL(String(url), 'http://localhost').pathname;
+    if (path === '/api/v1/chats/chat-2') return json({ id: 'chat-2', metadata: {} });
+    if (path === '/api/v1/preset-profiles/resolve/chat-2') { const binding = bindings.get('chat/chat-2') ?? inherited; return json({ preset_id: binding?.preset_id, binding }); }
+    return fetchSaved(url, init);
+  }) as typeof fetch;
+  await start(); await choose('prompt-preset', 'copy-1'); await save();
+  expect(bindings.get('chat/chat-2')?.preset_id).toBe('copy-1'); expect(count).toBe(1); expect(presets.get('copy-1')).toEqual(saved);
+});
+
+test('Save as new preserves the previous named version and later ordinary saves update only the new one', async () => {
+  await start(); await choose('prompt-source', 'custom'); change('prompt-name', 'Evening v1'); change('global-prompt', 'First version.'); await save();
+  const first = structuredClone(presets.get('copy-1'));
+  change('prompt-name', 'Evening v2'); change('global-prompt', 'Second version.'); button('Save as new prompt').click(); await settle();
+  expect(count).toBe(2); expect(presets.get('copy-1')).toEqual(first); expect(presets.get('copy-2')?.name).toBe('Evening v2');
+  expect(bindings.get('chat/chat-1')?.preset_id).toBe('copy-2');
+  change('global-prompt', 'Edited second version.'); await save();
+  expect(count).toBe(2); expect(presets.get('copy-2')?.cache_revision).toBe(2); expect(presets.get('copy-1')).toEqual(first);
+});
+
+test('renaming a current Janiverse prompt updates its native name and picker entry without another copy', async () => {
+  await start(); await choose('prompt-source', 'custom'); change('prompt-name', 'Old name'); await save();
+  change('prompt-name', 'New name'); await save();
+  expect(count).toBe(1); expect(presets.get('copy-1')?.name).toBe('New name');
+  expect([...input('prompt-preset').querySelectorAll('option')].filter(option => option.value === 'copy-1').map(option => option.textContent)).toEqual(['New name']);
+});
+
+test('Customize a copy also preserves an owned preset already bound to this same chat', async () => {
+  await start(); await choose('prompt-source', 'custom'); change('prompt-name', 'Keep this version'); await save();
+  const first = structuredClone(presets.get('copy-1'));
+  await choose('prompt-preset', 'copy-1'); expect(input('prompt-name').disabled).toBe(true);
+  button('Customize a copy').click(); expect(input('prompt-name').value).toBe('Keep this version (copy)');
+  change('global-prompt', 'A separate version.'); await save();
+  expect(count).toBe(2); expect(presets.get('copy-1')).toEqual(first); expect(presets.get('copy-2')?.name).toBe('Keep this version (copy)');
+});
+
+test.each(['', '   ', 'x'.repeat(201)])('invalid prompt name %j prevents both save actions and focuses the editable name', async name => {
+  const { session } = await mount(); await choose('prompt-source', 'custom'); change('prompt-name', name);
+  await save(); button('Save as new prompt').click(); await settle();
+  expect(writes()).toHaveLength(0); expect(input('prompt-name').getAttribute('aria-invalid')).toBe('true');
+  expect(document.activeElement).toBe(input('prompt-name')); expect(root.querySelector<HTMLDetailsElement>('.jb-settings-global-prompt')!.open).toBe(true); session.destroy();
+});
+
+test('a binding failure after Save as new retries the already created named version', async () => {
+  await start(); await choose('prompt-source', 'custom'); change('prompt-name', 'Original version'); await save();
+  const first = structuredClone(presets.get('copy-1'));
+  change('prompt-name', 'New version'); rejectBinding = true; button('Save as new prompt').click(); await settle();
+  expect(count).toBe(2); expect(presets.get('copy-1')).toEqual(first); expect(button('Finish saving prompt').disabled).toBe(false);
+  rejectBinding = false; button('Finish saving prompt').click(); await settle();
+  expect(count).toBe(2); expect(bindings.get('chat/chat-1')?.preset_id).toBe('copy-2'); expect(presets.get('copy-1')).toEqual(first);
+});
+
+test('repeated Save as new clicks while creation is pending send one create request', async () => {
+  await start(); await choose('prompt-source', 'custom'); change('prompt-name', 'Only once');
+  const fetchSaved = globalThis.fetch; let release!: () => void, creates = 0; const pending = new Promise<void>(resolve => { release = resolve; });
+  globalThis.fetch = (async (url: any, init: RequestInit = {}) => {
+    if (String(url) === '/api/v1/presets' && init.method === 'POST') { creates++; await pending; }
+    return fetchSaved(url, init);
+  }) as typeof fetch;
+  const saveNew = button('Save as new prompt'); saveNew.click(); saveNew.click(); await settle();
+  expect(creates).toBe(1); expect(saveNew.disabled).toBe(true); expect(input('prompt-name').disabled).toBe(true);
+  release(); await settle(); expect(count).toBe(1); expect(bindings.get('chat/chat-1')?.preset_id).toBe('copy-1');
+});
+
+test('an unconfirmed create blocks duplicate writes and the named row can be recovered from Saved preset', async () => {
+  await start(); await choose('prompt-source', 'custom'); change('prompt-name', 'Recovered name'); change('global-prompt', 'Keep these instructions.');
+  const fetchSaved = globalThis.fetch; let disconnect = true;
+  globalThis.fetch = (async (url: any, init: RequestInit = {}) => {
+    const response = await fetchSaved(url, init);
+    if (String(url) === '/api/v1/presets' && init.method === 'POST' && disconnect) { disconnect = false; throw new TypeError('Response lost'); }
+    return response;
+  }) as typeof fetch;
+  button('Save as new prompt').click(); await settle();
+  expect(count).toBe(1); expect(button('Save settings').disabled).toBe(true); expect(button('Save as new prompt').disabled).toBe(true); expect(root.textContent).toContain('save could not be confirmed');
+  button('Save settings').click(); button('Save as new prompt').click(); await settle(); expect(count).toBe(1);
+  button('Reload saved settings').click(); await settle(); await choose('prompt-preset', 'copy-1'); await save();
+  expect(count).toBe(1); expect(bindings.get('chat/chat-1')?.preset_id).toBe('copy-1'); expect(presets.get('copy-1')?.name).toBe('Recovered name');
+});
+
+test('revoked permission blocks Save as new while preserving the entered name and text', async () => {
+  await start(); await choose('prompt-source', 'custom'); change('prompt-name', 'Keep my name'); change('global-prompt', 'Keep my text'); grants = [];
+  button('Save as new prompt').click(); await settle();
+  expect(writes()).toHaveLength(0); expect(input('prompt-name').value).toBe('Keep my name'); expect(input('global-prompt').value).toBe('Keep my text'); expect(requested).toEqual([]);
+});
+
+test('refresh preserves a name-only draft instead of reloading its saved name', async () => {
+  const { session } = await mount(); await choose('prompt-source', 'custom'); change('prompt-name', 'Saved name'); await save();
+  change('prompt-name', 'Unsaved name'); session.refresh(); await settle();
+  expect(input('prompt-name').value).toBe('Unsaved name'); expect(root.textContent).toContain('unsaved prompt and generation settings are still here'); session.destroy();
+});

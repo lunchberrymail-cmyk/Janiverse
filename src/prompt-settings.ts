@@ -70,7 +70,8 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
     modal.root.classList.add('jb-settings');
     const suffix = `jb-prompt-${++ids}`;
     let loaded: Loaded | undefined, saving = false, loading = false, selected = initial, loadVersion = 0;
-    let promptDirty = false, prefillDirty = false, samplersDirty = false;
+    let promptDirty = false, prefillDirty = false, samplersDirty = false, nameDirty = false;
+    let copyDraft = false, pendingCreated = false, unconfirmedCreate = false;
     const editedSamplers = new Set<string>();
     let promptMode: PromptMode = 'custom', customizeCopy = false, sourceDirty = false, sourceLoading = false, sourceVersion = 0;
     let staged: PromptBase | undefined, choices: PresetChoice[] = [], unresolvedScope: Scope | undefined;
@@ -116,12 +117,17 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
     presetField.hidden = true;
     const sourceHelp = node('p', 'jb-settings-help jb-settings-prompt-source-help'); sourceHelp.setAttribute('aria-live', 'polite');
     const sourceControls = node('div', 'jb-settings-prompt-source-controls'); sourceControls.append(field('Prompt source', sourceChoice, 'Use one text prompt, or keep a complete Lumiverse preset.'), presetField, sourceHelp);
-    const promptField = field('Global prompt', prompt, promptHelp); promptCard.append(sourceControls, promptField);
+    const promptName = node('input', 'jb-settings-input'); promptName.name = 'prompt-name'; promptName.maxLength = 200; promptName.placeholder = 'e.g. Slow-burn roleplay'; promptName.autocomplete = 'off';
+    promptName.addEventListener('input', () => { nameDirty = true; promptName.removeAttribute('aria-invalid'); });
+    const nameField = field('Prompt name', promptName, 'Find this name under Saved preset to reuse it in another chat. Save as new prompt keeps the previous version and uses the new one here.'); nameField.classList.add('jb-settings-prompt-name');
+    const saveNew = button('Save as new prompt', () => { void saveSettings(true); }, 'jb-button jb-settings-save-new');
+    saveNew.title = 'Save a separate named version and use it for this chat or connection.';
+    const promptField = field('Global prompt', prompt, promptHelp); promptCard.append(sourceControls, nameField, promptField, saveNew);
     const manager = options.openPresetManager ? button('Manage / import presets', () => { if (!saving && !loading && !sourceLoading) options.openPresetManager?.(); }) : undefined;
     if (manager) sourceControls.append(manager);
     const customize = button('Customize a copy', () => {
       if (!loaded || saving || loading || sourceLoading || promptMode !== 'preset' || customizeCopy) return;
-      customizeCopy = true; sourceDirty = true; renderSource(staged ?? loaded, true); lock(false);
+      customizeCopy = true; copyDraft = true; nameDirty = false; sourceDirty = true; renderSource(staged ?? loaded, true); lock(false);
       message('You are editing a separate copy. The original stays intact. Preset-linked regex stays with the original; use Saved preset unchanged to keep that integration.', 'warning');
     });
     customize.hidden = true; sourceControls.append(customize);
@@ -178,7 +184,7 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
     if (!inline) modal.root.append(tabs, heading, intro);
     modal.root.append(scopeInfo, rawLabel, promptPanel, generationPanel, advanced, status, actions); show(selected);
     if (inline) actions.prepend(status);
-    const editable = [prompt, prefill, enabled, raw, sourceChoice, presetChoice, ...exampleButtons, ...inputs.values(), ...sliders.values(), ...(manager ? [manager] : []), ...(illarin ? [illarin] : [])];
+    const editable = [prompt, promptName, prefill, enabled, raw, sourceChoice, presetChoice, ...exampleButtons, ...inputs.values(), ...sliders.values(), ...(manager ? [manager] : []), ...(illarin ? [illarin] : [])];
     function syncSlider(key: string) {
       const slider = sliders.get(key), item = samplerFields.find(field => field.key === key); if (!slider || !item) return;
       const value = inputs.get(key)!.value.trim() === '' ? null : Number(inputs.get(key)!.value);
@@ -192,10 +198,12 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
     function useSavedOriginal() { return promptMode === 'preset' && !customizeCopy; }
     function lock(value: boolean) {
       editable.forEach(input => input.disabled = value);
-      if (useSavedOriginal()) [prompt, prefill, enabled, ...exampleButtons, ...inputs.values(), ...sliders.values()].forEach(input => input.disabled = true);
+      if (useSavedOriginal()) [prompt, promptName, prefill, enabled, ...exampleButtons, ...inputs.values(), ...sliders.values()].forEach(input => input.disabled = true);
       presetChoice.disabled = value || promptMode !== 'preset'; customize.disabled = value || loading || saving || sourceLoading;
       if (manager) manager.disabled = saving || loading || sourceLoading; if (illarin) illarin.disabled = saving || loading || sourceLoading;
-      save.disabled = value; reloadButton.disabled = saving || sourceLoading; modal.root.setAttribute('aria-busy', String(saving || sourceLoading));
+      save.disabled = value || unconfirmedCreate; saveNew.disabled = value || unconfirmedCreate || useSavedOriginal();
+      saveNew.textContent = pendingCreated ? 'Finish saving prompt' : 'Save as new prompt';
+      reloadButton.disabled = saving || sourceLoading; modal.root.setAttribute('aria-busy', String(saving || sourceLoading));
     }
     function message(text: string, tone = '') { status.textContent = text; status.dataset.tone = tone; }
     modal.root.addEventListener('input', () => { if (status.dataset.tone === 'success') message(''); });
@@ -265,6 +273,8 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
     }
     function renderSource(base: PromptBase, preserveDraft = false) {
       sourceChoice.value = promptMode; presetField.hidden = promptMode !== 'preset';
+      nameField.hidden = saveNew.hidden = useSavedOriginal();
+      if (!preserveDraft || !nameDirty) promptName.value = copyDraft ? `${base.preset.name.slice(0, 193)} (copy)` : rec(base.preset.metadata[markerKey]).owner === owner ? base.preset.name : promptMode === 'preset' ? `${base.preset.name.slice(0, 193)} (copy)` : 'My prompt';
       const visible = new Map(choices.map(choice => [choice.id, choice])); if (base.preset.id) visible.set(base.preset.id, base.preset);
       presetChoice.replaceChildren(...[...visible.values()].map(choice => { const option = node('option', '', choice.name); option.value = choice.id; return option; })); presetChoice.value = base.preset.id || choices[0]?.id || '';
       sourceHelp.textContent = promptMode === 'custom' ? !base.preset.id ? 'Lumiverse’s installed Default could not be used, so a standard base is prepared. Write or paste your own prompt; character details, memory and chat history stay included. It is saved only when you choose Save settings.' : base.preset.metadata._janiverse_standard_base ? 'Your own prompt, using a standard base with character details, memory and chat history included. Save settings to apply your changes.' : 'Your own prompt, using Lumiverse’s native Default layout. The original Default preset stays intact.' : useSavedOriginal() ? `Using “${base.preset.name}” directly, including its linked regex. Settings below show its saved values. No duplicate is created.` : `Editing a separate “${base.preset.name}” copy. Preset-linked regex stays with the original.`;
@@ -292,9 +302,9 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
           catch (error) { if (mode !== 'custom' || !current()) throw error; preset = createCustomDefault(); }
         }
         if (!current() || version !== sourceVersion) return;
-        promptMode = mode; customizeCopy = false; staged = { preset, binding, blockId: sourceBlock(preset, binding, mode), ...(preset.id && preset.id !== loaded?.sourceId ? { defaultsSourceId: preset.id } : {}) }; sourceDirty = true;
+        promptMode = mode; customizeCopy = false; copyDraft = pendingCreated = false; staged = { preset, binding, blockId: sourceBlock(preset, binding, mode), ...(preset.id && preset.id !== loaded?.sourceId ? { defaultsSourceId: preset.id } : {}) }; sourceDirty = true;
         if (!loaded) loaded = { scope: unresolvedScope!, preset, binding: null, blockId: staged.blockId, sourceId: null };
-        if (mode === 'preset') promptDirty = prefillDirty = samplersDirty = false;
+        if (mode === 'preset') promptDirty = prefillDirty = samplersDirty = nameDirty = false;
         renderSource(staged, mode !== 'preset');
         message(mode === 'preset' ? 'Saved preset prepared unchanged. Save settings to use it, or choose Customize a copy to edit it.' : `${preset.id ? 'Prompt source prepared.' : 'The installed Default could not be used. A standard base is prepared.'} Save settings to use it.${promptDirty || prefillDirty || samplersDirty ? ' Your unsaved text and generation edits were kept.' : ''}`, 'warning');
       } catch (error) {
@@ -307,7 +317,7 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
     async function load() {
       const version = ++loadVersion; const loadCurrent = () => current() && version === loadVersion;
       loading = true; let chooseFallback = false;
-      lock(true); loaded = undefined; unresolvedScope = undefined; staged = undefined; sourceDirty = false; message('');
+      lock(true); loaded = undefined; unresolvedScope = undefined; staged = undefined; sourceDirty = false; copyDraft = pendingCreated = unconfirmedCreate = false; message('');
       try {
         if (!await permissions() || !loadCurrent()) return;
         const scope = await getScope(); const resolved = scope.raw ? { preset_id: null, binding: null } : await effective(scope);
@@ -330,7 +340,7 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
         nativeInfo.textContent = 'Your character, persona, and chat memory stay included.';
         renderSource(loaded);
         scopeInfo.textContent = `Applies to: ${scope.label}`; presetInfo.textContent = `Currently applied preset: ${preset.id ? preset.name : 'Created on first save'}`;
-        rawLabel.hidden = !scope.raw; raw.checked = false; promptDirty = prefillDirty = samplersDirty = false; lock(false);
+        rawLabel.hidden = !scope.raw; raw.checked = false; promptDirty = prefillDirty = samplersDirty = nameDirty = false; lock(false);
         if (scope.raw) message('This temporary test chat bypasses presets. Tick “Use a native preset” to apply these settings.', 'warning');
         else if (!loaded.blockId && !useSavedOriginal()) {
           nativeInfo.textContent = 'These instructions are added to your existing preset. Your character, persona, and chat memory stay included.';
@@ -343,15 +353,20 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
             presetChoice.replaceChildren(...choices.map(choice => { const option = node('option', '', choice.name); option.value = choice.id; return option; })); chooseFallback = true;
           }
           if (manager) manager.disabled = false;
-          message(why === 'no-connection' ? inline ? 'Add or select an API configuration above, then reload saved settings.' : 'Add or select an API configuration in the Connection tab first.' : why === 'missing-default' ? 'Lumiverse’s built-in Default preset is unavailable. Choose a native preset instead.' : why === 'ambiguous-default' ? 'More than one preset carries Lumiverse’s Default identity. Choose a specific native preset instead.' : 'Could not load native settings. Try reloading saved settings.', 'error');
+          message(why === 'no-connection' ? 'Open API Settings to add or select a connection, then reload saved settings.' : why === 'missing-default' ? 'Lumiverse’s built-in Default preset is unavailable. Choose a native preset instead.' : why === 'ambiguous-default' ? 'More than one preset carries Lumiverse’s Default identity. Choose a specific native preset instead.' : 'Could not load native settings. Try reloading saved settings.', 'error');
         }
       } finally {
         if (loadCurrent()) { loading = false; lock(!loaded); if (chooseFallback) sourceChoice.disabled = false; }
       }
     }
-    async function saveSettings() {
-      if (!loaded || saving || sourceLoading) return;
+    async function saveSettings(asNew = false) {
+      if (!current() || !loaded || loading || saving || sourceLoading || unconfirmedCreate || asNew && useSavedOriginal()) return;
       if (loaded.scope.raw && !raw.checked) { message('Tick “Use a native preset” to apply settings to this raw test chat.', 'warning'); raw.focus(); return; }
+      const name = promptName.value.trim();
+      if (!useSavedOriginal() && (!name || name.length > 200)) {
+        show('prompt'); if (promptDisclosure) promptDisclosure.open = true;
+        promptName.setAttribute('aria-invalid', 'true'); promptName.focus(); message('Give your prompt a name (up to 200 characters).', 'error'); return;
+      }
       const values: Json = {};
       if (!useSavedOriginal() && samplersDirty) for (const item of samplerFields) {
         if (!editedSamplers.has(item.key)) continue;
@@ -397,13 +412,14 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
         // edits after the native editor changed a checkbox in this copy.
         next.prompt_order = next.prompt_order.map(b => ({ ...b, ...(Object.hasOwn(sourceBinding?.block_states ?? {}, String(b.id)) ? { enabled: sourceBinding!.block_states[String(b.id)] } : {}) }));
         const scopeKey = `${loaded.scope.kind}:${loaded.scope.id}`;
-        const reuse = owned.owner === owner && owned.scope === scopeKey;
+        const reuse = (pendingCreated || !asNew && !copyDraft) && owned.owner === owner && owned.scope === scopeKey;
         if (!reuse) {
-          next.id = ''; next.name = `Janiverse · ${loaded.scope.kind === 'chat' ? 'Chat' : 'API'} · ${preset.name}`;
+          next.id = '';
           // Preserve every native block/property and effective profile state, including variables.
           const { _lumiverse_preset_slug: builtinIdentity, ...metadata } = next.metadata;
           next.metadata = { ...metadata, _lumiverse_install_source: 'local', isDefault: false };
         }
+        if (!useSavedOriginal()) next.name = name;
         let promptId = base.blockId;
         if (!promptId && (promptDirty || prompt.value)) {
           const section = { ...block('Janiverse'), marker: 'category', categoryMode: 'checkbox', isLocked: false };
@@ -426,8 +442,18 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
         // A normal saved preset keeps its identity. Regex, prompt activation,
         // future source updates and native integrations may be linked to this ID.
         // Creating or updating a preset requires an explicit custom/copy edit.
-        const saved = useSavedOriginal() ? preset : next.id ? await api<Preset>(`/presets/${encodeURIComponent(next.id)}`, 'PUT', { ...body, expected_cache_revision: preset.cache_revision }) : await api<Preset>('/presets', 'POST', body);
+        let saved: Preset | null;
+        const creating = !useSavedOriginal() && !next.id;
+        try {
+          saved = useSavedOriginal() ? preset : next.id ? await api<Preset>(`/presets/${encodeURIComponent(next.id)}`, 'PUT', { ...body, expected_cache_revision: preset.cache_revision }) : await api<Preset>('/presets', 'POST', body);
+          if (creating && (!validPreset(saved) || typeof saved.id !== 'string' || !saved.id)) throw new Error('invalid-save');
+        } catch (error) {
+          if (creating && !['permission', 'conflict', 'request-400', 'request-401', 'request-403', 'request-404', 'request-422'].includes((error as Error).message)) { unconfirmedCreate = true; throw new Error('unconfirmed-create'); }
+          throw error;
+        }
         if (!saved || !current()) return;
+        if (creating) { pendingCreated = true; copyDraft = false; }
+        choices = [...choices.filter(choice => choice.id !== saved.id), { id: saved.id, name: saved.name, provider: saved.provider }];
         // Keep the new row for retry if the subsequent binding request fails.
         loaded.preset = saved; loaded.blockId = promptId;
         if (staged) staged = { ...staged, preset: saved, binding: sourceBinding, blockId: promptId };
@@ -446,18 +472,19 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
         const resolved = await effective(loaded.scope);
         if (!current()) return;
         if (resolved.preset_id !== saved.id) throw new Error('binding-not-active');
-        promptDirty = prefillDirty = samplersDirty = sourceDirty = false; staged = undefined; renderSource(loaded); scopeInfo.textContent = `Applies to: ${loaded.scope.label}`; presetInfo.textContent = `Currently applied preset: ${saved.name}`;
-        message(loaded.scope.kind === 'chat' ? 'Saved for this conversation.' : 'Saved for this API configuration. Chats with their own instructions keep them.', 'success');
+        promptDirty = prefillDirty = samplersDirty = sourceDirty = nameDirty = false; pendingCreated = copyDraft = false; staged = undefined; renderSource(loaded); scopeInfo.textContent = `Applies to: ${loaded.scope.label}`; presetInfo.textContent = `Currently applied preset: ${saved.name}`;
+        const resultMessage = loaded.scope.kind === 'chat' ? 'Saved for this conversation.' : 'Saved for this API configuration. Chats with their own instructions keep them.';
+        message(`${resultMessage} Saved as “${saved.name}”. Choose Saved preset to reuse it in another chat.`, 'success');
       } catch (error) {
         if (!current()) return;
         const why = (error as Error).message;
         if (why === 'permission') return;
-        message(why === 'conflict' ? 'The native preset changed while you were editing. Your draft is still here. Reload saved settings before trying again.' : why === 'scope-changed' ? 'The active chat or API configuration changed. Reload saved settings before saving.' : why === 'binding-not-active' ? 'The preset was saved, but its native binding could not be verified. Reload saved settings before using it.' : 'Could not finish saving native settings. Your draft is still here; try again.', 'error');
+        message(why === 'unconfirmed-create' ? 'The save could not be confirmed. Reload saved settings and check Saved preset for your prompt name before trying again.' : why === 'conflict' ? 'The native preset changed while you were editing. Your draft is still here. Reload saved settings before trying again.' : why === 'scope-changed' ? 'The active chat or API configuration changed. Reload saved settings before saving.' : why === 'binding-not-active' ? 'The preset was saved, but its native binding could not be verified. Reload saved settings before using it.' : 'Could not finish saving native settings. Your draft is still here; try again.', 'error');
       } finally { saving = false; if (current()) lock(!loaded); }
     }
     function refresh() {
       if (!current() || saving || sourceLoading) return;
-      if (promptDirty || prefillDirty || samplersDirty || sourceDirty) {
+      if (promptDirty || prefillDirty || samplersDirty || sourceDirty || nameDirty) {
         advanced.open = true;
         message('API configuration changed. Your unsaved prompt and generation settings are still here. Reload saved settings below before saving to the selected API configuration.', 'warning');
         return;
