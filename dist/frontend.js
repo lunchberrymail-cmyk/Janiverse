@@ -76,7 +76,7 @@ html[data-janitor-bridge-view=chats] .jb-home-masthead>.jb-search{display:none}
   color-scheme: dark;
   --lumiverse-primary: #f786f4 !important;
   --lumiverse-primary-hover: #ff9cf7 !important;
-  --lumiverse-primary-light: #fbc8f7 !important;
+  --lumiverse-primary-light: #f786f41a !important;
   --lumiverse-primary-text: #eeaff3 !important;
   --lumiverse-primary-muted: #aa79b1 !important;
   --lumiverse-primary-contrast: #1a0b2a !important;
