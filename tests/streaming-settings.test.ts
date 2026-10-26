@@ -18,6 +18,7 @@ function base(): Row {
     prompt_order: [{ id: 'first', role: 'system', content: 'Full prompt', enabled: true, marker: null, position: 'pre_history', variables: [{ name: 'tone' }] }, { id: 'history', enabled: true, marker: 'chat_history', isLocked: true, unknown: 'kept' }],
   };
 }
+function useOwnedCopy() { presets.get('source')!.metadata._janitor_bridge = { owner: 'janitor_bridge', scope: 'chat:chat-1', sourcePresetId: 'original', promptMode: 'custom' }; }
 beforeEach(() => {
   globalThis.location = { pathname: '/chat/chat-1' } as Location;
   calls = []; grants = ['generation', 'presets', 'chats']; requested = 0; chatId = 'chat-1'; personaId = 'persona-1'; selectedId = 'source'; activeConnection = 'connection-1'; metadata = {}; reasoning = {};
@@ -52,20 +53,39 @@ beforeEach(() => {
 });
 afterEach(() => { adapter.dispose(); globalThis.fetch = original.fetch; globalThis.location = original.location; });
 
-test('read is inert, first save copies only the streaming field and effective block states, and later saves reuse its copy', async () => {
+test('read is inert and streaming edits reuse an existing explicit chat copy while preserving its identity and other native options', async () => {
+  useOwnedCopy();
   const source = structuredClone(presets.get('source'));
   expect(await adapter.read('chat-1')).toEqual({ enabled: true, available: true }); expect(writes()).toEqual([]); expect(requested).toBe(0);
   expect(await adapter.save(false)).toEqual({ enabled: false, available: true });
-  const copy = presets.get('copy-1')!;
-  expect(presets.get('source')).toEqual(source); expect(copy.parameters).toEqual({ ...source!.parameters, samplerOverrides: { ...source!.parameters.samplerOverrides, streaming: false } });
+  const copy = presets.get('source')!;
+  expect(copy.id).toBe(source!.id); expect(copy.name).toBe(source!.name); expect(copy.metadata).toEqual(source!.metadata); expect(copy.parameters).toEqual({ ...source!.parameters, samplerOverrides: { ...source!.parameters.samplerOverrides, streaming: false } });
   expect(copy.parameters.samplerOverrides.enabled).toBe(false); expect(copy.prompts).toEqual(source!.prompts); expect(copy.metadata.modelProfiles).toEqual(source!.metadata.modelProfiles);
   expect(copy.prompt_order).toEqual(source!.prompt_order.map((block: Row) => ({ ...block, enabled: inherited!.block_states[block.id] ?? block.enabled })));
   expect(binding?.prompt_variables).toEqual(inherited!.prompt_variables); expect(binding?.block_states).toEqual({ first: false, history: true }); expect(selectedId).toBe('source');
-  expect(await adapter.save(true)).toEqual({ enabled: true, available: true }); expect(postCount).toBe(1); expect(presets.get('copy-1')!.parameters.samplerOverrides.streaming).toBe(true);
-  expect(writes().map(call => call.path)).toEqual(['/presets', '/preset-profiles/chat/chat-1', '/presets/copy-1', '/preset-profiles/chat/chat-1']);
+  expect(await adapter.save(true)).toEqual({ enabled: true, available: true }); expect(postCount).toBe(0); expect(presets.get('source')!.parameters.samplerOverrides.streaming).toBe(true);
+  expect(writes().map(call => call.path)).toEqual(['/presets/source', '/preset-profiles/chat/chat-1', '/presets/source', '/preset-profiles/chat/chat-1']);
 });
 
-test('unchanged value does not create a native copy or binding', async () => { await adapter.read(); await adapter.save(true); expect(writes()).toEqual([]); });
+test('unchanged value on an explicit copy does not update the preset or binding', async () => { useOwnedCopy(); await adapter.read(); await adapter.save(true); expect(writes()).toEqual([]); });
+
+test.each(['saved', 'builtin-default', 'other-chat-copy', 'connection-copy', 'foreign-owner'])('streaming never implicitly clones or edits a %s preset', async kind => {
+  const preset = presets.get('source')!; preset.parameters.samplerOverrides.streaming = false;
+  if (kind === 'builtin-default') preset.metadata._lumiverse_preset_slug = 'lumiverse-builtin-default-loom';
+  if (kind === 'other-chat-copy') preset.metadata._janitor_bridge = { owner: 'janitor_bridge', scope: 'chat:other-chat' };
+  if (kind === 'connection-copy') preset.metadata._janitor_bridge = { owner: 'janitor_bridge', scope: 'connection:connection-1' };
+  if (kind === 'foreign-owner') preset.metadata._janitor_bridge = { owner: 'another-extension', scope: 'chat:chat-1' };
+  const before = structuredClone(preset); const profile = structuredClone(inherited);
+  const result = await adapter.read(); expect(result.available).toBe(false); expect(result.enabled).toBe(false);
+  expect(result.reason).toContain(kind === 'builtin-default' ? 'Custom prompt · Default base, then Save settings and reopen Customize' : 'Settings → Global prompt → Customize a copy'); expect(result.reason).toContain('linked regex');
+  await expect(adapter.save(true)).rejects.toThrow('Streaming follows');
+  expect(writes()).toEqual([]); expect(postCount).toBe(0); expect(presets.get('source')).toEqual(before); expect(inherited).toEqual(profile); expect(binding).toBeNull(); expect(requested).toBe(0);
+});
+
+test('an owned marker disappearing before Save prevents mutation even if its native revision was not advanced', async () => {
+  useOwnedCopy(); expect((await adapter.read()).available).toBe(true); delete presets.get('source')!.metadata._janitor_bridge;
+  await expect(adapter.save(false)).rejects.toThrow('Streaming follows this saved preset'); expect(writes()).toEqual([]);
+});
 
 test('read uses a valid chat connection pin and selected persona while a missing persona leaves native default resolution intact', async () => {
   metadata.connection_profile_id = 'pinned'; await adapter.read();
@@ -78,8 +98,8 @@ test('read uses a valid chat connection pin and selected persona while a missing
 test('temporary chats bypass the default persona and preserve raw/empty preset behavior', async () => {
   metadata = { temporary: true, no_preset: true }; expect((await adapter.read()).available).toBe(false); expect(calls.some(call => call.path.startsWith('/preset-profiles/'))).toBe(false);
   await expect(adapter.save(false)).rejects.toThrow('Reload Customize'); expect(writes()).toEqual([]);
-  metadata = { temporary: true }; presets.get('source')!.prompt_order = []; expect((await adapter.read()).available).toBe(true); expect(calls.some(call => call.path.startsWith('/preset-profiles/resolve'))).toBe(false);
-  await adapter.save(false); expect(presets.get('copy-1')!.prompt_order).toEqual([]); expect(writes().some(call => call.path.includes('/connections/') || call.path.endsWith('/metadata'))).toBe(false);
+  metadata = { temporary: true }; useOwnedCopy(); presets.get('source')!.prompt_order = []; expect((await adapter.read()).available).toBe(true); expect(calls.some(call => call.path.startsWith('/preset-profiles/resolve'))).toBe(false);
+  await adapter.save(false); expect(presets.get('source')!.prompt_order).toEqual([]); expect(postCount).toBe(0); expect(writes().some(call => call.path.includes('/connections/') || call.path.endsWith('/metadata'))).toBe(false);
 });
 
 test('missing preset and missing permissions return an unavailable reason without creating defaults or requesting access', async () => {
@@ -89,12 +109,14 @@ test('missing preset and missing permissions return an unavailable reason withou
 });
 
 test('a custom body transport override is unavailable, including native connection reasoning precedence', async () => {
+  useOwnedCopy();
   presets.get('source')!.parameters.customBody.rawJson = '{"_streaming":false}'; expect((await adapter.read()).reason).toContain('custom request body');
   reasoning = { customBody: { enabled: false, rawJson: '{}' } }; expect((await adapter.read()).available).toBe(true);
   connections[0].metadata.reasoningBindings.settings = { customBody: { enabled: true, rawJson: '{"_streaming":true}' } }; expect((await adapter.read()).available).toBe(false); expect(writes()).toEqual([]);
 });
 
 test('scope, effective binding, revision, and permission changes prevent stale native mutations', async () => {
+  useOwnedCopy();
   await adapter.read(); inherited!.captured_at++; await expect(adapter.save(false)).rejects.toThrow('binding changed'); expect(writes()).toEqual([]);
   await adapter.read(); presets.get('source')!.cache_revision++; await expect(adapter.save(false)).rejects.toThrow('preset changed'); expect(writes()).toEqual([]);
   await adapter.read(); metadata.connection_profile_id = 'pinned'; await expect(adapter.save(false)).rejects.toThrow('configuration changed'); expect(writes()).toEqual([]);
@@ -102,20 +124,21 @@ test('scope, effective binding, revision, and permission changes prevent stale n
   grants = ['chats', 'presets', 'generation']; await adapter.read(); chatId = 'another'; await expect(adapter.save(false)).rejects.toThrow('active chat changed'); expect(writes()).toEqual([]);
 });
 
-test('a failed chat binding retries the staged copy rather than creating another one', async () => {
-  await adapter.read(); rejectBinding = true; await expect(adapter.save(false)).rejects.toThrow('Could not read or save'); expect(postCount).toBe(1);
-  rejectBinding = false; expect(await adapter.save(false)).toEqual({ enabled: false, available: true }); expect(postCount).toBe(1); expect(binding?.preset_id).toBe('copy-1');
+test('a failed chat binding retries the existing owned copy rather than creating another one', async () => {
+  useOwnedCopy(); await adapter.read(); rejectBinding = true; await expect(adapter.save(false)).rejects.toThrow('Could not read or save'); expect(postCount).toBe(0);
+  rejectBinding = false; expect(await adapter.save(false)).toEqual({ enabled: false, available: true }); expect(postCount).toBe(0); expect(binding?.preset_id).toBe('source');
 });
 
 test('dispose while a permission recheck is pending prevents delayed writes', async () => {
+  useOwnedCopy();
   await adapter.read(); let finish!: (value: string[]) => void;
   ctx.permissions.getGranted = () => new Promise<string[]>(resolve => { finish = resolve; });
   const save = adapter.save(false); adapter.dispose(); finish(['presets', 'chats', 'generation']); await expect(save).rejects.toThrow('closed'); expect(writes()).toEqual([]);
 });
 
-test('an interrupted creation cannot silently retry and create duplicate preset copies', async () => {
-  await adapter.read(); const transport = globalThis.fetch;
-  globalThis.fetch = (async (url: any, init?: RequestInit) => { const response = await transport(url, init); if (String(url) === '/api/v1/presets' && init?.method === 'POST') throw new Error('Dropped after commit'); return response; }) as typeof fetch;
-  await expect(adapter.save(false)).rejects.toThrow('may have been saved'); expect(postCount).toBe(1); expect(binding).toBeNull();
-  await expect(adapter.save(false)).rejects.toThrow('Reload Customize'); expect(postCount).toBe(1);
+test('an interrupted owned update requires a fresh read rather than retrying with an uncertain native revision', async () => {
+  useOwnedCopy(); await adapter.read(); const transport = globalThis.fetch;
+  globalThis.fetch = (async (url: any, init?: RequestInit) => { const response = await transport(url, init); if (String(url) === '/api/v1/presets/source' && init?.method === 'PUT') throw new Error('Dropped after commit'); return response; }) as typeof fetch;
+  await expect(adapter.save(false)).rejects.toThrow('update could not be confirmed'); expect(postCount).toBe(0); expect(binding).toBeNull();
+  const before = writes().length; await expect(adapter.save(false)).rejects.toThrow('Reload Customize'); expect(writes()).toHaveLength(before); expect(postCount).toBe(0);
 });

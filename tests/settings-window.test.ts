@@ -68,6 +68,28 @@ test('an editor dismiss without a replacement closes the shared host', async () 
   const child = editor(); child.dismiss(); expect(child.root.isConnected).toBe(false); await settle(); expect(hostCloses).toBe(1); expect(document.querySelector('.jb-settings-window-root')).toBeNull();
 });
 
+test('replacing an editor in the same section retains its scroll after asynchronous loading', async () => {
+  const first = editor(); const content = first.root.parentElement!; content.scrollTop = 540;
+  first.dismiss(); const next = editor(); next.root.setAttribute('aria-busy', 'true'); content.scrollTop = 0;
+  next.root.append(document.createElement('form')); await settle(); expect(content.scrollTop).toBe(540);
+  content.scrollTop = 0; next.root.setAttribute('aria-busy', 'false'); await settle(); expect(content.scrollTop).toBe(540);
+  content.scrollTop = 720; next.root.append(document.createElement('p')); await settle(); expect(content.scrollTop).toBe(720);
+});
+
+test('restoring a replacement never overrides new user scrolling or a different section', async () => {
+  const first = editor(); const content = first.root.parentElement!; content.scrollTop = 540;
+  const next = editor(); next.root.setAttribute('aria-busy', 'true'); content.scrollTop = 125;
+  content.dispatchEvent(new dom.window.WheelEvent('wheel', { bubbles: true }));
+  next.root.append(document.createElement('form')); next.root.setAttribute('aria-busy', 'false'); await settle(); expect(content.scrollTop).toBe(125);
+  editor('memory'); await settle(); expect(content.scrollTop).toBe(0);
+});
+
+test('programmatic section focus uses preventScroll', () => {
+  const focus = dom.window.HTMLElement.prototype.focus; const options: unknown[] = [];
+  dom.window.HTMLElement.prototype.focus = function(value?: FocusOptions) { options.push(value); focus.call(this, value); };
+  editor(); expect(options.at(-1)).toEqual({ preventScroll: true });
+});
+
 test('close and Escape each clean up once and restore the opener', async () => {
   const opener = document.querySelector<HTMLButtonElement>('#opener')!; opener.focus(); const first = editor(); let dismissed = 0; first.onDismiss(() => dismissed++);
   action('Close settings').click(); await settle(); expect(dismissed).toBe(1); expect(hostCloses).toBe(1); expect(document.activeElement).toBe(opener);
@@ -128,4 +150,15 @@ test('preparing a replacement Customize cleans the old owner before a new panel 
 test('destroy invalidates saved wrapper contexts and removes the active editor once', async () => {
   const context = window.context('settings'), child = editor(); let dismissed = 0; child.onDismiss(() => dismissed++);
   window.destroy(); window.destroy(); await settle(); expect(dismissed).toBe(1); expect(hostCloses).toBe(1); expect(subscriptions.size).toBe(0); expect(() => context.ui.showModal({ title: 'Late editor' })).toThrow('destroyed'); expect(hostCalls).toBe(1);
+});
+
+test('an unavailable optional chat selector does not abort settings startup or request access', async () => {
+  window.destroy(); const nativeMarkup = document.querySelector('#native')!.outerHTML; let permissionRequests = 0;
+  for (const state of [undefined, {}, { subscribe() { throw new Error('SELECTOR_UNKNOWN'); } }, { subscribe() { throw new Error('PERMISSION_DENIED:chats'); } }]) {
+    const context = { ...ctx, state, permissions: { request() { permissionRequests++; throw new Error('Unexpected permission request'); } } };
+    expect(() => { window = createSettingsWindow(context as any, { hasChat: () => true, navigate() {} }); }).not.toThrow();
+    const child = editor(); expect(child.root.isConnected).toBe(true); expect(document.querySelector('#native')!.outerHTML).toBe(nativeMarkup);
+    window.destroy(); await settle(); expect(child.root.isConnected).toBe(false); expect(document.querySelector('.jb-settings-window-root')).toBeNull();
+  }
+  expect(permissionRequests).toBe(0); expect(subscriptions.size).toBe(0);
 });

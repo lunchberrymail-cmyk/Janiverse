@@ -1,9 +1,10 @@
 import type { SpindleFrontendContext, SpindleModalHandle } from 'lumiverse-spindle-types';
+import { subscribeOptionalState } from './optional-state';
 
 export type SettingsSection = 'settings' | 'memory' | 'customize';
 type ModalOptions = Parameters<SpindleFrontendContext['ui']['showModal']>[0];
 type Child = { root: HTMLElement; handle: SpindleModalHandle; closed: boolean; dismiss(): void };
-type WindowState = { modal: SpindleModalHandle; content: HTMLElement; tabs: Map<SettingsSection, HTMLButtonElement>; collapse: HTMLButtonElement; frame?: HTMLElement; child?: Child; section: SettingsSection; collapsed: boolean; closed: boolean; chatId: string | null; pathname: string | null; previousFocus: HTMLElement | null };
+type WindowState = { modal: SpindleModalHandle; content: HTMLElement; tabs: Map<SettingsSection, HTMLButtonElement>; collapse: HTMLButtonElement; frame?: HTMLElement; child?: Child; section: SettingsSection; scroll: Map<SettingsSection, number>; stopRestore?: () => void; collapsed: boolean; closed: boolean; chatId: string | null; pathname: string | null; previousFocus: HTMLElement | null };
 let nextWindowId = 0;
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
@@ -47,7 +48,7 @@ export function createSettingsWindow(ctx: SpindleFrontendContext, options: { nav
     const collapse = element('button', 'jb-settings-window-icon', '−'); collapse.type = 'button'; collapse.setAttribute('aria-label', 'Collapse settings'); collapse.setAttribute('aria-expanded', 'true');
     const tabs = element('nav', 'jb-settings-window-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', 'Chat settings sections');
     const content = element('div', 'jb-settings-window-content'); content.id = `jb-settings-window-${++nextWindowId}`; content.setAttribute('role', 'tabpanel');
-    const window: WindowState = { modal, content, tabs: new Map(), collapse, frame: hasHostFrame ? frame : undefined, section, collapsed: false, closed: false, chatId: ctx.getActiveChat()?.chatId ?? null, pathname: typeof location === 'undefined' ? null : location.pathname, previousFocus };
+    const window: WindowState = { modal, content, tabs: new Map(), collapse, frame: hasHostFrame ? frame : undefined, section, scroll: new Map(), collapsed: false, closed: false, chatId: ctx.getActiveChat()?.chatId ?? null, pathname: typeof location === 'undefined' ? null : location.pathname, previousFocus };
     for (const [label, key] of [['Settings', 'settings'], ['Memory', 'memory'], ['Customize', 'customize']] as const) {
       const tab = element('button', '', label); tab.type = 'button'; tab.id = `${content.id}-${key}`; tab.setAttribute('role', 'tab'); tab.setAttribute('aria-controls', content.id);
       tab.addEventListener('click', () => {
@@ -69,23 +70,24 @@ export function createSettingsWindow(ctx: SpindleFrontendContext, options: { nav
     root.addEventListener('keydown', event => { if (event.key === 'Escape') { event.stopPropagation(); close(); } });
     modal.onDismiss(() => {
       if (window.closed) return;
-      window.closed = true; window.child?.dismiss();
+      window.closed = true; window.stopRestore?.(); window.child?.dismiss();
       if (current === window) current = undefined;
-      if (window.previousFocus?.isConnected) window.previousFocus.focus();
+      if (window.previousFocus?.isConnected) window.previousFocus.focus({ preventScroll: true });
     });
     current = window; updateNavigation(window); return window;
   }
   function show(section: SettingsSection, request: ModalOptions): SpindleModalHandle {
     if (disposed) throw new Error('Settings window has been destroyed.');
     const window = current && !current.closed ? current : makeWindow(section);
-    window.child?.dismiss(); window.section = section; window.content.dataset.section = section; window.content.scrollTop = 0;
+    window.child?.dismiss(); window.stopRestore?.(); window.section = section; window.content.dataset.section = section;
     window.content.setAttribute('aria-labelledby', window.tabs.get(section)!.id); setCollapsed(window, false);
     const root = element('section', 'jb-settings-window-editor'); root.setAttribute('aria-label', request.title); window.content.append(root);
     const listeners = new Set<() => void>();
     const observer = typeof MutationObserver === 'function' ? new MutationObserver(() => updateNavigation(window)) : undefined;
     const child: Child = { root, closed: false, handle: undefined as unknown as SpindleModalHandle, dismiss() {
       if (child.closed) return;
-      child.closed = true; observer?.disconnect();
+      window.scroll.set(section, window.content.scrollTop);
+      child.closed = true; observer?.disconnect(); window.stopRestore?.();
       if (window.child === child) window.child = undefined;
       for (const handler of [...listeners]) { try { handler(); } catch {} }
       listeners.clear(); root.remove();
@@ -98,10 +100,33 @@ export function createSettingsWindow(ctx: SpindleFrontendContext, options: { nav
       setTitle(title: string) { if (!child.closed) root.setAttribute('aria-label', title); },
       onDismiss(handler: () => void) { if (!child.closed) listeners.add(handler); return () => listeners.delete(handler); },
     };
-    window.child = child; observer?.observe(root, { attributes: true, attributeFilter: ['aria-busy'], childList: true, subtree: true }); updateNavigation(window); window.tabs.get(section)?.focus();
+    window.child = child; observer?.observe(root, { attributes: true, attributeFilter: ['aria-busy'], childList: true, subtree: true }); updateNavigation(window); window.tabs.get(section)?.focus({ preventScroll: true });
+    // Editors share this window. Removing a long editor clamps scrollTop before
+    // its replacement has loaded. Restore after layout, then leave scrolling
+    // entirely to the user; never keep a scroll-restoration loop running.
+    const target = window.scroll.get(section) ?? 0;
+    window.content.scrollTop = target;
+    if (target > 0 && typeof MutationObserver === 'function') {
+      let stopped = false;
+      const events = ['wheel', 'touchstart', 'pointerdown', 'keydown'] as const;
+      const stop = () => {
+        if (stopped) return; stopped = true; restoreObserver.disconnect();
+        for (const event of events) window.content.removeEventListener(event, stop);
+        if (window.stopRestore === stop) window.stopRestore = undefined;
+      };
+      const restore = () => {
+        if (stopped || child.closed || window.closed) { stop(); return; }
+        window.content.scrollTop = target;
+        if (root.childElementCount && root.getAttribute('aria-busy') !== 'true' && !root.querySelector('[aria-busy="true"]')) stop();
+      };
+      const restoreObserver = new MutationObserver(restore);
+      restoreObserver.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-busy', 'hidden'] });
+      for (const event of events) window.content.addEventListener(event, stop, { passive: true });
+      window.stopRestore = stop; queueMicrotask(restore);
+    }
     return child.handle;
   }
-  const stopChat = ctx.state?.subscribe('chat.active', () => { if (current && current.chatId !== (ctx.getActiveChat()?.chatId ?? null)) close(); });
+  const stopChat = subscribeOptionalState(ctx, 'chat.active', () => { if (current && current.chatId !== (ctx.getActiveChat()?.chatId ?? null)) close(); });
   return {
     context(section: SettingsSection) {
       let context = contexts.get(section);

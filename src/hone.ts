@@ -1,4 +1,5 @@
 import type { SpindleFrontendContext, SpindleModalHandle } from 'lumiverse-spindle-types';
+import { subscribeOptionalState } from './optional-state';
 
 export const HONE_REPOSITORY = 'https://github.com/AMousePad/Hone';
 export const HONE_QUICK_START = 'https://github.com/AMousePad/Hone/wiki/Quick-Start';
@@ -75,7 +76,7 @@ export function createHone(ctx: SpindleFrontendContext, options: HoneOptions = {
     if (active.chatId && (!state.mounted || state.chatId !== active.chatId)) { active.skipRestore = true; close(active); }
     else checkNavigation();
   }));
-  if (ctx.state?.subscribe) cleanups.push(ctx.state.subscribe('chat.active', checkNavigation));
+  cleanups.push(subscribeOptionalState(ctx, 'chat.active', checkNavigation));
   if (ctx.events?.on) cleanups.push(ctx.events.on('CHAT_CHANGED', checkNavigation));
   const win = document.defaultView;
   win?.addEventListener('popstate', checkNavigation); win?.addEventListener('hashchange', checkNavigation);

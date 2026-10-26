@@ -10,11 +10,18 @@ const permissions = ['generation', 'presets', 'chats'];
 const unavailable = (reason: string, enabled = true): StreamingSetting => ({ enabled, available: false, reason });
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const clone = <T>(value: T): T => structuredClone(value);
+const savedPresetGuidance = 'Streaming follows this saved preset. Edit it in Advanced Presets, or open Settings → Global prompt → Customize a copy and save that copy before changing streaming here. Keeping the original preset preserves its linked regex.';
+function presetGuidance(preset: Preset) {
+  return preset.metadata._lumiverse_preset_slug === 'lumiverse-builtin-default-loom'
+    ? 'Streaming follows the saved Default preset. Edit it in Advanced Presets to keep its original identity and linked regex. For a separate chat copy, open Settings → Global prompt, choose Custom prompt · Default base, then Save settings and reopen Customize.'
+    : savedPresetGuidance;
+}
 
-/** A chat-scoped native streaming editor. Read is inert; only save creates/updates a preset and chat binding. */
+/** A chat-scoped streaming editor for an already-created Janiverse copy. Never clones a normal saved preset. */
 export function createStreamingSettings(ctx: SpindleFrontendContext) {
   let disposed = false, saving = false, generation = 0;
   let snapshot: Snapshot | undefined;
+  let readOnlyReason: string | undefined;
   let abort = new AbortController();
   function alive() { if (disposed || abort.signal.aborted) throw new Error('This customization window was closed. Reopen it before saving.'); }
   function activeChat(id: string) {
@@ -49,9 +56,13 @@ export function createStreamingSettings(ctx: SpindleFrontendContext) {
   function validPreset(value: Preset | null): value is Preset {
     return !!value?.id && typeof value.cache_revision === 'number' && Array.isArray(value.prompt_order) && !!value.parameters && !!value.prompts && !!value.metadata;
   }
+  function editablePreset(preset: Preset, scope: Scope) {
+    const marker = rec(preset.metadata._janitor_bridge);
+    return marker.owner === 'janitor_bridge' && marker.scope === `chat:${scope.id}`;
+  }
   async function read(chatId?: string): Promise<StreamingSetting> {
     if (saving) return unavailable('Wait for the current settings save to finish.');
-    const ticket = ++generation; snapshot = undefined; abort.abort(); abort = new AbortController();
+    const ticket = ++generation; snapshot = undefined; readOnlyReason = undefined; abort.abort(); abort = new AbortController();
     try {
       alive(); const pinned = chatId || ctx.getActiveChat().chatId;
       if (!pinned) return unavailable('Open a chat to customize text streaming.');
@@ -66,6 +77,7 @@ export function createStreamingSettings(ctx: SpindleFrontendContext) {
       const enabled = rec(preset.parameters.samplerOverrides).streaming !== false;
       if (await bodyOverride(scope, preset)) return unavailable('A custom request body controls streaming. Edit it in Lumiverse’s advanced settings.', enabled);
       activeChat(pinned); if (ticket !== generation) return unavailable('Reload Customize to read the active settings.');
+      if (!editablePreset(preset, scope)) { readOnlyReason = presetGuidance(preset); return unavailable(readOnlyReason, enabled); }
       snapshot = { scope, resolved: clone(resolved), preset: clone(preset), enabled };
       return { enabled, available: true };
     } catch (error) { return unavailable(error instanceof Error ? error.message : 'Could not read native streaming settings.'); }
@@ -80,13 +92,14 @@ export function createStreamingSettings(ctx: SpindleFrontendContext) {
   }
   async function save(enabled: boolean): Promise<StreamingSetting> {
     alive(); if (saving) throw new Error('A streaming settings save is already in progress.');
-    if (typeof enabled !== 'boolean' || !snapshot) throw new Error('Reload Customize before changing streaming.');
-    const loaded = snapshot; saving = true; let attemptedCreation = false;
+    if (typeof enabled !== 'boolean' || !snapshot) throw new Error(readOnlyReason || 'Reload Customize before changing streaming.');
+    const loaded = snapshot; saving = true; let attemptedUpdate = false;
     try {
       await checkCurrent(loaded);
       if (enabled === loaded.enabled && !loaded.pending) return { enabled, available: true };
       let source = await api<Preset>(`/presets/${encodeURIComponent(loaded.preset.id)}`);
       if (!validPreset(source) || source.id !== loaded.preset.id || source.cache_revision !== loaded.preset.cache_revision) throw new Error('The native preset changed. Reopen Customize before saving.');
+      if (!editablePreset(source, loaded.scope)) throw new Error(presetGuidance(source));
       if (await bodyOverride(loaded.scope, source)) throw new Error('A custom request body now controls streaming. Reopen Customize to review it.');
       const pending = loaded.pending;
       let next = clone(pending || source);
@@ -95,20 +108,15 @@ export function createStreamingSettings(ctx: SpindleFrontendContext) {
         if (!validPreset(fresh) || fresh.id !== pending.id || fresh.cache_revision !== pending.cache_revision) throw new Error('The saved preset copy changed. Reopen Customize before saving.');
         next = fresh;
       }
-      const marker = rec(next.metadata._janitor_bridge), scopeKey = `chat:${loaded.scope.id}`;
-      const reuse = marker.owner === 'janitor_bridge' && marker.scope === scopeKey;
+      if (!editablePreset(next, loaded.scope)) throw new Error(presetGuidance(next));
       next.prompt_order = next.prompt_order.map(block => ({ ...block, ...(Object.hasOwn(loaded.resolved.binding?.block_states ?? {}, String(block.id)) ? { enabled: loaded.resolved.binding!.block_states[String(block.id)] } : {}) }));
       next.parameters = { ...next.parameters, samplerOverrides: { ...rec(next.parameters.samplerOverrides), streaming: enabled } };
-      next.metadata = { ...next.metadata, isDefault: false, _janitor_bridge: { ...marker, owner: 'janitor_bridge', scope: scopeKey, sourcePresetId: reuse ? marker.sourcePresetId : loaded.preset.id } };
-      if (!reuse) next.name = `Janiverse · Chat · ${next.name}`;
       const body = { name: next.name, provider: next.provider, engine: next.engine, parameters: next.parameters, prompts: next.prompts, metadata: next.metadata, prompt_order: next.prompt_order };
       await checkCurrent(loaded);
-      attemptedCreation = !reuse;
-      const saved = reuse
-        ? await api<Preset>(`/presets/${encodeURIComponent(next.id)}`, 'PUT', { ...body, expected_cache_revision: next.cache_revision })
-        : await api<Preset>('/presets', 'POST', body);
+      attemptedUpdate = true;
+      const saved = await api<Preset>(`/presets/${encodeURIComponent(next.id)}`, 'PUT', { ...body, expected_cache_revision: next.cache_revision });
       if (!validPreset(saved)) throw new Error('The native preset save could not be confirmed. Reopen Customize before retrying.');
-      attemptedCreation = false;
+      attemptedUpdate = false;
       loaded.pending = clone(saved);
       // An owned copy was updated in place; retain its new revision even if binding fails.
       if (saved.id === loaded.preset.id) loaded.preset = clone(saved);
@@ -121,9 +129,9 @@ export function createStreamingSettings(ctx: SpindleFrontendContext) {
       if (verified.preset_id !== saved.id) throw new Error('The settings were saved, but the chat binding could not be verified. Reopen Customize.');
       return { enabled, available: true };
     } catch (error) {
-      if (attemptedCreation && !loaded.pending) {
+      if (attemptedUpdate) {
         snapshot = undefined;
-        throw new Error('A native preset copy may have been saved, but its result could not be confirmed. Check Advanced Presets, then reopen Customize before retrying.');
+        throw new Error('The native preset update could not be confirmed. Reopen Customize before retrying.');
       }
       throw error;
     } finally { saving = false; }

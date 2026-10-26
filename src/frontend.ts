@@ -12,6 +12,7 @@ import customizeCSS from './customize.css' with { type: 'text' };
 import characterCreateCSS from './character-create.css' with { type: 'text' };
 import honeCSS from './hone.css' with { type: 'text' };
 import tutorialCSS from './feature-tutorials.css' with { type: 'text' };
+import welcomeCSS from './welcome.css' with { type: 'text' };
 import { createChatMemory } from './memory';
 import { createApiSettings } from './api-settings';
 import { createPromptSettings } from './prompt-settings';
@@ -31,8 +32,11 @@ import { createHone } from './hone';
 import { honeScreenshots } from './hone-screenshots';
 import { openFeatureTutorial, type TutorialFeature } from './feature-tutorials';
 import { tutorialScreenshots } from './tutorial-screenshots';
+import { readOptionalState, subscribeOptionalState } from './optional-state';
+import { createWelcome } from './welcome';
+import { groupCharacters, type CharacterGroup, type CharacterSignatureCache, type CharacterSummary } from './character-library';
 
-type Character = { id: string; name: string; creator?: string; creator_notes?: string; description?: string; preview_description?: string; image_id?: string; tags?: string[]; updated_at?: number };
+type Character = CharacterSummary;
 type View = 'browse' | 'chats';
 const pageSize = 24;
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') {
@@ -54,6 +58,8 @@ export function setup(ctx: SpindleFrontendContext) {
   let tutorialRequest = 0;
   const cleanups: Array<() => void> = [];
   const notePreviews = new Map<string, { revision: number | undefined; text: string; creator?: CreatorAttribution }>();
+  const signatures: CharacterSignatureCache = new Map();
+  let libraryCache: { key: string; groups: CharacterGroup[]; cardCount: number } | undefined;
   const favoriteWrites = new Map<string, boolean>();
   let favoriteQueue = Promise.resolve();
   const mounts = [ctx.ui.mount('landing_header'), ctx.ui.mount('chat_header_left'), ctx.ui.mount('landing_hero')];
@@ -139,7 +145,7 @@ export function setup(ctx: SpindleFrontendContext) {
     if (panel) settingsWindow.adoptCustomize(panel, () => customize.close());
   }
   const cardImport = createCardImport(ctx, {
-    onImported: () => { offset = 0; void loadCharacters(); },
+    onImported: () => { libraryCache = undefined; offset = 0; void loadCharacters(); },
     openCharacter: id => {
       void ctx.characters.get(id).then(value => {
         const character = payload(value);
@@ -148,7 +154,7 @@ export function setup(ctx: SpindleFrontendContext) {
     },
   });
   const characterCreate = createCharacterCreate(ctx, {
-    onCreated: () => { offset = 0; void loadCharacters(); },
+    onCreated: () => { libraryCache = undefined; offset = 0; void loadCharacters(); },
     openCharacter: id => {
       void ctx.characters.get(id).then(value => {
         const character = payload(value);
@@ -156,7 +162,7 @@ export function setup(ctx: SpindleFrontendContext) {
       }).catch(() => { if (!disposed) status.textContent = 'Your character is saved. Open it from the character library.'; });
     },
   });
-  cleanups.push(ctx.dom.addStyle(characterCreateCSS), ctx.dom.addStyle(honeCSS), ctx.dom.addStyle(tutorialCSS));
+  cleanups.push(ctx.dom.addStyle(characterCreateCSS), ctx.dom.addStyle(honeCSS), ctx.dom.addStyle(tutorialCSS), ctx.dom.addStyle(welcomeCSS));
   cleanups.push(ctx.dom.addStyle(themeCSS), ctx.dom.addStyle(layoutCSS), ctx.dom.addStyle(uiCSS), ctx.dom.addStyle(settingsCSS), ctx.dom.addStyle(composerCSS), ctx.dom.addStyle(homeBannerCSS), ctx.dom.addStyle(cardImportCSS), ctx.dom.addStyle(myChatsCSS), ctx.dom.addStyle(soundCloudCSS), ctx.dom.addStyle(customizeCSS));
   const status = el('p', 'jb-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   const navButtons: Array<{ node: HTMLButtonElement; view: View }> = [];
@@ -188,7 +194,7 @@ export function setup(ctx: SpindleFrontendContext) {
     });
     if (navigate && location.pathname !== '/') void invoke({ kind: 'route', id: '/' });
     if (next === 'chats' && location.pathname === '/') myChats.activate(); else myChats.deactivate();
-    if (next === 'browse') { void loadCharacters(); void loadRecent(); }
+    if (next === 'browse' && location.pathname === '/') { void loadCharacters(); void loadRecent(); }
   }
   const masthead = el('div', 'jb-home-masthead');
   const nav = el('nav', 'jb-nav'); nav.setAttribute('aria-label', 'Main navigation');
@@ -197,6 +203,7 @@ export function setup(ctx: SpindleFrontendContext) {
   }
   const more = el('details', 'jb-more'); const moreLabel = el('summary', '', 'More'); const menu = el('div', 'jb-more-menu');
   for (const [label, action] of [
+    ['Start here', () => welcome.open()],
     ['Import characters', openImport],
     ['Import card file or link', () => cardImport.open()],
     ['API Settings', openApi],
@@ -259,7 +266,7 @@ export function setup(ctx: SpindleFrontendContext) {
   }
   async function refreshConnection() {
     const generation = ++connectionRequest;
-    const connection = payload(ctx.state?.get('connections.active'));
+    const connection = payload(readOptionalState(ctx, 'connections.active', null));
     const active = ctx.getActiveChat();
     renderConnection(connection);
     if (!active?.chatId) return;
@@ -318,7 +325,7 @@ export function setup(ctx: SpindleFrontendContext) {
     void loadCharacters();
   }
   const favorites = () => {
-    const value = ctx.state?.get('characters.favorites'); const ids = new Set<string>(Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []);
+    const value = readOptionalState<unknown>(ctx, 'characters.favorites', []); const ids = new Set<string>(Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []);
     for (const [id, added] of favoriteWrites) { if (added) ids.add(id); else ids.delete(id); }
     return [...ids];
   };
@@ -333,17 +340,18 @@ export function setup(ctx: SpindleFrontendContext) {
     const text = plain(value.replace(/<\/?(?:p|div|h[1-6]|br|li|ul|ol|blockquote|hr)\b[^>]*>/gi, ' '));
     return text ? text.slice(0, 230) + (text.length > 230 ? '…' : '') : 'No creator’s note.';
   }
-  function renderCards(characters: Character[], generation = request) {
+  function renderCards(groups: CharacterGroup[], generation = request) {
     disposeCards(); grid.replaceChildren();
     const pending: Array<{ character: Character; node: HTMLElement; creator: HTMLElement }> = [];
-    for (const character of characters) {
+    for (const group of groups) {
+      const character = group.character;
       const card = el('article', 'jb-card'); card.dataset.characterId = character.id; card.setAttribute('aria-label', character.name);
-      card.addEventListener('click', event => { if (!(event.target as Element).closest?.('button,a,input,select,textarea,summary')) preview(character); });
-      const portrait = button('', () => preview(character), 'jb-portrait jb-card-open'); portrait.setAttribute('aria-label', `Read Creator’s Notes for ${character.name}`);
+      card.addEventListener('click', event => { if (!(event.target as Element).closest?.('button,a,input,select,textarea,summary')) preview(character, group.copies); });
+      const portrait = button('', () => preview(character, group.copies), 'jb-portrait jb-card-open'); portrait.setAttribute('aria-label', `Read Creator’s Notes for ${character.name}`);
       if (character.image_id) { const img = el('img'); img.src = `/api/v1/images/${encodeURIComponent(character.image_id)}?size=lg`; img.alt = ''; img.loading = 'lazy'; img.addEventListener('error', () => img.remove()); portrait.append(img); }
       portrait.append(el('span', 'jb-avatar-fallback', character.name.slice(0, 1).toUpperCase()));
       portrait.append(el('span', 'jb-card-cta', 'Read Creator’s Notes →'));
-      const cardTitle = el('h3', 'jb-card-name'); cardTitle.append(button(character.name, () => preview(character), 'jb-card-title'));
+      const cardTitle = el('h3', 'jb-card-name'); cardTitle.append(button(character.name, () => preview(character, group.copies), 'jb-card-title'));
       const media = el('div', 'jb-card-media');
       const cardStatus = el('p', 'jb-card-status'); cardStatus.setAttribute('role', 'status');
       const favorite = favoriteControl(character.id, {
@@ -362,10 +370,14 @@ export function setup(ctx: SpindleFrontendContext) {
       else note.textContent = 'Loading creator’s note…';
       if (!freshCache && (typeof character.creator_notes !== 'string' || !creatorAttribution(character)?.profileUrl)) pending.push({ character, node: note, creator });
       info.append(note, cardStatus);
+      if (group.copies.length > 1) {
+        const copies = button(`${group.copies.length} saved copies`, () => preview(character, group.copies), 'jb-card-copies');
+        copies.setAttribute('aria-label', `Choose saved copy of ${character.name}`); info.append(copies);
+      }
       const tags = el('div', 'jb-tags'); for (const tag of (character.tags || []).slice(0, 4)) tags.append(el('span', '', tag)); info.append(tags);
       card.append(cardTitle, media, info); grid.append(card);
     }
-    if (!characters.length) {
+    if (!groups.length) {
       const empty = el('div', 'jb-empty'); empty.append(el('h3', '', 'No character cards found'), el('p', '', filter === 'favorites' ? 'Character cards you favorite in Lumiverse appear here.' : search.value ? 'Try another name, creator, or description.' : 'Create or import a character card to add it to your library.'), button('Open character library', () => { void invoke({ kind: 'drawer_tab', id: 'characters' }); })); grid.append(empty);
     }
     // Summary DTOs can omit notes and creator provenance. Read only this page,
@@ -391,19 +403,43 @@ export function setup(ctx: SpindleFrontendContext) {
   async function loadCharacters() {
     const generation = ++request; controller?.abort(); controller = new AbortController(); grid.setAttribute('aria-busy', 'true'); status.textContent = '';
     previous.disabled = true; next.disabled = true;
-    const params = new URLSearchParams({ limit: String(pageSize), offset: String(offset), search: search.value.trim(), sort: sort.value, direction: sort.value === 'name' ? 'asc' : 'desc' });
+    const params = new URLSearchParams({ limit: '1000', offset: '0', search: search.value.trim(), sort: sort.value, direction: sort.value === 'name' ? 'asc' : 'desc' });
     if (filter === 'favorites') { params.set('filter', 'favorites'); params.set('favorite_ids', favorites().join(',')); }
     try {
-      if (filter === 'favorites' && !favorites().length) { total = 0; renderCards([]); }
-      else {
-        const response = await fetch(`/api/v1/characters/summary?${params}`, { credentials: 'same-origin', signal: controller.signal });
-        if (!response.ok) throw new Error('Character library unavailable');
-        const result = await response.json(); if (disposed || generation !== request) return;
-        const characters = Array.isArray(result.data) ? result.data.filter((c: Character) => c && typeof c.id === 'string' && typeof c.name === 'string') : [];
-        total = typeof result.total === 'number' ? result.total : characters.length; renderCards(characters);
+      const key = params.toString();
+      if (libraryCache?.key !== key) {
+        const characters: Character[] = [], ids = new Set<string>();
+        if (filter !== 'favorites' || favorites().length) {
+          let read = 0;
+          // Group before slicing pages: the same saved card can be imported on
+          // opposite sides of a native page boundary. Only summary data is
+          // indexed; full definitions are compared for plausible collisions.
+          while (true) {
+            params.set('offset', String(read));
+            const response = await fetch(`/api/v1/characters/summary?${params}`, { credentials: 'same-origin', signal: controller.signal });
+            if (!response.ok) throw new Error('Character library unavailable');
+            const result = await response.json(); if (disposed || generation !== request) return;
+            if (!Array.isArray(result.data)) throw new Error('Invalid character index');
+            const rows = result.data.filter((c: Character) => c && typeof c.id === 'string' && typeof c.name === 'string');
+            let added = 0;
+            for (const character of rows) if (!ids.has(character.id)) { ids.add(character.id); characters.push(character); added++; }
+            read += result.data.length;
+            const expected = typeof result.total === 'number' && Number.isFinite(result.total) ? result.total : read;
+            if (!result.data.length || read >= expected) break;
+            if (!added) throw new Error('Character index did not advance');
+          }
+        }
+        const groups = await groupCharacters(characters, id => ctx.characters.get(id), signatures, () => !disposed && generation === request);
+        if (disposed || generation !== request) return;
+        libraryCache = { key, groups, cardCount: characters.length };
       }
+      total = libraryCache.groups.length;
+      if (offset >= total) offset = Math.max(0, Math.floor((total - 1) / pageSize) * pageSize);
+      renderCards(libraryCache.groups.slice(offset, offset + pageSize));
       if (disposed || generation !== request) return;
-      count.textContent = `${total} ${filter === 'favorites' ? 'favorite' : 'saved'} character card${total === 1 ? '' : 's'}`;
+      count.textContent = libraryCache.cardCount === total
+        ? `${total} ${filter === 'favorites' ? 'favorite' : 'saved'} character card${total === 1 ? '' : 's'}`
+        : `${total} character${total === 1 ? '' : 's'} · ${libraryCache.cardCount} ${filter === 'favorites' ? 'favorite' : 'saved'} cards`;
       pageLabel.textContent = total ? `${offset + 1}–${Math.min(offset + pageSize, total)} of ${total}` : '0 character cards';
       paging.hidden = total <= pageSize; previous.disabled = offset === 0; next.disabled = offset + pageSize >= total;
     } catch (error) {
@@ -471,11 +507,11 @@ export function setup(ctx: SpindleFrontendContext) {
       } catch { if (current()) localStatus.textContent = 'Could not save this favorite. Please try again.'; }
       finally { release(); busy = false; if (current()) render(); }
     }
-    const stop = ctx.state?.subscribe('characters.favorites', render);
+    const stop = subscribeOptionalState(ctx, 'characters.favorites', render);
     owner.onDispose(() => { closed = true; abort.abort(); stop?.(); });
     render(); return toggle;
   }
-  function openProfile(characterId: string, name = 'Character profile') {
+  function openProfile(characterId: string, name = 'Character profile', copies: Character[] = []) {
     modal?.dismiss(); modal = ctx.ui.showModal({ title: name, width: 720, maxHeight: 800 });
     const current = modal; current.root.classList.add('jb-preview', 'jb-profile-window');
     const actions = el('div', 'jb-preview-actions'); const localStatus = el('p', 'jb-status'); localStatus.setAttribute('role', 'status');
@@ -499,27 +535,39 @@ export function setup(ctx: SpindleFrontendContext) {
     });
     edit.disabled = !ctx.host.surfaces?.list(['modal']).some(s => s.id === 'character_editor' && s.invocable !== false);
     actions.append(favoriteControl(characterId, { isCurrent: () => modal === current, onDispose: cleanup => { current.onDismiss(cleanup); } }, localStatus), edit, button('Close', () => current.dismiss()));
+    if (copies.length > 1) {
+      const picker = el('div', 'jb-profile-copies'); const label = el('label', '', 'Saved copy');
+      const select = el('select', 'jb-profile-copy-select'); select.setAttribute('aria-label', 'Saved copy');
+      for (const [index, copy] of copies.entries()) {
+        const saved = typeof copy.created_at === 'number' ? new Date(copy.created_at * 1000) : undefined;
+        const when = saved && Number.isFinite(saved.getTime()) ? ` · ${saved.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}` : '';
+        const option = el('option', '', `Copy ${index + 1}${when}`); option.value = copy.id; select.append(option);
+      }
+      select.value = characterId;
+      select.addEventListener('change', () => { const copy = copies.find(copy => copy.id === select.value); if (copy && !disposed && modal === current) openProfile(copy.id, copy.name, copies); });
+      label.append(select); picker.append(label, el('p', '', 'Choose a saved copy to read or use. Each keeps its own chats, favorites and lorebook links.')); current.root.append(picker);
+    }
     const body = el('div', 'jb-preview-body'); const chatActions = el('div', 'jb-profile-chat-actions'); chatActions.append(chat);
     current.root.append(body, actions, localStatus, chatActions);
     const cleanup = mountCharacterProfile(ctx, body, characterId);
     current.onDismiss(() => { cleanup(); if (modal === current) modal = undefined; });
   }
-  function preview(character: Character) {
-    openProfile(character.id, character.name);
+  function preview(character: Character, copies?: Character[]) {
+    openProfile(character.id, character.name, copies);
   }
   search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { offset = 0; void loadCharacters(); }, 200); });
   sort.addEventListener('change', () => { offset = 0; void loadCharacters(); });
   if (ctx.events?.on) {
     for (const event of ['CHARACTER_CREATED', 'CHARACTER_EDITED', 'CHARACTER_DELETED', 'CHARACTER_LIBRARY_CHANGED', 'CHARACTER_AVATAR_CHANGED', 'jar_bridge:imported'] as const) {
       cleanups.push(ctx.events.on(event, () => {
-        notePreviews.clear(); request++; controller?.abort();
+        notePreviews.clear(); libraryCache = undefined; signatures.clear(); request++; controller?.abort();
         clearTimeout(libraryRefreshTimer);
         libraryRefreshTimer = setTimeout(() => { if (!disposed) { offset = 0; if (view === 'browse') void loadCharacters(); else myChats.refresh(); } }, 300);
       }));
     }
   }
-  if (ctx.state) cleanups.push(ctx.state.subscribe('characters.favorites', () => { favoriteWrites.clear(); offset = 0; if (view === 'browse') void loadCharacters(); }));
-  if (ctx.state) cleanups.push(ctx.state.subscribe('chat.active', () => { void refreshChatHeader(); void refreshConnection(); }), ctx.state.subscribe('connections.active', () => { void refreshConnection(); }));
+  cleanups.push(subscribeOptionalState(ctx, 'characters.favorites', () => { favoriteWrites.clear(); offset = 0; if (view === 'browse') void loadCharacters(); }));
+  cleanups.push(subscribeOptionalState(ctx, 'chat.active', () => { void refreshChatHeader(); void refreshConnection(); }), subscribeOptionalState(ctx, 'connections.active', () => { void refreshConnection(); }));
   let lastPath = location.pathname, lastHome = lastPath === '/';
   const routeTimer = setInterval(() => {
     if (location.pathname !== lastPath) { settingsWindow.syncRoute(); if (!location.pathname.startsWith('/chat/')) soundCloud.close(); lastPath = location.pathname; }
@@ -530,10 +578,20 @@ export function setup(ctx: SpindleFrontendContext) {
     } else if (!atHome && lastHome) myChats.deactivate();
     lastHome = atHome;
   }, 500);
+  const welcome = createWelcome(ctx, {
+    openHome: async () => {
+      if (location.pathname !== '/' && !await invoke({ kind: 'route', id: '/' })) return false;
+      setView('browse', false); return true;
+    },
+    openApi,
+    openImport,
+  });
+  cleanups.push(() => welcome.destroy());
   setView('browse', false);
   void refreshChatHeader(); refreshConnection();
+  void welcome.maybeOpen();
   return () => {
-    disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); tutorialWindow?.destroy(); characterCreate.destroy(); hone.destroy(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); composerActions.destroy(); memory.destroy(); apiSettings.destroy(); promptSettings.destroy(); settingsWindow.destroy();
+    disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); tutorialWindow?.destroy(); characterCreate.destroy(); hone.destroy(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); composerActions.destroy(); memory.destroy(); apiSettings.destroy(); promptSettings.destroy(); settingsWindow.destroy();
     cleanups.reverse().forEach(cleanup => cleanup()); mounts.forEach(root => root.replaceChildren());
     if (oldView === null) document.documentElement.removeAttribute('data-janitor-bridge-view'); else document.documentElement.setAttribute('data-janitor-bridge-view', oldView);
     if (oldTools === null) document.documentElement.removeAttribute('data-jb-tools'); else document.documentElement.setAttribute('data-jb-tools', oldTools);

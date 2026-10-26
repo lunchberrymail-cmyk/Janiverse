@@ -42,7 +42,16 @@ function nativeDefault(): Row {
 }
 function button(text: string): HTMLButtonElement { const found = [...root.querySelectorAll('button')].find(b => b.textContent === text); if (!found) throw new Error(`Missing ${text}`); return found; }
 function input(name: string): HTMLInputElement { return root.querySelector<HTMLInputElement>(`[name="${name}"]`)!; }
-function change(name: string, value: string) { const field = input(name); field.value = value; field.dispatchEvent(new dom.window.Event('input', { bubbles: true })); }
+function change(name: string, value: string) {
+  // Editing a saved preset now requires the same explicit copy action as the UI.
+  // Tests that only choose/save a normal preset do not use this helper.
+  const field = input(name);
+  if (field.disabled) {
+    const copy = [...root.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent === 'Customize a copy' && !b.hidden && !b.disabled);
+    copy?.click();
+  }
+  expect(field.disabled).toBe(false); field.value = value; field.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+}
 async function choose(name: string, value: string) { const field = input(name); field.value = value; field.dispatchEvent(new dom.window.Event('change', { bubbles: true })); await settle(); }
 function writes() { return calls.filter(call => call.method !== 'GET'); }
 async function start(tab: 'prompt' | 'generation' = 'prompt') { editor.open(tab); await settle(); }
@@ -108,6 +117,70 @@ beforeEach(() => {
 });
 afterEach(() => { editor.destroy(); dom.window.close(); globalThis.fetch = originals.fetch; globalThis.document = originals.document; globalThis.location = originals.location; });
 
+test('a normal saved preset stays unchanged, read-only, and keeps native inherited state without any duplicate or unnecessary binding', async () => {
+  const original = structuredClone(presets.get('original')); const profile = structuredClone(inherited);
+  await start();
+  expect(input('prompt-source').value).toBe('preset'); expect(input('prompt-preset').value).toBe('original');
+  for (const name of ['global-prompt', 'assistant-prefill', 'temperature', 'sampler-overrides']) expect(input(name).disabled).toBe(true);
+  expect(button('Customize a copy').hidden).toBe(false); expect(button('Customize a copy').disabled).toBe(false);
+  expect(root.querySelector('.jb-settings-prompt-source-help')?.textContent).toContain('linked regex');
+  await save(); await save();
+  expect(writes()).toHaveLength(0); expect(count).toBe(0); expect(bindings.size).toBe(0); expect(inherited).toEqual(profile);
+  expect(presets.get('original')).toEqual(original); expect(selectedId).toBe('original');
+  expect(root.textContent).toContain('already uses the saved preset unchanged');
+});
+
+test('choosing another saved preset binds its actual identity and native values, variables and enabled states without preset or regex mutations', async () => {
+  const alternate = { ...base(), id: 'threadbare', name: 'ThreadBare', cache_revision: 4 };
+  // These are valid native/provider settings beyond this simplified editor's
+  // copy-edit limits. Applying the unmodified preset must never reject them.
+  alternate.parameters.samplerOverrides.maxTokens = 262144; alternate.parameters.samplerOverrides.topK = 700;
+  alternate.metadata.regex = { sourceOwned: true }; presets.set(alternate.id, alternate);
+  const profile = { preset_id: alternate.id, block_states: { first: false, second: true, history: true, category: true }, prompt_variables: { first: { tone: 'saved variable' } }, captured_at: 3 };
+  presetDefaults.set(alternate.id, profile); const original = structuredClone(alternate);
+  await start(); await choose('prompt-preset', alternate.id); await save();
+  expect(count).toBe(0); expect(presets.get(alternate.id)).toEqual(original); expect(input('prompt-preset').value).toBe(alternate.id);
+  expect(bindings.get('chat/chat-1')).toMatchObject({ preset_id: alternate.id, block_states: profile.block_states, prompt_variables: profile.prompt_variables });
+  expect(writes().map(call => call.path)).toEqual(['/preset-profiles/chat/chat-1']);
+  expect(calls.some(call => call.path.includes('regex'))).toBe(false); expect(selectedId).toBe('original');
+  expect(input('maxTokens').value).toBe('262144'); expect(input('maxTokens').disabled).toBe(true);
+  const before = writes().length; await save(); expect(writes()).toHaveLength(before);
+});
+
+test('Customize a copy is an explicit draft action, with no mutation until Save and a warning about original preset-linked regex', async () => {
+  await start(); button('Customize a copy').click();
+  expect(writes()).toHaveLength(0); expect(input('global-prompt').disabled).toBe(false); expect(input('temperature').disabled).toBe(false);
+  expect(root.querySelector('.jb-settings-status')?.textContent).toContain('Preset-linked regex stays with the original');
+  change('global-prompt', 'Explicit isolated change'); await save();
+  expect(count).toBe(1); expect(bindings.get('chat/chat-1')?.preset_id).toBe('copy-1');
+  expect(presets.get('original')?.prompt_order).toEqual(base().prompt_order);
+});
+
+test('choosing an unchanged saved preset abandons a copy draft without applying its prompt or generation edits', async () => {
+  presets.set('alternate', { ...base(), id: 'alternate', name: 'Original imported preset' });
+  await start(); change('global-prompt', 'Do not carry this draft into the saved source'); change('temperature', '1.9');
+  await choose('prompt-preset', 'alternate');
+  expect(input('global-prompt').value).toBe(''); expect(input('temperature').value).toBe('0.8'); expect(input('global-prompt').disabled).toBe(true);
+  await save(); expect(count).toBe(0); expect(bindings.get('chat/chat-1')?.preset_id).toBe('alternate');
+  expect(presets.get('alternate')?.parameters).toEqual(base().parameters);
+});
+
+test('a failed direct saved-preset binding retries the same original identity and never creates a copy', async () => {
+  presets.set('alternate', { ...base(), id: 'alternate', name: 'Native source' });
+  await start(); await choose('prompt-preset', 'alternate'); rejectBinding = true; await save();
+  expect(count).toBe(0); expect(bindings.size).toBe(0); expect(root.textContent).toContain('Could not finish');
+  rejectBinding = false; await save(); expect(count).toBe(0); expect(bindings.get('chat/chat-1')?.preset_id).toBe('alternate');
+  expect(writes().every(call => call.path === '/preset-profiles/chat/chat-1')).toBe(true);
+});
+
+test('users can replace a legacy Janiverse duplicate with its original preset without deleting either row or creating another', async () => {
+  const legacy = { ...base(), id: 'legacy-copy', name: 'Janiverse · Chat · ThreadBare', metadata: { ...base().metadata, _janitor_bridge: { owner: 'janitor_bridge', scope: 'chat:chat-1', sourcePresetId: 'original', promptMode: 'preset' } } };
+  presets.set(legacy.id, legacy); inherited = { ...inherited!, preset_id: legacy.id }; const oldCopy = structuredClone(legacy);
+  await start(); await choose('prompt-preset', 'original'); await save();
+  expect(count).toBe(0); expect(bindings.get('chat/chat-1')?.preset_id).toBe('original'); expect(presets.get(legacy.id)).toEqual(oldCopy);
+  expect(writes().map(call => call.path)).toEqual(['/preset-profiles/chat/chat-1']);
+});
+
 test('first Save copies the effective hierarchy and maps, preserves the original, binds real native state, then reuses its copy', async () => {
   const original = structuredClone(presets.get('original'));
   await start(); expect(input('global-prompt').value).toBe(''); expect(input('assistant-prefill').value).toBe('Existing prefix');
@@ -145,7 +218,7 @@ test('native sampler names and values are merged while advanced controls survive
 test('permissions are never requested on open and every denied Save avoids writes', async () => {
   grants = ['chats']; await start(); expect(requested).toEqual([]); expect(writes()).toHaveLength(0); expect(input('global-prompt').disabled).toBe(true);
   expect(root.textContent).toContain('presets and generation'); button('Enable permissions').click(); await settle();
-  expect(requested).toEqual([['presets', 'chats', 'generation']]); expect(input('global-prompt').disabled).toBe(false);
+  expect(requested).toEqual([['presets', 'chats', 'generation']]); expect(input('prompt-preset').disabled).toBe(false); expect(input('global-prompt').disabled).toBe(true);
   change('global-prompt', 'Draft'); grants = ['chats']; await save(); expect(writes()).toHaveLength(0); expect(input('global-prompt').value).toBe('Draft');
 });
 
@@ -284,7 +357,7 @@ test('destroying an inline session cancels pending writes without dismissing its
   button('Save settings').click(); expect(root.getAttribute('aria-busy')).toBe('true');
   session.destroy(); allow(['presets', 'generation', 'chats']); await settle(); expect(writes()).toHaveLength(0); expect(target.isConnected).toBe(true);
   ctx.permissions.getGranted = async () => [...grants]; const newer = editor.mount(target); root = target.querySelector<HTMLElement>('.jb-prompt-settings-inline')!; await settle();
-  session.destroy(); expect(root.isConnected).toBe(true); expect(input('global-prompt').disabled).toBe(false);
+  session.destroy(); expect(root.isConnected).toBe(true); expect(input('prompt-preset').disabled).toBe(false); expect(input('global-prompt').disabled).toBe(true);
   newer.destroy(); expect(target.isConnected).toBe(true); expect(target.children).toHaveLength(0);
 });
 
@@ -294,7 +367,7 @@ test('inline refresh loads a newly available first API connection without requir
   ctx.state.get = (key: string) => !connected && ['connections.active', 'connections.profiles'].includes(key) ? null : state(key);
   const { session } = await mount(); expect(input('global-prompt').disabled).toBe(true); expect(root.textContent).toContain('Add or select an API configuration above');
   connected = true; session.refresh(); await settle();
-  expect(input('global-prompt').disabled).toBe(false); expect(input('temperature').value).toBe('0.8'); expect(root.textContent).toContain('This API configuration · My model');
+  expect(input('prompt-preset').disabled).toBe(false); expect(input('global-prompt').disabled).toBe(true); expect(input('temperature').value).toBe('0.8'); expect(root.textContent).toContain('This API configuration · My model');
   expect(writes()).toHaveLength(0); change('global-prompt', 'Instructions for the first connection'); await save();
   expect(bindings.get('connection/connection-1')?.preset_id).toBe('copy-1'); expect(root.textContent).toContain('Saved for this API configuration');
 });
@@ -318,7 +391,7 @@ test('a slower initial native read cannot overwrite an inline refresh, and refre
   }) as typeof fetch;
   const { session } = await mount(); expect(input('temperature').disabled).toBe(true);
   presets.get('original')!.parameters.samplerOverrides.temperature = 1.7; session.refresh(); await settle(); expect(input('temperature').value).toBe('1.7');
-  finish(json(stale)); await settle(); expect(input('temperature').value).toBe('1.7'); expect(input('temperature').disabled).toBe(false);
+  finish(json(stale)); await settle(); expect(input('temperature').value).toBe('1.7'); expect(input('temperature').disabled).toBe(true); expect(input('prompt-preset').disabled).toBe(false);
   session.destroy(); const before = calls.length; session.refresh(); await settle(); expect(calls).toHaveLength(before); expect(root.isConnected).toBe(false);
 });
 
@@ -339,7 +412,7 @@ test('the current built-in Default opens in simple mode while keeping its comple
   change('global-prompt', 'My writing style'); await save(); expect(presets.get('copy-1')?.prompt_order.slice(1)).toEqual(nativeDefault().prompt_order.slice(1));
 });
 
-test('selecting a saved preset copies its complete hierarchy, native defaults and variables without changing the original', async () => {
+test('explicitly customizing a saved preset copies its complete hierarchy, native defaults and variables without changing the original', async () => {
   const alternate = { ...base(), id: 'alternate', name: 'Imported story', cache_revision: 3 }; alternate.metadata = { ...alternate.metadata, _lumiverse_install_source: 'illarin', _lumiverse_illarin_asset_id: 'asset-123' };
   alternate.prompt_order = alternate.prompt_order.map((block: Row) => ({ ...block, id: `alt-${block.id}`, content: `Imported: ${block.content}`, sealedProvenance: { preserve: true } })); presets.set(alternate.id, alternate);
   const sourceBinding = { preset_id: 'alternate', block_states: { 'alt-first': false, 'alt-second': true, 'alt-history': true, 'alt-category': true }, prompt_variables: { 'alt-first': { tone: 'imported tone' } }, captured_at: 300 }; presetDefaults.set('alternate', sourceBinding);
@@ -389,7 +462,7 @@ test('missing native Default fails safely and still allows explicitly choosing a
   editor.destroy(); editor = createPromptSettings(ctx, { openPresetManager: () => { managed++; } }); await start();
   expect(input('global-prompt').disabled).toBe(true); expect(button('Save settings').disabled).toBe(true); expect(root.textContent).toContain('built-in Default preset is unavailable'); expect(writes()).toHaveLength(0);
   expect(button('Manage / import presets').disabled).toBe(false); button('Manage / import presets').click(); expect(managed).toBe(1);
-  await choose('prompt-source', 'preset'); expect(input('global-prompt').disabled).toBe(false); expect(input('prompt-preset').value).toBe('original'); await save(); expect(bindings.get('chat/chat-1')?.preset_id).toBe('copy-1');
+  await choose('prompt-source', 'preset'); expect(input('prompt-preset').disabled).toBe(false); expect(input('global-prompt').disabled).toBe(true); expect(input('prompt-preset').value).toBe('original'); await save(); expect(bindings.get('chat/chat-1')?.preset_id).toBe('original'); expect(count).toBe(0);
 });
 
 test('Default discovery checks the native identity across pages and rejects duplicated native identities', async () => {

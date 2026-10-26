@@ -18,6 +18,7 @@ let activeChat: string | null;
 let composerHandlers: Set<(state: { mounted: boolean; chatId: string | null; text: string }) => void>;
 let navigationHandlers: Set<() => void>;
 let read: () => Promise<Response>;
+let selectorFailure: string | undefined;
 const originalFetch = globalThis.fetch;
 const originalDocument = globalThis.document;
 const settle = async () => { for (let i = 0; i < 15; i++) await Promise.resolve(); };
@@ -52,7 +53,7 @@ function setup(options: HoneOptions = { revealTools() { revealCount++; } }) {
       onChange(handler: (state: any) => void) { composerHandlers.add(handler); return () => composerHandlers.delete(handler); },
       setText() { throw new Error('Draft writes are forbidden'); }, send() { throw new Error('Sending is forbidden'); },
     },
-    state: { subscribe(_key: string, handler: () => void) { navigationHandlers.add(handler); return () => navigationHandlers.delete(handler); } },
+    state: { subscribe(_key: string, handler: () => void) { if (selectorFailure) throw new Error(selectorFailure); navigationHandlers.add(handler); return () => navigationHandlers.delete(handler); } },
     events: { on(_event: string, handler: () => void) { navigationHandlers.add(handler); return () => navigationHandlers.delete(handler); } },
     sendToBackend() { throw new Error('Generation is forbidden'); },
   } as any, options);
@@ -63,11 +64,20 @@ beforeEach(() => {
   dom = new JSDOM('<!doctype html><html><body><div data-component="InputArea"><textarea>My unchanged draft</textarea><div id="mount"><div id="composer-sibling">Existing writing tools</div></div></div></body></html>', { url: 'http://localhost:11113/chat/current' });
   globalThis.document = dom.window.document;
   mounted = document.querySelector('#mount')!; activeChat = 'current'; composerHandlers = new Set(); navigationHandlers = new Set();
-  extensions = []; surfaces = [{ kind: 'drawer_tab', id: 'spindle', invocable: true }]; calls = []; invocations = []; roots = []; signals = []; mountPoints = []; revealCount = 0; invokeError = false;
+  extensions = []; surfaces = [{ kind: 'drawer_tab', id: 'spindle', invocable: true }]; calls = []; invocations = []; roots = []; signals = []; mountPoints = []; revealCount = 0; invokeError = false; selectorFailure = undefined;
   read = async () => Response.json({ extensions });
   globalThis.fetch = (async (url, options) => { calls.push({ url: String(url), options }); if (options?.signal) signals.push(options.signal); return read(); }) as typeof fetch;
 });
 afterEach(() => { hone?.destroy(); hone = undefined; globalThis.fetch = originalFetch; dom.window.close(); globalThis.document = originalDocument; });
+
+test('unsupported or denied optional chat selectors do not abort Hone startup or touch native content', () => {
+  const nativeMarkup = document.body.innerHTML;
+  for (const failure of ['SELECTOR_UNKNOWN', 'PERMISSION_DENIED:chats']) {
+    selectorFailure = failure; expect(() => setup()).not.toThrow();
+    expect(calls).toHaveLength(0); expect(invocations).toHaveLength(0); expect(roots).toHaveLength(0); expect(document.body.innerHTML).toBe(nativeMarkup);
+    hone!.destroy(); hone = undefined; expect(composerHandlers.size).toBe(0); expect(navigationHandlers.size).toBe(0);
+  }
+});
 
 describe('Hone toolbar hand-off', () => {
   test('enabled Hone leads straight to its visible manual button, keeping draft, models and composer siblings untouched', async () => {

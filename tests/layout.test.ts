@@ -4,6 +4,12 @@ import { setup } from '../dist/frontend.js';
 
 type Ref = { kind: string; id: string };
 type Card = { id: string; name: string; description?: string; creator_notes?: string; creator?: string; tags?: string[]; image_id?: string; updated_at?: number };
+function fullCard(card: Card, changes: Record<string, unknown> = {}) {
+  return {
+    description: '', personality: '', scenario: '', first_mes: '', mes_example: '', creator: '', creator_notes: '',
+    system_prompt: '', post_history_instructions: '', tags: [], alternate_greetings: [], extensions: {}, ...card, ...changes,
+  };
+}
 const flush = () => new Promise(resolve => setTimeout(resolve, 5));
 const respond = (data: Card[], total = data.length) => ({ ok: true, json: async () => ({ data, total }) });
 function deferred<T>() {
@@ -12,6 +18,12 @@ function deferred<T>() {
   return { promise, resolve };
 }
 const cards = Array.from({ length: 24 }, (_, index) => ({ id: `char_${index}`, name: `Character ${index}`, description: 'A character from your own library.' }));
+const allCards = [...cards, ...Array.from({ length: 48 }, (_, index) => ({ id: `char_${index + 24}`, name: `Character ${index + 24}`, description: 'A character from your own library.' }))];
+const summaryRequests = () => requests.filter(request => request.url.pathname === '/api/v1/characters/summary');
+function respondPage(data: Card[], url: URL) {
+  const offset = Number(url.searchParams.get('offset') || 0), limit = Number(url.searchParams.get('limit') || 1000);
+  return respond(data.slice(offset, offset + limit), data.length);
+}
 let dom: any, ctx: any, stop: (() => void) | undefined;
 let native: HTMLElement, nativeMarkup: string, nativeClicks: number;
 let calls: Array<{ ref: Ref; params?: Record<string, string> }>;
@@ -46,7 +58,7 @@ beforeEach(() => {
   activeChat = { chatId: null, characterId: null };
   connectionProjection = { activeProfileId: 'connection_1', provider: 'test-provider', model: 'model-one' };
   characterResult = async id => ({ id, name: 'Current character' });
-  fetchResult = async () => respond(cards, 72);
+  fetchResult = async url => respondPage(allCards, url);
   globalThis.fetch = (async (input: any, init: RequestInit = {}) => {
     const url = new URL(String(input), dom.window.location.href);
     requests.push({ url, signal: init.signal as AbortSignal | undefined, options: init });
@@ -130,6 +142,15 @@ test('mounts only the declared visual slots and preserves native chat DOM and li
   expect(document.querySelector('#native')).toBe(native); expect(native.outerHTML).toBe(nativeMarkup);
   (document.querySelector('#native-send') as HTMLButtonElement).click(); expect(nativeClicks).toBe(1);
   expect(document.querySelectorAll('.jb-card')).toHaveLength(24);
+});
+
+test('optional state selector failures leave the home layout usable without requesting permissions', async () => {
+  let permissionRequests = 0;
+  ctx.state = { get() { throw new Error('SELECTOR_UNKNOWN'); }, subscribe() { throw new Error('PERMISSION_DENIED'); } };
+  ctx.permissions.request = async () => { permissionRequests++; return []; };
+  expect(() => start()).not.toThrow(); await flush();
+  expect(document.querySelector('.jb-home-masthead')).not.toBeNull(); expect(document.querySelectorAll('.jb-card')).toHaveLength(24);
+  expect(permissionRequests).toBe(0); expect(native.outerHTML).toBe(nativeMarkup);
 });
 
 test('Home and My Chats select native home views while chat uses its own Back control', async () => {
@@ -328,7 +349,7 @@ test('API status reflects the chat-bound profile and model rather than the globa
     ? { ok: true, json: async () => ({ metadata: { connection_profile_id: 'pinned_api', connection_model: 'chat-specific-model' } }) }
     : url.pathname === '/api/v1/connections/pinned_api'
       ? { ok: true, json: async () => ({ id: 'pinned_api', provider: 'custom', model: 'profile-default-model' }) }
-      : respond(cards, 72);
+      : respond(cards);
   start(); await flush();
   const api = roots.get('chat_header_left')!.querySelector('.jb-api-status') as HTMLButtonElement;
   expect(api.textContent).toBe('using proxy');
@@ -386,30 +407,43 @@ test('Lumiverse tools can be revealed from either menu and the prior attribute i
   stop!(); stop = undefined; expect(document.documentElement.getAttribute('data-jb-tools')).toBe('saved');
 });
 
-test('search, sort and favorites reset pagination and send native summary query parameters', async () => {
+test('grouped gallery pages reuse the native summary index while search, sort and favorites reset it', async () => {
   start(); await flush();
   expect(requests[0].url.searchParams.get('sort')).toBe('created');
+  expect(summaryRequests()).toHaveLength(1);
+  expect(summaryRequests()[0].url.searchParams.get('limit')).toBe('1000');
+  expect(summaryRequests()[0].url.searchParams.get('offset')).toBe('0');
   expect([...document.querySelectorAll('.jb-sort option')].map(option => (option as HTMLOptionElement).value)).toEqual(['created', 'name']);
   findButton('Next →').click(); await flush();
-  expect(requests.at(-1)!.url.searchParams.get('offset')).toBe('24');
+  expect(summaryRequests()).toHaveLength(1);
+  expect(document.querySelector('.jb-card')!.getAttribute('data-character-id')).toBe('char_24');
+  expect(document.querySelector('.jb-paging span')!.textContent).toBe('25–48 of 72');
   const search = document.querySelector('.jb-search input') as HTMLInputElement;
   search.value = '  Ada  '; search.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
   await new Promise(resolve => setTimeout(resolve, 225));
-  expect(requests.at(-1)!.url.searchParams.get('offset')).toBe('0'); expect(requests.at(-1)!.url.searchParams.get('search')).toBe('Ada');
+  expect(summaryRequests()).toHaveLength(2);
+  expect(summaryRequests().at(-1)!.url.searchParams.get('offset')).toBe('0'); expect(summaryRequests().at(-1)!.url.searchParams.get('search')).toBe('Ada');
+  expect(document.querySelector('.jb-card')!.getAttribute('data-character-id')).toBe('char_0');
   findButton('Next →').click(); await flush();
+  expect(summaryRequests()).toHaveLength(2);
   const sort = document.querySelector('.jb-sort') as HTMLSelectElement; sort.value = 'name'; sort.dispatchEvent(new dom.window.Event('change'));
-  await flush(); expect(requests.at(-1)!.url.searchParams.get('offset')).toBe('0'); expect(requests.at(-1)!.url.searchParams.get('direction')).toBe('asc');
+  await flush(); expect(summaryRequests()).toHaveLength(3);
+  expect(summaryRequests().at(-1)!.url.searchParams.get('offset')).toBe('0'); expect(summaryRequests().at(-1)!.url.searchParams.get('direction')).toBe('asc');
+  expect(document.querySelector('.jb-card')!.getAttribute('data-character-id')).toBe('char_0');
   sort.value = 'created'; sort.dispatchEvent(new dom.window.Event('change')); await flush();
-  expect(requests.at(-1)!.url.searchParams.get('sort')).toBe('created'); expect(requests.at(-1)!.url.searchParams.get('direction')).toBe('desc');
+  expect(summaryRequests().at(-1)!.url.searchParams.get('sort')).toBe('created'); expect(summaryRequests().at(-1)!.url.searchParams.get('direction')).toBe('desc');
   findButton('Next →').click(); await flush(); findButton('♥ Favorites').click(); await flush();
-  const params = requests.at(-1)!.url.searchParams;
+  const params = summaryRequests().at(-1)!.url.searchParams;
   expect(params.get('offset')).toBe('0'); expect(params.get('filter')).toBe('favorites'); expect(params.get('favorite_ids')).toBe('char_0,char_4');
-  expect(params.get('limit')).toBe('24'); expect(requests.at(-1)!.url.pathname).toBe('/api/v1/characters/summary');
+  expect(params.get('limit')).toBe('1000');
+  expect(document.querySelector('.jb-card')!.getAttribute('data-character-id')).toBe('char_0');
 });
 
 test('favorites changes reset the page when the filtered collection shrinks', async () => {
-  favoriteIds = cards.map(card => card.id); start(); await flush(); findButton('♥ Favorites').click(); await flush();
-  findButton('Next →').click(); await flush(); expect(requests.at(-1)!.url.searchParams.get('offset')).toBe('24');
+  favoriteIds = allCards.map(card => card.id); start(); await flush(); findButton('♥ Favorites').click(); await flush();
+  const priorReads = summaryRequests().length;
+  findButton('Next →').click(); await flush(); expect(summaryRequests()).toHaveLength(priorReads);
+  expect(document.querySelector('.jb-card')!.getAttribute('data-character-id')).toBe('char_24');
   favoriteIds = ['char_0']; fetchResult = async () => respond([cards[0]], 1);
   subscriptions.get('characters.favorites')!.forEach(handler => handler()); await flush();
   expect(requests.at(-1)!.url.searchParams.get('offset')).toBe('0');
@@ -450,12 +484,15 @@ test('untrusted names and creator notes are rendered as text without executable 
   expect(document.querySelector('.jb-description')!.textContent).toBe('Safe creator note');
   expect(document.querySelectorAll('.jb-grid img, .jb-grid script, .jb-grid svg')).toHaveLength(0);
   (document.querySelector('.jb-card') as HTMLElement).click(); await flush();
+  const note = document.querySelector<HTMLDetailsElement>('.jb-profile-notes')!; note.open = true; note.dispatchEvent(new dom.window.Event('toggle'));
   expect(document.querySelector('.jb-preview-body .jb-profile-notes')!.textContent).toContain('Safe creator note');
   expect(document.querySelectorAll('.jb-preview script, .jb-preview svg, .jb-preview [onerror], .jb-preview [onload]')).toHaveLength(0);
   expect(document.querySelector('.jb-preview img')!.getAttribute('src')).toBe('/api/v1/characters/unsafe/avatar?size=lg');
 });
 
 test('gallery loads and caches the saved creator note instead of the definition', async () => {
+  const libraryEvents = new Map<string, () => void>();
+  ctx.events = { on: (name: string, handler: () => void) => { libraryEvents.set(name, handler); return () => libraryEvents.delete(name); } };
   fetchResult = async () => respond([{ id: 'note-card', name: 'Story', description: 'PRIVATE DEFINITION', updated_at: 1 }]);
   let reads = 0;
   characterResult = async id => { reads++; return { id, name: 'Story', creator_notes: '<p>A creator’s</p><p>introduction.</p>', description: 'PRIVATE DEFINITION' }; };
@@ -466,7 +503,7 @@ test('gallery loads and caches the saved creator note instead of the definition'
   findButton('Home', roots.get('landing_header')!).click(); await flush(); expect(reads).toBe(1);
   fetchResult = async () => respond([{ id: 'note-card', name: 'Story', description: 'PRIVATE DEFINITION', updated_at: 2 }]);
   characterResult = async id => { reads++; return { id, creator_notes: '' }; };
-  findButton('Home', roots.get('landing_header')!).click(); await flush();
+  libraryEvents.get('CHARACTER_EDITED')!(); await new Promise(resolve => setTimeout(resolve, 325));
   expect(reads).toBe(2); expect(document.querySelector('.jb-description')!.textContent).toBe('No creator’s note.');
 });
 
@@ -496,15 +533,86 @@ test('All Characters includes saved cards with no chats and never builds the lib
   expect(document.querySelector('.jb-profile-window')).not.toBeNull(); expect(calls).toHaveLength(0); expect(chatReads).toBe(0);
 });
 
-test('opening an All Characters card goes directly to full Creator’s Notes without mounting chat history or starting a conversation', async () => {
+test('identical saved cards across native summary pages share one tile before gallery pagination', async () => {
+  const first = { id: 'rajah-new', name: 'Rajah | Tiger in the Garden', description: 'A saved card.', updated_at: 1 };
+  const last = { ...first, id: 'rajah-old', image_id: 'older-portrait' };
+  const library = [first, ...Array.from({ length: 999 }, (_, index) => ({ id: `unique-${index}`, name: `Unique ${index}`, creator_notes: 'A separate saved card.' })), last];
+  const fullReads: string[] = [];
+  fetchResult = async url => respondPage(library, url);
+  characterResult = async id => {
+    fullReads.push(id);
+    const summary = library.find(card => card.id === id)!;
+    return fullCard(summary, { extensions: id === last.id ? { world_book_ids: ['older-lorebook'], jar_companion: { source: 'janitorai' } } : {} });
+  };
+  start(); await flush(); await flush();
+  expect(summaryRequests().map(request => request.url.searchParams.get('offset'))).toEqual(['0', '1000']);
+  expect(summaryRequests().every(request => request.url.searchParams.get('limit') === '1000')).toBe(true);
+  expect(fullReads).toContain(last.id);
+  const rajahTiles = [...document.querySelectorAll('.jb-card')].filter(card => card.getAttribute('aria-label') === first.name);
+  expect(rajahTiles).toHaveLength(1);
+  expect(rajahTiles[0].querySelector('.jb-card-copies')!.textContent).toBe('2 saved copies');
+  expect(document.querySelector('.jb-count')!.textContent).toBe('1000 characters · 1001 saved cards');
+  expect(document.querySelector('.jb-paging span')!.textContent).toBe('1–24 of 1000');
+  const initialReads = summaryRequests().length;
+  findButton('Next →').click(); await flush();
+  expect(summaryRequests()).toHaveLength(initialReads);
+  expect(document.querySelector('.jb-paging span')!.textContent).toBe('25–48 of 1000');
+  expect(document.querySelector('.jb-card')!.getAttribute('data-character-id')).toBe('unique-23');
+  expect(requests.every(request => !request.options.method || request.options.method === 'GET')).toBe(true);
+  expect(calls).toHaveLength(0); expect(groupedQueries).toHaveLength(0); expect(native.outerHTML).toBe(nativeMarkup);
+});
+
+test('saved-copy selection keeps edited variants separate and uses the exact copy for favorite, edit and chat actions', async () => {
+  const first = { id: 'rajah-new', name: 'Rajah | Tiger in the Garden', description: 'A saved card.', creator_notes: 'Public notes.', updated_at: 1 };
+  const older = { ...first, id: 'rajah-old', image_id: 'older-portrait' };
+  const variant = { ...first, id: 'rajah-edited' };
+  const library = [first, older, variant]; let savedFavorites: string[] = [];
+  fetchResult = async (url, options) => {
+    if (url.pathname !== '/api/v1/settings/favorites') return respond(library);
+    if (options.method === 'PUT') savedFavorites = JSON.parse(String(options.body)).value;
+    return { ok: true, status: 200, json: async () => ({ value: [...savedFavorites] }) };
+  };
+  characterResult = async id => fullCard(library.find(card => card.id === id)!, {
+    personality: id === variant.id ? 'An intentionally edited personality.' : 'The original personality.',
+    extensions: id === older.id ? { world_book_ids: ['older-lorebook'], jar_companion: { source: 'janitorai' } } : {},
+  });
+  start(); await flush(); await flush();
+  expect([...document.querySelectorAll('.jb-card')].map(card => card.getAttribute('data-character-id'))).toEqual([first.id, variant.id]);
+  expect(document.querySelector('.jb-count')!.textContent).toBe('2 characters · 3 saved cards');
+  expect(document.querySelector(`[data-character-id="${variant.id}"] .jb-card-copies`)).toBeNull();
+  const openCopies = () => (document.querySelector(`[data-character-id="${first.id}"] .jb-card-copies`) as HTMLButtonElement).click();
+  const chooseOlder = async () => {
+    const picker = document.querySelector<HTMLSelectElement>('.jb-profile-copy-select')!;
+    expect(picker.getAttribute('aria-label')).toBe('Saved copy');
+    expect([...picker.options].map(option => option.value)).toEqual([first.id, older.id]);
+    picker.value = older.id; picker.dispatchEvent(new dom.window.Event('change', { bubbles: true })); await flush();
+    expect(document.querySelector<HTMLSelectElement>('.jb-profile-copy-select')!.value).toBe(older.id);
+    expect(document.querySelectorAll('.jb-profile-window')).toHaveLength(1);
+  };
+  openCopies(); await flush(); expect(calls).toHaveLength(0); await chooseOlder();
+  findButton('Favorite', document.querySelector('.jb-profile-window')!).click(); await flush();
+  expect(savedFavorites).toEqual([older.id]);
+  findButton('Edit card', document.querySelector('.jb-profile-window')!).click(); await flush();
+  expect(calls).toEqual([{ ref: { kind: 'modal', id: 'character_editor' }, params: { id: older.id } }]);
+  openCopies(); await flush(); await chooseOlder();
+  findButton('Start new chat', document.querySelector('.jb-profile-window')!).click(); await flush();
+  expect(calls.at(-1)).toEqual({ ref: { kind: 'entity_action', id: 'character_chat' }, params: { characterId: older.id, mode: 'new' } });
+  expect(requests.filter(request => request.options.method && request.options.method !== 'GET').map(request => request.url.pathname)).toEqual(['/api/v1/settings/favorites']);
+  expect(groupedQueries).toHaveLength(0); expect(native.outerHTML).toBe(nativeMarkup);
+});
+
+test('opening an All Characters card offers collapsed Creator’s Notes without starting a conversation', async () => {
   let chatReads = 0; characterChatsResult = async () => { chatReads++; return []; };
   characterResult = async id => ({ id, name: 'Selected card', creator_notes: 'Public card introduction', description: 'Private definition' });
   start(); await flush(); (document.querySelector('.jb-card') as HTMLElement).click(); await flush();
   expect(document.querySelector('.jb-preview-body .jb-character-profile')).toBeNull();
   expect(document.querySelector('.jb-preview-body.jb-character-profile')).not.toBeNull();
+  const note = document.querySelector<HTMLDetailsElement>('.jb-profile-notes')!; expect(note.open).toBe(false);
+  expect(document.querySelector('.jb-profile-rich')!.childElementCount).toBe(0);
+  note.open = true; note.dispatchEvent(new dom.window.Event('toggle'));
   expect(document.querySelector('.jb-preview-body')!.textContent).toContain('Public card introduction');
-  expect(document.querySelector('.jb-preview-body details')!.textContent).toContain('Private definition');
-  expect((document.querySelector('.jb-preview-body details') as HTMLDetailsElement).open).toBe(false);
+  expect(document.querySelector('.jb-profile-details')!.textContent).toContain('Private definition');
+  expect((document.querySelector('.jb-profile-details') as HTMLDetailsElement).open).toBe(false);
   expect(document.querySelector('[data-surface-id="character_preview_panel"]')).toBeNull();
   expect(surfaceHandlers.size).toBe(0); expect(chatReads).toBe(0); expect(calls).toHaveLength(0);
   expect([...document.querySelectorAll('.jb-preview button')].some(button => button.textContent === 'Pin')).toBe(false);
@@ -547,6 +655,7 @@ test('Read Creator’s Notes stays on Home, renders the selected full note, and 
   start(); await flush(); (document.querySelector('.jb-card-cta')!.closest('button') as HTMLButtonElement).click(); await flush();
   expect(location.pathname).toBe('/'); expect(calls).toHaveLength(0);
   expect(document.querySelectorAll('[role=dialog]')).toHaveLength(1); expect(surfaceDestroyed).toBe(0);
+  const note = document.querySelector<HTMLDetailsElement>('.jb-profile-notes')!; expect(note.open).toBe(false); note.open = true; note.dispatchEvent(new dom.window.Event('toggle'));
   expect(document.querySelector('.jb-profile-notes')!.textContent).toContain('Full creator note.');
   expect(document.querySelector('.jb-profile-notes .jb-profile-rich h2')!.textContent).toBe('Public introduction');
   expect(document.querySelector('.jb-profile-details')!.textContent).toContain('Definition stays in details.');
@@ -584,7 +693,7 @@ test('the inline Favorite button saves the native card preference without openin
 
 test('replacing a gallery page disposes its Favorite controls and prevents a delayed preference write', async () => {
   const pending = deferred<any>();
-  fetchResult = async url => url.pathname === '/api/v1/settings/favorites' ? pending.promise : respond(cards, 72);
+  fetchResult = async url => url.pathname === '/api/v1/settings/favorites' ? pending.promise : respondPage(allCards, url);
   start(); await flush();
   const subscriptionCount = subscriptions.get('characters.favorites')!.size;
   const inline = document.querySelector<HTMLButtonElement>('[data-character-id="char_1"] .jb-card-favorite')!;
@@ -764,4 +873,45 @@ test('without an invocable JAR drawer import opens the card file/link modal with
   expect(input.multiple).toBe(true); expect(input.accept).toContain('.png'); expect(input.accept).toContain('.json');
   expect(calls).toHaveLength(0); expect(requests).toHaveLength(priorRequests);
   expect(permissionsRead).toBe(0); expect(permissionRequests).toBe(0);
+});
+
+test('first-install welcome on native Characters waits for an explicit Home click before navigating or acknowledging', async () => {
+  dom.window.history.replaceState({}, '', '/characters'); activeChat = { chatId: null, characterId: null };
+  let permissionRequests = 0; const writes: Array<{ key: string; value: unknown }> = [];
+  ctx.settings = { get: async () => undefined, set: async (key: string, value: unknown) => { writes.push({ key, value }); } };
+  ctx.permissions.request = async () => { permissionRequests++; return []; };
+  const invokeNative = ctx.host.surfaces.invoke;
+  ctx.host.surfaces.invoke = async (ref: Ref, params?: Record<string, string>) => {
+    await invokeNative(ref, params);
+    if (ref.kind === 'route' && ref.id === '/') dom.window.history.replaceState({}, '', '/');
+  };
+  start(); await flush();
+  const welcome = document.querySelector('.jb-welcome')!;
+  expect(welcome.getAttribute('aria-label')).toBe('Welcome to Janiverse');
+  expect(welcome.textContent).toContain('No permissions enabled yet? That’s normal.');
+  expect(dom.window.location.pathname).toBe('/characters'); expect(calls).toHaveLength(0); expect(writes).toHaveLength(0);
+  expect(permissionRequests).toBe(0); expect(native.outerHTML).toBe(nativeMarkup);
+  findButton('Open Janiverse Home', welcome).click(); await flush();
+  expect(calls).toEqual([{ ref: { kind: 'route', id: '/' }, params: undefined }]);
+  expect(dom.window.location.pathname).toBe('/'); expect(document.documentElement.getAttribute('data-janitor-bridge-view')).toBe('browse');
+  expect(document.querySelector('.jb-welcome')).toBeNull();
+  expect(writes).toEqual([{ key: 'onboarding:welcome_completed_v1', value: true }]);
+  expect(permissionRequests).toBe(0); expect(requests.every(request => !request.options.method || request.options.method === 'GET')).toBe(true);
+  expect(native.outerHTML).toBe(nativeMarkup);
+});
+
+test('More Start here reopens first-run orientation after dismissal without routing or requesting grants', async () => {
+  dom.window.history.replaceState({}, '', '/characters'); activeChat = { chatId: null, characterId: null };
+  const saved = new Map<string, unknown>(); let permissionRequests = 0, writes = 0;
+  ctx.settings = { get: async (key: string) => saved.get(key), set: async (key: string, value: unknown) => { writes++; saved.set(key, value); } };
+  ctx.permissions.request = async () => { permissionRequests++; return []; };
+  start(); await flush(); const first = document.querySelector('.jb-welcome')!;
+  findButton('Got it', first).click(); await flush();
+  expect(document.querySelector('.jb-welcome')).toBeNull(); expect(saved.get('onboarding:welcome_completed_v1')).toBe(true); expect(writes).toBe(1);
+  const more = roots.get('landing_header')!.querySelector('.jb-more') as HTMLDetailsElement; more.open = true;
+  findButton('Start here', more).click(); await flush();
+  const reopened = document.querySelector('.jb-welcome')!; expect(reopened).not.toBe(first);
+  expect(findButton('Open Janiverse Home', reopened)).not.toBeNull(); expect(dom.window.location.pathname).toBe('/characters');
+  expect(calls).toHaveLength(0); expect(permissionRequests).toBe(0); expect(native.outerHTML).toBe(nativeMarkup);
+  findButton('Got it', reopened).click(); await flush(); expect(writes).toBe(1);
 });

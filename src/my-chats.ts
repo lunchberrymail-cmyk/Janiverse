@@ -116,6 +116,7 @@ export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptio
   let searchTimer: ReturnType<typeof setTimeout> | undefined, refreshTimer: ReturnType<typeof setTimeout> | undefined;
   let pageAbort: AbortController | undefined, detailAbort: AbortController | undefined;
   let profileInjection: Element | undefined;
+  let profileCleanup: (() => void) | undefined;
   const personaNames = new Map<string, string>();
   const cleanups: Array<() => void> = [];
   const root = el('section', 'jb-my-chats'); root.hidden = true; root.setAttribute('aria-label', 'My Chats');
@@ -150,7 +151,10 @@ export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptio
     const options = { limit: 3, offset: 0, sort: 'recent' as const, direction: 'desc' as const };
     return ctx.chats.listRecent ? ctx.chats.listRecent(options) : get(`/chats/recent?${params(options)}`, signal);
   }
-  function clearProfile() { if (profileInjection) { try { ctx.dom.uninject(profileInjection); } catch { profileInjection.remove(); } profileInjection = undefined; } }
+  function clearProfile() {
+    profileCleanup?.(); profileCleanup = undefined;
+    if (profileInjection) { try { ctx.dom.uninject(profileInjection); } catch { profileInjection.remove(); } profileInjection = undefined; }
+  }
   function stopDetail() { detailRequest++; detailAbort?.abort(); detailAbort = undefined; clearProfile(); expanded = ''; }
   function updateSummary() {
     navCount.textContent = chatTotal.toLocaleString();
@@ -258,16 +262,34 @@ export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptio
       const chats = summaries.filter(item => text(record(item).id) && !hiddenIds.has(item.id)).map(item => ({ ...item }));
       body.replaceChildren(); const profile = el('section', 'jb-mc-profile');
       const creator = text(character.creator).trim(); if (creator) profile.append(el('p', 'jb-mc-creator', creator.startsWith('@') ? creator : `@${creator}`));
+      const note = el('section', 'jb-mc-note'); note.setAttribute('aria-label', 'Creator’s Note');
+      note.append(el('h3', 'jb-mc-note-title', 'Creator’s Note'));
       const description = el('div', 'jb-mc-description');
-      const profileText = text(character.creator_notes).trim() || text(character.description).trim() || text(character.preview_description).trim();
+      description.id = `jb-mc-note-${encodeURIComponent(row.character_id)}`;
+      description.dataset.expanded = 'false';
+      const profileText = text(character.creator_notes).trim();
       if (profileText) {
         if (typeof ctx.dom.inject === 'function') {
           try { profileInjection = ctx.dom.inject(description, profileMarkup(profileText)); }
           catch { description.textContent = plain(profileText).slice(0, MAX_PROFILE_CHARS); }
         } else description.textContent = plain(profileText).slice(0, MAX_PROFILE_CHARS);
-      } else description.append(el('p', '', 'No character description.'));
-      if (profileText.length > MAX_PROFILE_CHARS) description.append(el('p', 'jb-mc-status', 'Preview shortened. View character to read the full profile.'));
-      profile.append(description); const actions = el('div', 'jb-mc-character-actions');
+      } else description.append(el('p', '', 'No creator’s note.'));
+      if (profileText.length > MAX_PROFILE_CHARS) description.append(el('p', 'jb-mc-status', 'This creator’s note was shortened for display.'));
+      note.append(description);
+      if (profileText) {
+        const toggle = el('button', 'jb-mc-note-toggle', 'Read full creator note'); toggle.type = 'button';
+        toggle.setAttribute('aria-expanded', 'false'); toggle.setAttribute('aria-controls', description.id);
+        const toggleNote = () => {
+          if (!current()) return;
+          const open = toggle.getAttribute('aria-expanded') !== 'true';
+          toggle.setAttribute('aria-expanded', String(open)); description.dataset.expanded = String(open);
+          toggle.textContent = open ? 'Show less' : 'Read full creator note';
+          if (!open) description.scrollTop = 0;
+        };
+        toggle.addEventListener('click', toggleNote); profileCleanup = () => toggle.removeEventListener('click', toggleNote);
+        note.append(toggle);
+      }
+      profile.append(note); const actions = el('div', 'jb-mc-character-actions');
       const start = button('＋ Start new chat', () => {
         if (!current() || start.disabled) return; start.disabled = true;
         void (async () => await options.startChat(row.character_id))().then(ok => {
