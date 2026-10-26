@@ -1,5 +1,6 @@
 import type { SpindleFrontendContext, SpindleModalHandle } from 'lumiverse-spindle-types';
 import { createNativePresetResolution, type Binding, type Scope } from './native-preset-scope';
+import { createCustomDefault } from './custom-default';
 
 type Json = Record<string, unknown>;
 type Preset = { id: string; name: string; provider: string; engine: string; parameters: Json; prompts: Json; metadata: Json; prompt_order: Json[]; cache_revision: number };
@@ -234,22 +235,28 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
     async function getDefault(): Promise<Preset> {
       // Registry rows omit metadata, and the native Default may be renamed.
       // Inspect every full-record page so a copied slug cannot select a wrong base.
-      let offset = 0; const found: Preset[] = [];
-      while (current()) {
-        const page = await api<Json>(`/presets?limit=100&offset=${offset}`);
-        if (!Array.isArray(page?.data) || typeof page.total !== 'number') throw new Error('invalid-presets');
-        for (const candidate of page.data) if (validPreset(candidate as Preset) && isNativeDefault(candidate as Preset)) found.push(candidate as Preset);
-        offset += page.data.length;
-        if (offset >= page.total) break;
-        if (!page.data.length) throw new Error('incomplete-presets');
+      try {
+        let offset = 0; const found: Preset[] = [];
+        while (current()) {
+          const page = await api<Json>(`/presets?limit=100&offset=${offset}`);
+          if (!Array.isArray(page?.data) || typeof page.total !== 'number') throw new Error('invalid-presets');
+          for (const candidate of page.data) if (validPreset(candidate as Preset) && isNativeDefault(candidate as Preset)) found.push(candidate as Preset);
+          offset += page.data.length;
+          if (offset >= page.total) break;
+          if (!page.data.length) throw new Error('incomplete-presets');
+        }
+        if (found.length === 1 && found[0].prompt_order.length) return found[0];
+      } catch (error) {
+        if (!current()) throw error;
       }
-      if (found.length !== 1) throw new Error(found.length ? 'ambiguous-default' : 'missing-default');
-      if (!found[0].prompt_order.length) throw new Error('invalid-default-layout');
-      return found[0];
+      // Deleted, duplicated or temporarily unreadable built-ins must not make
+      // the paste-your-own-prompt editor depend on another installed preset.
+      // This draft has no native ID: opening it never writes or rebinds anything.
+      return createCustomDefault();
     }
     function sourceBlock(preset: Preset, binding: Binding | null, mode: PromptMode) {
       const projection: Preset = { ...preset, prompt_order: preset.prompt_order.map(b => ({ ...b, ...(Object.hasOwn(binding?.block_states ?? {}, String(b.id)) ? { enabled: binding!.block_states[String(b.id)] } : {}) })) };
-      if (mode === 'custom' && isNativeDefault(preset)) {
+      if (mode === 'custom' && (isNativeDefault(preset) || !preset.id)) {
         const main = projection.prompt_order.find(b => b.id === defaultPromptId && !b.sealed && !b.marker && !b.isLocked && b.enabled !== false);
         if (main) return String(main.id);
       }
@@ -257,12 +264,12 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
     }
     function renderSource(base: PromptBase, preserveDraft = false) {
       sourceChoice.value = promptMode; presetField.hidden = promptMode !== 'preset';
-      const visible = new Map(choices.map(choice => [choice.id, choice])); visible.set(base.preset.id, base.preset);
-      presetChoice.replaceChildren(...[...visible.values()].map(choice => { const option = node('option', '', choice.name); option.value = choice.id; return option; })); presetChoice.value = base.preset.id;
-      sourceHelp.textContent = promptMode === 'custom' ? 'Your own prompt, using Lumiverse’s native Default layout. The original Default preset stays intact.' : useSavedOriginal() ? `Using “${base.preset.name}” directly, including its linked regex. Settings below show its saved values. No duplicate is created.` : `Editing a separate “${base.preset.name}” copy. Preset-linked regex stays with the original.`;
+      const visible = new Map(choices.map(choice => [choice.id, choice])); if (base.preset.id) visible.set(base.preset.id, base.preset);
+      presetChoice.replaceChildren(...[...visible.values()].map(choice => { const option = node('option', '', choice.name); option.value = choice.id; return option; })); presetChoice.value = base.preset.id || choices[0]?.id || '';
+      sourceHelp.textContent = promptMode === 'custom' ? !base.preset.id ? 'Lumiverse’s installed Default could not be used, so a standard base is prepared. Write or paste your own prompt; character details, memory and chat history stay included. It is saved only when you choose Save settings.' : base.preset.metadata._janiverse_standard_base ? 'Your own prompt, using a standard base with character details, memory and chat history included. Save settings to apply your changes.' : 'Your own prompt, using Lumiverse’s native Default layout. The original Default preset stays intact.' : useSavedOriginal() ? `Using “${base.preset.name}” directly, including its linked regex. Settings below show its saved values. No duplicate is created.` : `Editing a separate “${base.preset.name}” copy. Preset-linked regex stays with the original.`;
       customize.hidden = promptMode !== 'preset' || customizeCopy;
       nativeInfo.textContent = useSavedOriginal() ? 'The saved preset is used unchanged. Edit the original in Manage / import presets, or choose Customize a copy.' : 'Your character, persona, and chat memory stay included.';
-      promptField.querySelector('.jb-settings-label')!.textContent = promptMode === 'preset' && !base.blockId ? 'Additional instructions' : 'Global prompt';
+      promptField.querySelector('.jb-settings-label')!.textContent = promptMode === 'custom' ? 'Your prompt' : !base.blockId ? 'Additional instructions' : 'Global prompt';
       if (!preserveDraft || !promptDirty) { const target = base.preset.prompt_order.find(b => b.id === base.blockId); prompt.value = typeof target?.content === 'string' ? target.content : ''; }
       if (!preserveDraft || !prefillDirty) prefill.value = typeof rec(base.preset.prompts.completionSettings).assistantPrefill === 'string' ? String(rec(base.preset.prompts.completionSettings).assistantPrefill) : '';
       replyPrefix.open = !!prefill.value;
@@ -272,18 +279,22 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
       }
     }
     async function chooseSource(mode: PromptMode, presetId: string) {
-      if ((!loaded && !unresolvedScope) || saving || sourceLoading) return;
+      if (!current() || (!loaded && !unresolvedScope) || saving || loading) return;
       const version = ++sourceVersion; sourceLoading = true; lock(true);
       try {
-        const preset = mode === 'custom' ? await getDefault() : await api<Preset>(`/presets/${encodeURIComponent(presetId)}`);
+        let preset = mode === 'custom' ? await getDefault() : await api<Preset>(`/presets/${encodeURIComponent(presetId)}`);
         if (!validPreset(preset) || preset.provider !== 'loom') throw new Error('invalid-preset');
-        const binding = preset.id === loaded?.sourceId ? loaded.binding : await api<Binding>(`/preset-profiles/defaults?preset_id=${encodeURIComponent(preset.id)}`, 'GET', undefined, true);
+        let binding: Binding | null = null;
+        if (preset.id) {
+          try { binding = preset.id === loaded?.sourceId ? loaded.binding : await api<Binding>(`/preset-profiles/defaults?preset_id=${encodeURIComponent(preset.id)}`, 'GET', undefined, true); }
+          catch (error) { if (mode !== 'custom' || !current()) throw error; preset = createCustomDefault(); }
+        }
         if (!current() || version !== sourceVersion) return;
-        promptMode = mode; customizeCopy = false; staged = { preset, binding, blockId: sourceBlock(preset, binding, mode), ...(preset.id !== loaded?.sourceId ? { defaultsSourceId: preset.id } : {}) }; sourceDirty = true;
+        promptMode = mode; customizeCopy = false; staged = { preset, binding, blockId: sourceBlock(preset, binding, mode), ...(preset.id && preset.id !== loaded?.sourceId ? { defaultsSourceId: preset.id } : {}) }; sourceDirty = true;
         if (!loaded) loaded = { scope: unresolvedScope!, preset, binding: null, blockId: staged.blockId, sourceId: null };
         if (mode === 'preset') promptDirty = prefillDirty = samplersDirty = false;
         renderSource(staged, mode !== 'preset');
-        message(mode === 'preset' ? 'Saved preset prepared unchanged. Save settings to use it, or choose Customize a copy to edit it.' : `Prompt source prepared. Save settings to use it.${promptDirty || prefillDirty || samplersDirty ? ' Your unsaved text and generation edits were kept.' : ''}`, 'warning');
+        message(mode === 'preset' ? 'Saved preset prepared unchanged. Save settings to use it, or choose Customize a copy to edit it.' : `${preset.id ? 'Prompt source prepared.' : 'The installed Default could not be used. A standard base is prepared.'} Save settings to use it.${promptDirty || prefillDirty || samplersDirty ? ' Your unsaved text and generation edits were kept.' : ''}`, 'warning');
       } catch (error) {
         if (current() && version === sourceVersion) { sourceChoice.value = promptMode; presetChoice.value = (staged?.preset ?? loaded?.preset)?.id || choices[0]?.id || ''; message((error as Error).message === 'missing-default' ? 'Lumiverse’s built-in Default preset is unavailable. Choose a native preset instead.' : (error as Error).message === 'ambiguous-default' ? 'More than one preset carries Lumiverse’s Default identity. Choose a specific native preset instead.' : 'Could not load that prompt source. Your current draft is still here.', 'error'); }
       } finally { if (current() && version === sourceVersion) { sourceLoading = false; lock(!loaded); } }
@@ -311,7 +322,7 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
         if (!preset.prompt_order.length) preset = { ...preset, prompt_order: copy((await getDefault()).prompt_order) };
         if (!loadCurrent()) return;
         const owned = rec(preset.metadata[markerKey]);
-        promptMode = isNativeDefault(preset) || owned.owner === owner && owned.promptMode === 'custom' ? 'custom' : 'preset';
+        promptMode = !preset.id || isNativeDefault(preset) || owned.owner === owner && owned.promptMode === 'custom' ? 'custom' : 'preset';
         customizeCopy = owned.owner === owner && owned.scope === `${scope.kind}:${scope.id}`;
         loaded = { scope, preset, binding: resolved.binding, blockId: sourceBlock(preset, resolved.binding, promptMode), sourceId: resolved.preset_id };
         nativeInfo.textContent = 'Your character, persona, and chat memory stay included.';
@@ -401,7 +412,7 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
         }
         if (prefillDirty) next.prompts = { ...next.prompts, completionSettings: { ...rec(next.prompts.completionSettings), assistantPrefill: prefill.value } };
         if (samplersDirty) next.parameters = { ...next.parameters, samplerOverrides: { ...rec(next.parameters.samplerOverrides), ...values, enabled: enabled.checked } };
-        next.metadata = { ...next.metadata, [markerKey]: { ...owned, owner, scope: scopeKey, sourcePresetId: reuse ? owned.sourcePresetId : base.preset.id || loaded.sourceId, blockId: promptId, promptMode } };
+        next.metadata = { ...next.metadata, [markerKey]: { ...owned, owner, scope: scopeKey, sourcePresetId: reuse ? owned.sourcePresetId : base.preset.id || null, blockId: promptId, promptMode } };
         const body = { name: next.name, provider: next.provider, engine: next.engine, parameters: next.parameters, prompts: next.prompts, metadata: next.metadata, prompt_order: next.prompt_order };
         const beforeWrite = await getScope();
         if (beforeWrite.kind !== loaded.scope.kind || beforeWrite.id !== loaded.scope.id || beforeWrite.connectionId !== loaded.scope.connectionId || beforeWrite.raw !== loaded.scope.raw || beforeWrite.temporary !== loaded.scope.temporary) throw new Error('scope-changed');

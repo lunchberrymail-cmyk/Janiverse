@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 import { createPromptSettings } from '../src/prompt-settings';
+import { createCustomDefault } from '../src/custom-default';
 
 const originals = { document: globalThis.document, location: globalThis.location, fetch: globalThis.fetch };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -457,20 +458,132 @@ test('optional examples append only on explicit action and native manager callba
   button('Save settings').click(); expect(button('Manage / import presets').disabled).toBe(true); expect(button('Connect Illarin').disabled).toBe(true); editor.destroy(); allow(grants); await settle(); expect(writes()).toHaveLength(0);
 });
 
-test('missing native Default fails safely and still allows explicitly choosing an available saved preset', async () => {
+test('missing native Default opens an editable unsaved custom draft and still permits choosing a saved preset directly', async () => {
   selectedId = null; connection.preset_id = null; inherited = null; presets.delete('native-default'); let managed = 0;
   editor.destroy(); editor = createPromptSettings(ctx, { openPresetManager: () => { managed++; } }); await start();
-  expect(input('global-prompt').disabled).toBe(true); expect(button('Save settings').disabled).toBe(true); expect(root.textContent).toContain('built-in Default preset is unavailable'); expect(writes()).toHaveLength(0);
+  expect(input('prompt-source').value).toBe('custom'); expect(input('global-prompt').disabled).toBe(false); expect(button('Save settings').disabled).toBe(false); expect(root.textContent).toContain('saved only when you choose Save settings'); expect(writes()).toHaveLength(0);
   expect(button('Manage / import presets').disabled).toBe(false); button('Manage / import presets').click(); expect(managed).toBe(1);
   await choose('prompt-source', 'preset'); expect(input('prompt-preset').disabled).toBe(false); expect(input('global-prompt').disabled).toBe(true); expect(input('prompt-preset').value).toBe('original'); await save(); expect(bindings.get('chat/chat-1')?.preset_id).toBe('original'); expect(count).toBe(0);
 });
 
-test('Default discovery checks the native identity across pages and rejects duplicated native identities', async () => {
+test('Default discovery checks the native identity across pages and uses an independent draft for ambiguous identities', async () => {
   selectedId = null; connection.preset_id = null; inherited = null; const real = presets.get('native-default')!; real.name = 'Renamed native starter'; presets.clear();
   for (let i = 0; i < 101; i++) presets.set(`filler-${i}`, { ...base(), id: `filler-${i}`, name: i ? `Preset ${i}` : 'Default' }); presets.set(real.id, real);
   await start(); expect(input('prompt-source').value).toBe('custom'); expect(input('global-prompt').value).toBe(real.prompt_order[0].content); expect(calls.some(call => call.path === '/presets?limit=100&offset=100')).toBe(true); expect(writes()).toHaveLength(0);
   presets.set('duplicate-default', { ...structuredClone(real), id: 'duplicate-default' }); button('Reload saved settings').click(); await settle();
-  expect(input('global-prompt').disabled).toBe(true); expect(root.textContent).toContain('More than one preset carries'); expect(writes()).toHaveLength(0);
+  expect(input('prompt-source').value).toBe('custom'); expect(input('global-prompt').disabled).toBe(false); expect(root.textContent).toContain('saved only when you choose Save settings'); expect(writes()).toHaveLength(0);
+  expect(input('global-prompt').value).toBe(createCustomDefault().prompt_order[0].content); expect(input('prompt-preset').value).toBe('filler-0');
+});
+
+test('the bundled custom draft has native character, persona, scenario, examples, memory and history assembly without an installed identity', () => {
+  const draft = createCustomDefault(); const another = createCustomDefault();
+  expect(draft.id).toBe(''); expect(draft.provider).toBe('loom'); expect(draft.engine).toBe('classic'); expect(draft.metadata._lumiverse_preset_slug).toBeUndefined();
+  const main = draft.prompt_order.find(b => b.id === '019e62a4-7dba-7001-a422-10836ade35dd')!;
+  expect(main).toMatchObject({ enabled: true, marker: null, role: 'system', isLocked: false });
+  const content = draft.prompt_order.map(b => b.content).join('\n'); const markers = draft.prompt_order.map(b => b.marker);
+  expect(markers).toContain('chat_history');
+  for (const [marker, macro] of [['char_description', '{{description}}'], ['char_personality', '{{personality}}'], ['persona_description', '{{persona}}'], ['scenario', '{{scenario}}'], ['dialogue_examples', '{{mesExamples}}']]) {
+    expect(markers.includes(marker) || content.includes(macro)).toBe(true);
+  }
+  expect(content).toContain('{{loomSummary}}'); expect(content).toContain('{{memories}}');
+  for (const macro of ['{{cortexActive}}', '{{entities}}', '{{relationships}}', '{{arc}}', '{{memorySalience}}']) expect(content).toContain(macro);
+  expect(new Set(draft.prompt_order.map(b => b.id)).size).toBe(draft.prompt_order.length);
+  expect(draft.prompts.completionSettings).toMatchObject({ useSystemPrompt: true });
+  main.content = 'Mutated draft'; expect(another.prompt_order[0].content).not.toBe(main.content);
+});
+
+test.each(['missing', 'ambiguous', 'empty-layout'])('%s Default still accepts a long custom paste and saves a new native binding only on Save', async condition => {
+  if (condition === 'missing') presets.delete('native-default');
+  if (condition === 'ambiguous') presets.set('duplicate-default', { ...nativeDefault(), id: 'duplicate-default' });
+  if (condition === 'empty-layout') presets.get('native-default')!.prompt_order = [];
+  const originals = structuredClone([...presets]); const currentBinding = structuredClone(inherited);
+  await start(); await choose('prompt-source', 'custom');
+  expect(input('prompt-source').value).toBe('custom'); expect(input('global-prompt').disabled).toBe(false); expect(input('prompt-preset').value).toBe('original');
+  expect(writes()).toHaveLength(0); expect(inherited).toEqual(currentBinding); expect(bindings.size).toBe(0);
+  const longPrompt = 'My own full prompt. {{char}} responds to {{user}}.\n'.repeat(12000); change('global-prompt', longPrompt); await save();
+  const saved = presets.get('copy-1')!;
+  expect(saved.prompt_order.find((b: Row) => b.id === '019e62a4-7dba-7001-a422-10836ade35dd').content).toBe(longPrompt);
+  expect(saved.prompt_order.slice(1)).toEqual(createCustomDefault().prompt_order.slice(1));
+  expect(saved.metadata._janitor_bridge).toMatchObject({ sourcePresetId: null, promptMode: 'custom' });
+  expect(bindings.get('chat/chat-1')?.preset_id).toBe(saved.id); expect(count).toBe(1); expect(selectedId).toBe('original');
+  for (const [id, value] of originals) expect(presets.get(id)).toEqual(value);
+  expect(calls.some(call => call.path === '/presets/' || call.path === '/preset-profiles/defaults?preset_id=')).toBe(false);
+  await save(); expect(count).toBe(1); expect(presets.get('copy-1')?.metadata._janitor_bridge.sourcePresetId).toBeNull();
+});
+
+test.each(['list-error', 'list-network', 'defaults-error'])('custom selection remains editable with %s and preserves dirty copy edits', async condition => {
+  const fetchSaved = globalThis.fetch; let failDiscovery = false;
+  globalThis.fetch = (async (url: any, init: RequestInit = {}) => {
+    const path = String(url);
+    if (failDiscovery && condition.startsWith('list') && path.startsWith('/api/v1/presets?')) {
+      if (condition === 'list-network') throw new TypeError('Network error');
+      return json({}, 503);
+    }
+    if (failDiscovery && condition === 'defaults-error' && path === '/api/v1/preset-profiles/defaults?preset_id=native-default') return json({}, 503);
+    return fetchSaved(url, init);
+  }) as typeof fetch;
+  await start(); change('global-prompt', 'Unsaved custom prompt'); change('assistant-prefill', 'Unsaved prefix'); change('temperature', '1.4');
+  failDiscovery = true; await choose('prompt-source', 'custom');
+  expect(input('prompt-source').value).toBe('custom'); expect(input('global-prompt').disabled).toBe(false); expect(input('global-prompt').value).toBe('Unsaved custom prompt');
+  expect(input('assistant-prefill').value).toBe('Unsaved prefix'); expect(input('temperature').value).toBe('1.4'); expect(writes()).toHaveLength(0);
+  await save(); expect(count).toBe(1); expect(bindings.get('chat/chat-1')?.preset_id).toBe('copy-1'); expect(presets.get('copy-1')?.metadata._janitor_bridge.sourcePresetId).toBeNull();
+});
+
+test.each(['scope-binding', 'source-revision', 'scope'])('a fallback custom draft retains the %s conflict check before any mutation', async conflictKind => {
+  presets.delete('native-default'); await start(); await choose('prompt-source', 'custom'); change('global-prompt', 'Keep my unsaved text');
+  if (conflictKind === 'scope-binding') inherited = { ...inherited!, captured_at: 999 };
+  if (conflictKind === 'source-revision') presets.get('original')!.cache_revision++;
+  if (conflictKind === 'scope') chatId = 'chat-2';
+  await save(); expect(writes()).toHaveLength(0); expect(input('global-prompt').value).toBe('Keep my unsaved text');
+  expect(root.textContent).toContain(conflictKind === 'scope' ? 'active chat or API configuration changed' : 'changed while you were editing');
+});
+
+test('a failed fallback binding Save reuses its created native preset on retry without inventing source provenance', async () => {
+  presets.delete('native-default'); await start(); await choose('prompt-source', 'custom'); change('global-prompt', 'My draft');
+  rejectBinding = true; await save(); expect(count).toBe(1); expect(bindings.size).toBe(0);
+  rejectBinding = false; await save(); expect(count).toBe(1); expect(bindings.get('chat/chat-1')?.preset_id).toBe('copy-1');
+  expect(presets.get('copy-1')?.metadata._janitor_bridge.sourcePresetId).toBeNull();
+});
+
+test('revoked permissions keep an editable fallback draft and prevent all native writes', async () => {
+  presets.delete('native-default'); await start(); await choose('prompt-source', 'custom'); change('global-prompt', 'Keep draft'); grants = [];
+  await save(); expect(writes()).toHaveLength(0); expect(input('global-prompt').value).toBe('Keep draft'); expect(button('Enable permissions').hidden).toBe(false);
+});
+
+test('a first-run standard base stays local until Save and then binds a real native preset to the API configuration', async () => {
+  selectedId = null; connection.preset_id = null; inherited = null; presets.delete('native-default'); chatId = null;
+  dom.reconfigure({ url: 'http://localhost/' }); await start();
+  expect(input('prompt-source').value).toBe('custom'); expect(input('global-prompt').disabled).toBe(false); expect(writes()).toHaveLength(0);
+  change('global-prompt', 'My first custom prompt'); await save();
+  expect(count).toBe(1); expect(bindings.get('connection/connection-1')?.preset_id).toBe('copy-1'); expect(connection.preset_id).toBe('copy-1'); expect(selectedId).toBeNull();
+  expect(presets.get('copy-1')?.metadata._janitor_bridge.sourcePresetId).toBeNull(); expect(root.querySelector('.jb-settings-prompt-source-help')?.textContent).toContain('standard base');
+  expect(calls.some(call => call.path === '/presets/' || call.path === '/preset-profiles/defaults?preset_id=')).toBe(false);
+});
+
+test.each(['success', 'failure'])('the latest Custom selection wins over a slower saved-preset %s response', async responseKind => {
+  presets.set('alternate', { ...base(), id: 'alternate', name: 'Slow saved preset' });
+  const fetchSaved = globalThis.fetch; let finish!: (response: Response) => void; let pending = true;
+  globalThis.fetch = (async (url: any, init: RequestInit = {}) => {
+    if (String(url) === '/api/v1/presets/alternate' && pending) { pending = false; return new Promise<Response>(resolve => { finish = resolve; }); }
+    return fetchSaved(url, init);
+  }) as typeof fetch;
+  await start(); await choose('prompt-preset', 'alternate'); expect(input('global-prompt').disabled).toBe(true);
+  await choose('prompt-source', 'custom'); expect(input('prompt-source').value).toBe('custom'); expect(input('global-prompt').disabled).toBe(false);
+  change('global-prompt', 'The latest custom draft'); finish(responseKind === 'success' ? json(presets.get('alternate')) : json({}, 503)); await settle();
+  expect(input('prompt-source').value).toBe('custom'); expect(input('global-prompt').value).toBe('The latest custom draft'); expect(input('global-prompt').disabled).toBe(false); expect(writes()).toHaveLength(0);
+  expect(root.querySelector('label[for$="-global-prompt"] .jb-settings-label')?.textContent).toBe('Your prompt');
+});
+
+test('a newer saved-preset selection wins over slower Custom discovery without applying any draft', async () => {
+  presets.set('alternate', { ...base(), id: 'alternate', name: 'Chosen saved preset' });
+  const fetchSaved = globalThis.fetch; let finish!: (response: Response) => void; let pending = true;
+  globalThis.fetch = (async (url: any, init: RequestInit = {}) => {
+    if (String(url) === '/api/v1/presets?limit=100&offset=0' && pending) { pending = false; return new Promise<Response>(resolve => { finish = resolve; }); }
+    return fetchSaved(url, init);
+  }) as typeof fetch;
+  await start(); await choose('prompt-source', 'custom'); await choose('prompt-preset', 'alternate');
+  finish(json({ data: [...presets.values()], total: presets.size, offset: 0, limit: 100 })); await settle();
+  expect(input('prompt-source').value).toBe('preset'); expect(input('prompt-preset').value).toBe('alternate'); expect(input('global-prompt').disabled).toBe(true); expect(writes()).toHaveLength(0);
 });
 
 test('legacy Janiverse copies retaining the builtin slug do not hide the genuine Default or get modified on discovery', async () => {
