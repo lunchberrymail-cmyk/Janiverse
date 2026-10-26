@@ -132,6 +132,15 @@ test('mounts only the declared visual slots and preserves native chat DOM and li
   expect(document.querySelectorAll('.jb-card')).toHaveLength(24);
 });
 
+test('optional state selector failures leave the home layout usable without requesting permissions', async () => {
+  let permissionRequests = 0;
+  ctx.state = { get() { throw new Error('SELECTOR_UNKNOWN'); }, subscribe() { throw new Error('PERMISSION_DENIED'); } };
+  ctx.permissions.request = async () => { permissionRequests++; return []; };
+  expect(() => start()).not.toThrow(); await flush();
+  expect(document.querySelector('.jb-home-masthead')).not.toBeNull(); expect(document.querySelectorAll('.jb-card')).toHaveLength(24);
+  expect(permissionRequests).toBe(0); expect(native.outerHTML).toBe(nativeMarkup);
+});
+
 test('Home and My Chats select native home views while chat uses its own Back control', async () => {
   dom.window.history.replaceState({}, '', '/chat/existing'); start(); await flush();
   const nav = roots.get('landing_header')!.querySelector('nav')!;
@@ -450,6 +459,7 @@ test('untrusted names and creator notes are rendered as text without executable 
   expect(document.querySelector('.jb-description')!.textContent).toBe('Safe creator note');
   expect(document.querySelectorAll('.jb-grid img, .jb-grid script, .jb-grid svg')).toHaveLength(0);
   (document.querySelector('.jb-card') as HTMLElement).click(); await flush();
+  const note = document.querySelector<HTMLDetailsElement>('.jb-profile-notes')!; note.open = true; note.dispatchEvent(new dom.window.Event('toggle'));
   expect(document.querySelector('.jb-preview-body .jb-profile-notes')!.textContent).toContain('Safe creator note');
   expect(document.querySelectorAll('.jb-preview script, .jb-preview svg, .jb-preview [onerror], .jb-preview [onload]')).toHaveLength(0);
   expect(document.querySelector('.jb-preview img')!.getAttribute('src')).toBe('/api/v1/characters/unsafe/avatar?size=lg');
@@ -496,15 +506,18 @@ test('All Characters includes saved cards with no chats and never builds the lib
   expect(document.querySelector('.jb-profile-window')).not.toBeNull(); expect(calls).toHaveLength(0); expect(chatReads).toBe(0);
 });
 
-test('opening an All Characters card goes directly to full Creator’s Notes without mounting chat history or starting a conversation', async () => {
+test('opening an All Characters card offers collapsed Creator’s Notes without starting a conversation', async () => {
   let chatReads = 0; characterChatsResult = async () => { chatReads++; return []; };
   characterResult = async id => ({ id, name: 'Selected card', creator_notes: 'Public card introduction', description: 'Private definition' });
   start(); await flush(); (document.querySelector('.jb-card') as HTMLElement).click(); await flush();
   expect(document.querySelector('.jb-preview-body .jb-character-profile')).toBeNull();
   expect(document.querySelector('.jb-preview-body.jb-character-profile')).not.toBeNull();
+  const note = document.querySelector<HTMLDetailsElement>('.jb-profile-notes')!; expect(note.open).toBe(false);
+  expect(document.querySelector('.jb-profile-rich')!.childElementCount).toBe(0);
+  note.open = true; note.dispatchEvent(new dom.window.Event('toggle'));
   expect(document.querySelector('.jb-preview-body')!.textContent).toContain('Public card introduction');
-  expect(document.querySelector('.jb-preview-body details')!.textContent).toContain('Private definition');
-  expect((document.querySelector('.jb-preview-body details') as HTMLDetailsElement).open).toBe(false);
+  expect(document.querySelector('.jb-profile-details')!.textContent).toContain('Private definition');
+  expect((document.querySelector('.jb-profile-details') as HTMLDetailsElement).open).toBe(false);
   expect(document.querySelector('[data-surface-id="character_preview_panel"]')).toBeNull();
   expect(surfaceHandlers.size).toBe(0); expect(chatReads).toBe(0); expect(calls).toHaveLength(0);
   expect([...document.querySelectorAll('.jb-preview button')].some(button => button.textContent === 'Pin')).toBe(false);
@@ -547,6 +560,7 @@ test('Read Creator’s Notes stays on Home, renders the selected full note, and 
   start(); await flush(); (document.querySelector('.jb-card-cta')!.closest('button') as HTMLButtonElement).click(); await flush();
   expect(location.pathname).toBe('/'); expect(calls).toHaveLength(0);
   expect(document.querySelectorAll('[role=dialog]')).toHaveLength(1); expect(surfaceDestroyed).toBe(0);
+  const note = document.querySelector<HTMLDetailsElement>('.jb-profile-notes')!; expect(note.open).toBe(false); note.open = true; note.dispatchEvent(new dom.window.Event('toggle'));
   expect(document.querySelector('.jb-profile-notes')!.textContent).toContain('Full creator note.');
   expect(document.querySelector('.jb-profile-notes .jb-profile-rich h2')!.textContent).toBe('Public introduction');
   expect(document.querySelector('.jb-profile-details')!.textContent).toContain('Definition stays in details.');
@@ -764,4 +778,45 @@ test('without an invocable JAR drawer import opens the card file/link modal with
   expect(input.multiple).toBe(true); expect(input.accept).toContain('.png'); expect(input.accept).toContain('.json');
   expect(calls).toHaveLength(0); expect(requests).toHaveLength(priorRequests);
   expect(permissionsRead).toBe(0); expect(permissionRequests).toBe(0);
+});
+
+test('first-install welcome on native Characters waits for an explicit Home click before navigating or acknowledging', async () => {
+  dom.window.history.replaceState({}, '', '/characters'); activeChat = { chatId: null, characterId: null };
+  let permissionRequests = 0; const writes: Array<{ key: string; value: unknown }> = [];
+  ctx.settings = { get: async () => undefined, set: async (key: string, value: unknown) => { writes.push({ key, value }); } };
+  ctx.permissions.request = async () => { permissionRequests++; return []; };
+  const invokeNative = ctx.host.surfaces.invoke;
+  ctx.host.surfaces.invoke = async (ref: Ref, params?: Record<string, string>) => {
+    await invokeNative(ref, params);
+    if (ref.kind === 'route' && ref.id === '/') dom.window.history.replaceState({}, '', '/');
+  };
+  start(); await flush();
+  const welcome = document.querySelector('.jb-welcome')!;
+  expect(welcome.getAttribute('aria-label')).toBe('Welcome to Janiverse');
+  expect(welcome.textContent).toContain('No permissions enabled yet? That’s normal.');
+  expect(dom.window.location.pathname).toBe('/characters'); expect(calls).toHaveLength(0); expect(writes).toHaveLength(0);
+  expect(permissionRequests).toBe(0); expect(native.outerHTML).toBe(nativeMarkup);
+  findButton('Open Janiverse Home', welcome).click(); await flush();
+  expect(calls).toEqual([{ ref: { kind: 'route', id: '/' }, params: undefined }]);
+  expect(dom.window.location.pathname).toBe('/'); expect(document.documentElement.getAttribute('data-janitor-bridge-view')).toBe('browse');
+  expect(document.querySelector('.jb-welcome')).toBeNull();
+  expect(writes).toEqual([{ key: 'onboarding:welcome_completed_v1', value: true }]);
+  expect(permissionRequests).toBe(0); expect(requests.every(request => !request.options.method || request.options.method === 'GET')).toBe(true);
+  expect(native.outerHTML).toBe(nativeMarkup);
+});
+
+test('More Start here reopens first-run orientation after dismissal without routing or requesting grants', async () => {
+  dom.window.history.replaceState({}, '', '/characters'); activeChat = { chatId: null, characterId: null };
+  const saved = new Map<string, unknown>(); let permissionRequests = 0, writes = 0;
+  ctx.settings = { get: async (key: string) => saved.get(key), set: async (key: string, value: unknown) => { writes++; saved.set(key, value); } };
+  ctx.permissions.request = async () => { permissionRequests++; return []; };
+  start(); await flush(); const first = document.querySelector('.jb-welcome')!;
+  findButton('Got it', first).click(); await flush();
+  expect(document.querySelector('.jb-welcome')).toBeNull(); expect(saved.get('onboarding:welcome_completed_v1')).toBe(true); expect(writes).toBe(1);
+  const more = roots.get('landing_header')!.querySelector('.jb-more') as HTMLDetailsElement; more.open = true;
+  findButton('Start here', more).click(); await flush();
+  const reopened = document.querySelector('.jb-welcome')!; expect(reopened).not.toBe(first);
+  expect(findButton('Open Janiverse Home', reopened)).not.toBeNull(); expect(dom.window.location.pathname).toBe('/characters');
+  expect(calls).toHaveLength(0); expect(permissionRequests).toBe(0); expect(native.outerHTML).toBe(nativeMarkup);
+  findButton('Got it', reopened).click(); await flush(); expect(writes).toBe(1);
 });

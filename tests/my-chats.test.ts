@@ -51,7 +51,7 @@ beforeEach(() => {
   hiddenResult = async () => []; startResult = () => {}; injections = []; uninjected = [];
   metadataResult = async () => ({ data: [], total: 0 }); personaResult = async () => ({ data: [], total: 0 });
   chatDetailResult = async id => ({ id, character_id: id.startsWith('mira') ? 'mira' : 'ada', metadata: { active_persona_id: null } });
-  characterResult = async id => ({ id, name: id === 'ada' ? 'Ada' : 'Mira', image_id: null, description: '<b>Character description</b>', personality: 'Thoughtful', tags: ['Adventure'] });
+  characterResult = async id => ({ id, name: id === 'ada' ? 'Ada' : 'Mira', image_id: null, creator_notes: '<b>Creator note</b>', description: '<b>Character description</b>', personality: 'Thoughtful', tags: ['Adventure'] });
   globalThis.fetch = (async (input: unknown, init: RequestInit = {}) => {
     const url = new URL(String(input), dom.window.location.href); fetches.push({ url, init });
     if (init.method && init.method !== 'GET') { mutations.push(init.method); throw new Error('Unexpected mutation'); }
@@ -117,7 +117,7 @@ describe('My Chats reads native conversations without changing them', () => {
     expect(characterReads).toEqual(['ada']); expect(characterChatReads).toEqual(['ada']); expect(fetches.map(item => item.url.pathname)).toEqual(['/api/v1/chats/hidden-from-recent', '/api/v1/chats']);
     expect([...root().querySelectorAll('.jb-mc-date-heading')].map(node => node.textContent)).toEqual(['Today', 'Yesterday']);
     expect([...root().querySelectorAll('.jb-mc-conversation-name')].map(node => node.textContent)).toEqual(['Today conversation', 'Yesterday conversation']);
-    expect(root().textContent).not.toContain('Older conversation'); expect(root().querySelector('.jb-mc-description b')?.textContent).toBe('Character description');
+    expect(root().textContent).not.toContain('Older conversation'); expect(root().querySelector('.jb-mc-description b')?.textContent).toBe('Creator note');
     expect(mutations).toHaveLength(0); expect(started).toHaveLength(0); expect(invoked).toHaveLength(0);
   });
   test('conversation navigation, profile view and Start new chat are separate explicit native actions', async () => {
@@ -194,12 +194,46 @@ describe('My Chats filters and asynchronous lifecycle', () => {
   });
   test('untrusted names and previews remain text, while profile formatting removes active content', async () => {
     groupedResult = async () => ({ data: [{ ...groups[0], character_name: '<img src=x onerror=alert(1)>' }], total: 1 });
-    characterResult = async id => ({ id, description: '<p onclick="alert(1)">Safe <b>bio</b><img src="https://illustration.example/image.png" onerror="alert(1)"><script>bad()</script><iframe src="https://evil.example"></iframe><a href="javascript:alert(1)">Bad URL</a></p>' });
+    characterResult = async id => ({ id, creator_notes: '<p onclick="alert(1)">Safe <b>bio</b><img src="https://illustration.example/image.png" onerror="alert(1)"><script>bad()</script><iframe src="https://evil.example"></iframe><a href="javascript:alert(1)">Bad URL</a></p>' });
     setup().activate(); await flush(); expect(root().querySelector('.jb-mc-character-name')?.textContent).toBe('<img src=x onerror=alert(1)>');
     expect(root().querySelector('.jb-mc-resume-preview')?.textContent).toBe('Safe preview'); expect(root().querySelector('.jb-mc-resume-preview img')).toBeNull();
     btn('<img src=x onerror=alert(1)>, 4 chats').click(); await flush(); const profile = root().querySelector('.jb-mc-description')!;
     expect(profile.querySelector('b')?.textContent).toBe('bio'); expect(profile.querySelector('img')?.getAttribute('src')).toBe('https://illustration.example/image.png');
     expect(profile.querySelectorAll('script,iframe,[onclick],[onerror],a[href^="javascript:"]')).toHaveLength(0); expect(mutations).toHaveLength(0);
+  });
+  test('long rich creator notes start bounded and expand only by explicit choice without reloading chats', async () => {
+    characterResult = async id => ({ id, creator_notes: '<p>' + 'A long creator note. '.repeat(200) + '</p><img src="https://example.com/art.png"><a href="https://example.com/card">Original card</a>', description: 'Private definition stays out of the chat browser.' });
+    const style = document.createElement('style'); style.textContent = await Bun.file(new URL('../src/my-chats.css', import.meta.url)).text(); document.head.append(style);
+    const native = document.querySelector('#native')!, nativeMarkup = native.outerHTML;
+    setup().activate(); await flush(); btn('Ada, 4 chats').click(); await flush();
+    const note = root().querySelector('.jb-mc-description') as HTMLElement;
+    const toggle = btn('Read full creator note'), requestsBefore = fetches.length;
+    expect(dom.window.getComputedStyle(note).maxHeight).toBe('360px'); expect(dom.window.getComputedStyle(note).overflow).toBe('auto');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false'); expect(toggle.getAttribute('aria-controls')).toBe(note.id);
+    expect(note.querySelector('img')?.getAttribute('src')).toBe('https://example.com/art.png');
+    expect(note.querySelector('a')?.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(root().querySelectorAll('.jb-mc-conversation-card')).toHaveLength(3); expect(root().textContent).not.toContain('Private definition');
+    toggle.click(); expect(toggle.textContent).toBe('Show less'); expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(dom.window.getComputedStyle(note).maxHeight).toBe('none');
+    note.scrollTop = 150; toggle.click(); expect(toggle.textContent).toBe('Read full creator note'); expect(note.scrollTop).toBe(0);
+    expect(dom.window.getComputedStyle(note).maxHeight).toBe('360px'); expect(fetches).toHaveLength(requestsBefore);
+    expect(characterReads).toEqual(['ada']); expect(characterChatReads).toEqual(['ada']); expect(injections).toHaveLength(1);
+    expect(mutations).toHaveLength(0); expect(native.outerHTML).toBe(nativeMarkup);
+  });
+  test('missing creator notes never fall back to private character definitions', async () => {
+    characterResult = async id => ({ id, creator_notes: '  ', description: 'Private character definition', preview_description: 'Old copied definition' });
+    setup().activate(); await flush(); btn('Ada, 4 chats').click(); await flush();
+    expect(root().querySelector('.jb-mc-description')?.textContent).toBe('No creator’s note.');
+    expect(root().textContent).not.toContain('Private character definition'); expect(root().textContent).not.toContain('Old copied definition');
+    expect(root().querySelector('.jb-mc-note-toggle')).toBeNull(); expect(injections).toHaveLength(0);
+    expect(root().querySelectorAll('.jb-mc-conversation-card')).toHaveLength(3);
+  });
+  test('collapsing a character releases its rich note and removes its detached expansion control', async () => {
+    setup().activate(); await flush(); const header = btn('Ada, 4 chats'); header.click(); await flush();
+    const toggle = btn('Read full creator note'); header.click();
+    expect(uninjected).toHaveLength(1); toggle.click(); expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(injections).toHaveLength(1); expect(mutations).toHaveLength(0);
+    header.click(); await flush(); expect(btn('Read full creator note').getAttribute('aria-expanded')).toBe('false');
   });
   test('Continue resolves only actual native persona bindings and never substitutes a global or copied display name', async () => {
     recentResult = async () => ({ data: [{ ...recent[0], metadata: { active_persona_id: 'persona-a' } }, { ...recent[1], metadata: { active_persona_id: null, persona_id: 'old-import-id', persona_name: 'Unbound guessed name' } }], total: 2 });

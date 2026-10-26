@@ -3,6 +3,10 @@ import { JSDOM } from 'jsdom';
 import { mountCharacterProfile } from '../src/character-profile';
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 5));
+async function openNotes() {
+  const notes = root.querySelector('.jb-profile-notes') as HTMLDetailsElement;
+  notes.open = true; notes.dispatchEvent(new dom.window.Event('toggle')); await flush(); return notes;
+}
 let dom: any, root: HTMLElement, cleanup: (() => void) | undefined;
 let originalDocument: any, originalLocation: any, originalDOMParser: any;
 let reads: string[], injections: Element[], removed: Element[], ctx: any;
@@ -26,21 +30,26 @@ afterEach(() => {
   globalThis.document = originalDocument; globalThis.location = originalLocation; globalThis.DOMParser = originalDOMParser;
 });
 
-test('reads the exact selected character and shows full notes with the definition collapsed separately', async () => {
+test('reads the exact selected character and loads creator notes only when their closed disclosure opens', async () => {
   cleanup = mountCharacterProfile(ctx, root, 'selected-id'); await flush();
   expect(reads).toEqual(['selected-id']); expect(root.querySelector('h2')!.textContent).toBe('Selected card');
   expect(root.querySelector('img')!.getAttribute('src')).toBe('/api/v1/characters/selected-id/avatar?size=lg');
+  expect((root.querySelector('.jb-profile-notes') as HTMLDetailsElement).open).toBe(false);
+  expect(root.querySelector('.jb-profile-notes')!.textContent).not.toContain('Full creator note.'); expect(injections).toHaveLength(0);
+  const notes = await openNotes();
   expect(root.querySelector('.jb-profile-notes')!.textContent).toContain('Full creator note.');
   expect(root.querySelector('.jb-profile-notes')!.textContent).not.toContain('Private definition.');
   expect(root.querySelector('.jb-profile-details')!.textContent).toContain('Private definition.');
-  expect((root.querySelector('details') as HTMLDetailsElement).open).toBe(false);
+  expect((root.querySelector('.jb-profile-details') as HTMLDetailsElement).open).toBe(false);
+  notes.open = false; notes.dispatchEvent(new dom.window.Event('toggle')); await flush(); await openNotes();
+  expect(injections).toHaveLength(1);
   expect(root.hasAttribute('aria-busy')).toBe(false);
 });
 
 test('public pictures and links survive while scripts, event handlers, frames and dangerous URLs are removed', async () => {
   result = async id => ({ id, name: '<img src=x onerror=alert(1)>', creator_notes: '<script>bad()</script><iframe src="https://example.com"></iframe><p onclick="bad()">Read <strong>this</strong>.</p><img src="https://example.com/art.png" onerror="bad()"><a href="javascript:bad()">bad link</a><a href="https://example.com/page">Good link</a>', description: '<script>Definition is text</script>' });
   cleanup = mountCharacterProfile(ctx, root, 'safe'); await flush();
-  const notes = root.querySelector('.jb-profile-notes')!;
+  const notes = await openNotes();
   expect(root.querySelector('h2')!.textContent).toBe('<img src=x onerror=alert(1)>');
   expect(notes.querySelectorAll('script,iframe,[onclick],[onerror]')).toHaveLength(0);
   expect(notes.querySelector('img')!.getAttribute('src')).toBe('https://example.com/art.png');
@@ -52,7 +61,7 @@ test('public pictures and links survive while scripts, event handlers, frames an
 
 test('empty creator notes never expose the definition as their fallback', async () => {
   result = async id => ({ id, name: 'Empty note', creator_notes: '', description: 'Definition only' });
-  cleanup = mountCharacterProfile(ctx, root, 'empty'); await flush();
+  cleanup = mountCharacterProfile(ctx, root, 'empty'); await flush(); await openNotes();
   expect(root.querySelector('.jb-profile-notes')!.textContent).toBe('Creator’s NoteNo creator’s note.');
   expect(injections).toHaveLength(0);
 });
@@ -67,7 +76,7 @@ test('mismatched responses show a retry without exposing another card', async ()
 });
 
 test('dismissal clears injected content and a late read cannot restore it', async () => {
-  cleanup = mountCharacterProfile(ctx, root, 'loaded'); await flush();
+  cleanup = mountCharacterProfile(ctx, root, 'loaded'); await flush(); await openNotes();
   cleanup(); expect(removed).toHaveLength(1); expect(root.childNodes).toHaveLength(0);
   let finish!: (value: unknown) => void;
   result = () => new Promise(resolve => { finish = resolve; });
@@ -79,19 +88,28 @@ test('dismissal clears injected content and a late read cannot restore it', asyn
 test('injection failure keeps the note readable as inert text', async () => {
   ctx.dom.inject = () => { throw new Error('Unavailable'); };
   result = async id => ({ id, name: 'Fallback', creator_notes: '<b>Readable note</b>' });
-  cleanup = mountCharacterProfile(ctx, root, 'fallback'); await flush();
+  cleanup = mountCharacterProfile(ctx, root, 'fallback'); await flush(); await openNotes();
   expect(root.querySelector('.jb-profile-rich')!.textContent).toBe('<b>Readable note</b>');
   expect(root.querySelector('.jb-profile-rich b')).toBeNull();
 });
 
 test('card preview keeps notes as a short inert introduction while preserving the separate full-notes reader', async () => {
   result = async id => ({ id, name: 'Card preview', creator_notes: '<p>' + 'Story '.repeat(100) + '</p><img src="https://example.com/art.png">', description: 'Card definition' });
-  cleanup = mountCharacterProfile(ctx, root, 'preview', { notesPreview: true }); await flush();
+  cleanup = mountCharacterProfile(ctx, root, 'preview', { notesPreview: true }); await flush(); await openNotes();
   const content = root.querySelector('.jb-profile-rich')!;
   expect(content.textContent!.length).toBe(351); expect(content.textContent!.endsWith('…')).toBe(true);
   expect(content.querySelector('img')).toBeNull(); expect(injections).toHaveLength(0);
   expect((root.querySelector('.jb-profile-details') as HTMLDetailsElement).open).toBe(false);
-  cleanup(); cleanup = mountCharacterProfile(ctx, root, 'preview'); await flush();
+  cleanup(); cleanup = mountCharacterProfile(ctx, root, 'preview'); await flush(); await openNotes();
   expect(root.querySelector('.jb-profile-notes img')).not.toBeNull();
   expect(root.querySelector('.jb-profile-rich')!.textContent!.length).toBeGreaterThan(350);
+});
+
+test('closing the reader before opening notes prevents detached disclosures from loading pictures', async () => {
+  result = async id => ({ id, name: 'Lazy pictures', creator_notes: '<img src="https://example.com/art.png">' });
+  cleanup = mountCharacterProfile(ctx, root, 'lazy'); await flush();
+  const notes = root.querySelector('.jb-profile-notes') as HTMLDetailsElement;
+  expect(notes.querySelector('img')).toBeNull(); cleanup();
+  notes.open = true; notes.dispatchEvent(new dom.window.Event('toggle')); await flush();
+  expect(injections).toHaveLength(0); expect(root.childNodes).toHaveLength(0);
 });
