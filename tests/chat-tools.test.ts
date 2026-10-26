@@ -10,7 +10,7 @@ function deferred<T>() { let resolve!: (value: T) => void; const promise = new P
 const settle = async () => { for (let n = 0; n < 20; n++) await Promise.resolve(); };
 function setup() {
   tools = createChatTools(ctx, { onLayoutChange: layout => layouts.push(layout),
-    openApi: () => { actions.push('api'); }, openMemory: () => { actions.push('memory'); },
+    openSettings: () => { actions.push('settings'); }, openMemory: () => { actions.push('memory'); },
     openPersonas: () => { actions.push('personas'); }, invoke: async ref => { actions.push(ref.kind + ':' + ref.id); return true; },
   }); return tools;
 }
@@ -106,7 +106,7 @@ test.each([
 });
 
 test('unavailable extension manager keeps the recommendation and allows retry', async () => {
-  tools = createChatTools(ctx, { onLayoutChange() {}, openApi() {}, openMemory() {}, openPersonas() {}, invoke: async () => false });
+  tools = createChatTools(ctx, { onLayoutChange() {}, openSettings() {}, openMemory() {}, openPersonas() {}, invoke: async () => false });
   tools.openHelp('extensions'); button('Polish my writing').click(); button('Open Extensions').click(); await settle();
   expect(document.querySelector('.jb-extension-result h3')!.textContent).toBe('Hone');
   expect(document.querySelector('.jb-chat-guide-status')!.textContent).toContain('unavailable');

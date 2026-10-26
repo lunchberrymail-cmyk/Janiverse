@@ -18,7 +18,6 @@ import visualCSS from './visual-style.css' with { type: 'text' };
 import frauncesFont from '../assets/fonts/fraunces-latin.woff2';
 import juraFont from '../assets/fonts/jura-latin.woff2';
 import { createChatMemory } from './memory';
-import { createApiSettings } from './api-settings';
 import { createPromptSettings } from './prompt-settings';
 import { icon } from './icons';
 import { createBrand } from './brand';
@@ -73,7 +72,7 @@ export function setup(ctx: SpindleFrontendContext) {
     navigate: section => {
       if (section === 'memory') { const chatId = ctx.getActiveChat()?.chatId; if (chatId) openMemory(chatId); }
       else if (section === 'customize') openCustomize();
-      else openApi();
+      else openSettings();
     },
   });
   const memory = createChatMemory(settingsWindow.context('memory'), {
@@ -92,13 +91,12 @@ export function setup(ctx: SpindleFrontendContext) {
   });
   const chatTools = createChatTools(ctx, {
     onLayoutChange: layout => composer.setEnabled(layout === 'janitorai'),
-    openApi,
+    openSettings,
     openMemory: () => { const chatId = ctx.getActiveChat()?.chatId; if (chatId) openMemory(chatId); },
     openPersonas: () => invoke({ kind: 'drawer_tab', id: 'personas' }),
     invoke,
   });
   const promptSettings = createPromptSettings(settingsWindow.context('settings'), {
-    openConnection: openConnections,
     openPresetManager: () => {
       void invoke({ kind: 'drawer_tab', id: 'loom' }).then(opened => {
         if (opened) settingsWindow.close();
@@ -110,35 +108,22 @@ export function setup(ctx: SpindleFrontendContext) {
       });
     },
   });
-  const apiSettings = createApiSettings(settingsWindow.context('settings'), {
-    openInstructions: () => openPrompt('prompt'),
-    openGeneration: () => openPrompt('generation'),
-    openNativeConnections: openConnections,
-    mountPreferences: target => {
-      const preferences = promptSettings.mount(target);
-      const footer = target.querySelector<HTMLElement>('.jb-prompt-settings-inline > .jb-settings-actions');
-      const apiRoot = target.closest<HTMLElement>('.jb-api-settings');
-      let footerObserver: MutationObserver | undefined;
-      if (footer) {
-        footer.classList.add('jb-settings-window-footer', 'jb-settings');
-        const savePreferences = footer.querySelector<HTMLButtonElement>('.jb-settings-save');
-        if (savePreferences) savePreferences.textContent = 'Save prompt & generation';
-        target.closest('.jb-settings-window-root')?.append(footer);
-        if (apiRoot && typeof MutationObserver === 'function') {
-          const syncFooter = () => { footer.inert = apiRoot.getAttribute('aria-busy') === 'true'; };
-          footerObserver = new MutationObserver(syncFooter);
-          footerObserver.observe(apiRoot, { attributes: true, attributeFilter: ['aria-busy'] });
-          syncFooter();
-        }
-      }
-      const promo = createPresetPromo(ctx);
-      target.parentElement?.prepend(promo.root);
-      return { refresh() { preferences.refresh(); }, destroy() { footerObserver?.disconnect(); preferences.destroy(); promo.destroy(); footer?.remove(); } };
-    },
-    onApplied: () => { void refreshConnection(); },
-  });
   const customize = createCustomize(ctx, { settings: () => openPrompt('generation'), memory: chatId => openMemory(chatId) });
-  function openApi() { apiSettings.open(); }
+  function openSettings() {
+    if (disposed) return;
+    const editor = settingsWindow.context('settings').ui.showModal({ title: 'Prompt and generation settings' });
+    editor.root.classList.add('jb-settings', 'jb-settings-combined');
+    const promo = createPresetPromo(ctx); editor.root.append(promo.root);
+    const preferences = promptSettings.mount(editor.root);
+    const footer = editor.root.querySelector<HTMLElement>('.jb-prompt-settings-inline > .jb-settings-actions');
+    if (footer) {
+      footer.classList.add('jb-settings-window-footer', 'jb-settings');
+      const savePreferences = footer.querySelector<HTMLButtonElement>('.jb-settings-save');
+      if (savePreferences) savePreferences.textContent = 'Save prompt & generation';
+      editor.root.closest('.jb-settings-window-root')?.append(footer);
+    }
+    editor.onDismiss(() => { preferences.destroy(); promo.destroy(); footer?.remove(); });
+  }
   function openConnections() {
     if (disposed) return;
     void invoke({ kind: 'drawer_tab', id: 'connections' }).then(opened => {
@@ -219,7 +204,7 @@ export function setup(ctx: SpindleFrontendContext) {
     ['Start here', () => welcome.open()],
     ['Import characters', openImport],
     ['Import card file or link', () => cardImport.open()],
-    ['API Settings', openApi],
+    ['API Settings', openConnections],
     ['Prompt', () => openPrompt('prompt')],
     ['Generation Settings', () => openPrompt('generation')],
   ] as const) menu.append(button(label, () => { more.open = false; action(); }, 'jb-menu-link'));
@@ -243,7 +228,7 @@ export function setup(ctx: SpindleFrontendContext) {
   const chatAction = (label: string, action: () => void, picture: Parameters<typeof icon>[0]) => {
     const item = button(label, () => { chatMenu.open = false; action(); }, 'jb-menu-link'); item.setAttribute('role', 'menuitem'); item.prepend(icon(picture)); chatMenuItems.append(item); return item;
   };
-  chatAction('Settings', openApi, 'settings');
+  chatAction('Settings', openSettings, 'settings');
   const memoryMenuItem = chatAction('Chat Memory', () => { const chatId = ctx.getActiveChat()?.chatId; if (chatId) openMemory(chatId); }, 'memory');
   chatAction('Customize', openCustomize, 'customize');
   chatAction('New Chat', () => { const characterId = ctx.getActiveChat()?.characterId; if (characterId) void invoke({ kind: 'entity_action', id: 'character_chat' }, { characterId, mode: 'new' }); }, 'new-chat');
@@ -610,7 +595,7 @@ export function setup(ctx: SpindleFrontendContext) {
   try { if (consumePersonaSetupHandoff(window.sessionStorage)) void invoke({ kind: 'drawer_tab', id: 'personas' }); }
   catch { /* Storage can be unavailable; ordinary setup still works. */ }
   return () => {
-    disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); tutorialWindow?.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); apiSettings.destroy(); promptSettings.destroy(); settingsWindow.destroy();
+    disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); tutorialWindow?.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
     cleanups.reverse().forEach(cleanup => cleanup()); mounts.forEach(root => root.replaceChildren());
     if (oldView === null) document.documentElement.removeAttribute('data-janitor-bridge-view'); else document.documentElement.setAttribute('data-janitor-bridge-view', oldView);
     chatTools.destroy();

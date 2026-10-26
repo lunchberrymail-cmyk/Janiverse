@@ -6,7 +6,7 @@ type GuideView = 'lumiverse' | 'extensions';
 export const COMPOSER_LAYOUT_KEY = 'chat:composer_layout_v1';
 type Options = {
   onLayoutChange(layout: ComposerLayout): void;
-  openApi(): void;
+  openSettings(): void;
   openMemory(): void;
   openPersonas(): void | Promise<boolean>;
   invoke(ref: SpindleHostSurfaceRef): Promise<boolean>;
@@ -100,7 +100,7 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
       const row = node('div', 'jb-chat-help-row'), text = node('div'); text.append(node('h4', '', title), node('p', '', detail));
       row.append(text, actionButton(label, action, needsChat)); native.append(row);
     }
-    row('API, prompt & generation', 'Choose your model, instructions, and reply settings.', 'Open settings', options.openApi);
+    row('Prompt & generation', 'Choose your instructions and reply settings.', 'Open settings', options.openSettings);
     row('Summary', 'Keep a running recap. Configure and edit it in the native Summary window.', 'Open Summary', () => options.invoke({ kind: 'drawer_tab', id: 'summary' }), true);
     row('Memory Cortex', 'Set up automatic recall of people, relationships, and events.', 'Set up Memory Cortex', () => options.invoke({ kind: 'settings_tab', id: 'memoryCortex' }));
     row('Chat Memory', 'Write important facts to include in this chat’s prompt.', 'Open memory', options.openMemory, true);

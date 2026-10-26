@@ -244,25 +244,27 @@ test('chat API Settings opens native Connections, preserves chat settings, and r
   expect(api.title).toContain('model-two'); expect(api.classList.contains('jb-api-missing')).toBe(false);
 });
 
-test('Settings composes connection setup, prompt and generation editors with a persistent footer and cleans them on tab changes', async () => {
+test('chat Settings contains prompt and generation with its preset banner and footer, without an API editor', async () => {
   dom.window.history.replaceState({}, '', '/chat/active_chat');
   activeChat = { chatId: 'active_chat', characterId: 'char_current' }; start(); await flush();
   findButton('Settings', roots.get('chat_header_left')!).click(); await flush();
   const window = document.querySelector('.jb-settings-window-root')!;
-  const api = window.querySelector('.jb-api-settings')!;
-  const promo = api.querySelector('.jb-preset-promo')!;
-  const connection = api.querySelector('.jb-api-native-setup')!;
-  expect(promo.compareDocumentPosition(connection) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+  const settings = window.querySelector('.jb-settings-combined')!;
+  const promo = settings.querySelector('.jb-preset-promo')!;
+  const preferences = settings.querySelector('.jb-prompt-settings-inline')!;
+  expect(settings.querySelector('.jb-api-settings, .jb-api-native-setup, .jb-api-config-card, .jb-api-provider-card')).toBeNull();
+  expect(promo.compareDocumentPosition(preferences) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
   expect([...promo.querySelectorAll('a')].map(anchor => [anchor.textContent, anchor.href])).toEqual([
     ['Browse presets', 'https://illarin.com/browse?type=preset'],
     ['Presets on Discord', 'https://discord.com/channels/1484149939167821915/1484156801447497792'],
     ['Join Discord', 'https://discord.gg/28rBWVFfCu'],
   ]);
-  expect(api.querySelector('[aria-label="Improve chat memory"]')).toBeNull();
-  expect([...api.querySelectorAll('button')].some(button => button.textContent === 'Set up summaries')).toBe(false);
-  expect(api.classList.contains('jb-settings-combined')).toBe(true);
-  expect(api.querySelector('input[name="temperature-slider"]')).not.toBeNull();
-  expect(api.querySelector('textarea[name="global-prompt"]')).not.toBeNull();
+  expect(settings.querySelector('[aria-label="Improve chat memory"]')).toBeNull();
+  expect([...settings.querySelectorAll('button')].some(button => ['Set up summaries', 'Connection', 'Open Lumiverse Connections', 'Save & Use'].includes(button.textContent || ''))).toBe(false);
+  expect(settings.querySelector('input[name="temperature-slider"]')).not.toBeNull();
+  expect(settings.querySelector('textarea[name="global-prompt"]')).not.toBeNull();
+  expect(requests.some(request => /^\/api\/v1\/(?:connections|providers)$/.test(request.url.pathname))).toBe(false);
+  expect(requests.every(request => !request.options.method || request.options.method === 'GET')).toBe(true);
   const footer = window.querySelector('.jb-settings-window-footer')!;
   expect(footer.parentElement).toBe(window);
   expect(findButton('Save prompt & generation', footer)).not.toBeNull();
@@ -885,14 +887,13 @@ test('Add API connection opens the native Connections drawer without loading the
   expect(permissionRequests).toBe(0);
 });
 
-test('opening native Connections from Settings closes the Janiverse window', async () => {
+test('Home API Settings opens native Connections directly without a custom connection window', async () => {
   start(); await flush();
+  const previousRequests = requests.length;
   findButton('API Settings', roots.get('landing_header')!).click(); await flush();
-  const window = document.querySelector('.jb-settings-window-root')!;
-  expect(window.querySelector<HTMLElement>('.jb-api-native-setup')!.hidden).toBe(false);
-  findButton('Open Lumiverse Connections', window).click(); await flush();
   expect(calls).toEqual([{ ref: { kind: 'drawer_tab', id: 'connections' }, params: undefined }]);
   expect(document.querySelector('.jb-settings-window-root')).toBeNull();
+  expect(requests).toHaveLength(previousRequests);
   expect(requests.every(request => !request.options.method || request.options.method === 'GET')).toBe(true);
 });
 

@@ -266,8 +266,7 @@
   .jb-settings-card { padding: 13px; }
 }
 
-/* Janitor-style Settings: provider, configurations, prompt and samplers share
-   one scroll area. Native connections and preset saves remain separate. */
+/* Prompt and generation controls share one scroll area and save footer. */
 .jb-settings-combined > .jb-settings-tabs { display: none; }
 .jb-settings-combined > .jb-settings-section { margin: 0; padding: 0; border: 0; }
 .jb-settings-combined .jb-memory-promo { margin-bottom: 10px; }

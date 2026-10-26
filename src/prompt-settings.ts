@@ -10,7 +10,7 @@ type PromptMode = 'custom' | 'preset';
 type PresetChoice = { id: string; name: string; provider: string };
 type PromptBase = { preset: Preset; binding: Binding | null; blockId: string | null; defaultsSourceId?: string };
 type EditorHandle = Pick<SpindleModalHandle, 'root' | 'dismiss' | 'onDismiss'>;
-export type PromptSettingsOptions = { openConnection?: () => void; openPresetManager?: () => void; openIllarinSettings?: () => void };
+export type PromptSettingsOptions = { openPresetManager?: () => void; openIllarinSettings?: () => void };
 const owner = 'janitor_bridge';
 const markerKey = '_janitor_bridge';
 const defaultSlug = 'lumiverse-builtin-default-loom';
@@ -51,7 +51,7 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
   function open(initial: 'prompt' | 'generation' = 'prompt') {
     if (disposed) return;
     active?.modal.dismiss();
-    const modal = ctx.ui.showModal({ title: 'API Settings', width: 720, maxHeight: 880 });
+    const modal = ctx.ui.showModal({ title: 'Prompt and generation settings', width: 720, maxHeight: 880 });
     render(modal, initial, false);
   }
   function mount(target: HTMLElement) {
@@ -76,12 +76,11 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
     let staged: PromptBase | undefined, choices: PresetChoice[] = [], unresolvedScope: Scope | undefined;
     const heading = node('h2', '', 'Instructions');
     const intro = node('p', 'jb-settings-intro', 'Set how your character responds.');
-    const tabs = node('div', 'jb-settings-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', 'API Settings');
+    const tabs = node('div', 'jb-settings-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', 'Prompt and generation settings');
     const promptPanel = node('div', 'jb-settings-panel'); const generationPanel = node('div', 'jb-settings-panel');
     promptPanel.id = `${suffix}-prompt`; generationPanel.id = `${suffix}-generation`;
     const tabButtons: Array<{ button: HTMLButtonElement; tab: 'prompt' | 'generation' }> = [];
     const button = (label: string, fn: () => void, cls = 'jb-button') => { const result = node('button', cls, label); result.type = 'button'; result.addEventListener('click', fn); return result; };
-    if (options.openConnection) tabs.append(button('Connection', () => { modal.dismiss(); options.openConnection?.(); }, 'jb-settings-tab'));
     for (const [label, tab] of [['Instructions', 'prompt'], ['Generation', 'generation']] as const) {
       const item = button(label, () => show(tab), 'jb-settings-tab'); item.setAttribute('role', 'tab'); item.id = `${suffix}-tab-${tab}`; item.setAttribute('aria-controls', `${suffix}-${tab}`); tabButtons.push({ button: item, tab }); tabs.append(item);
     }
