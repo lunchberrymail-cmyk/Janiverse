@@ -1,0 +1,68 @@
+/* Character pages follow the portrait / definition layout on JanitorAI. */
+.jb-profile-window { padding: 0; min-width: 0; }
+.jb-character-profile { container-type: inline-size; min-width: 0; overflow-wrap: anywhere; }
+.jb-profile-layout { display: grid; grid-template-columns: minmax(0, 1.04fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+.jb-profile-card { min-width: 0; padding: 14px; border: 1px solid #e7e6e9; border-radius: 11px; background: linear-gradient(145deg, #606164, #484a4f); box-shadow: inset 0 0 0 2px #ffffff12, 0 4px 15px #0003; }
+.jb-profile-heading { display: block; margin: 0; }
+.jb-profile-heading .jb-profile-title { margin: 0 2px 16px; font: 600 32px/1.15 var(--jb-font-display, Georgia, serif); letter-spacing: -.5px; color: #fff; }
+.jb-profile-media { position: relative; width: 100%; min-height: 160px; overflow: hidden; border: 1px solid #ffffff26; border-radius: 9px; background: linear-gradient(145deg, #524461, #322e3c); }
+.jb-profile-no-image { aspect-ratio: 1; }
+.jb-profile-avatar-fallback { position: absolute; inset: 0; display: grid; place-items: center; font: 500 100px var(--jb-font-display, Georgia, serif); color: #d9caee; }
+.jb-profile-media .jb-profile-portrait { position: relative; display: block; width: 100%; height: auto; border-radius: 0; }
+.jb-profile-creator { display: inline-block; margin: 11px 0 13px; padding: 7px 10px; border: 1px solid #b39b573d; border-radius: 8px; background: #252326; color: #d1cbd9; font-size: 13px; line-height: 1.5; }
+.jb-profile-creator a { color: #c6afff; font-weight: 700; text-decoration: none; }
+.jb-profile-creator a:hover { text-decoration: underline; }
+.jb-profile-notes { border: 0; padding: 13px; border-radius: 9px; background: #2e2f33; }
+.jb-profile-notes > summary { color: #c8c0d6; font: 600 11px/1.5 var(--jb-font-card, inherit); letter-spacing: .6px; text-transform: uppercase; cursor: pointer; }
+.jb-profile-notes[open] > .jb-profile-rich { margin-top: 15px; }
+.jb-profile-rich { color: #ede9f4; font-size: 13px; line-height: 1.75; white-space: pre-wrap; }
+.jb-profile-rich > div > :first-child { margin-top: 0; }
+.jb-profile-rich > div > :last-child { margin-bottom: 0; }
+.jb-profile-rich :is(h1,h2,h3,h4,h5,h6) { margin-block: 20px 12px; font: 600 22px/1.3 var(--jb-font-display, Georgia, serif); color: #f3eafc; }
+.jb-profile-rich :is(img,video) { display: block; max-width: 100%; height: auto; margin: 14px auto; border-radius: 7px; }
+.jb-profile-rich :is(pre,table) { max-width: 100%; overflow: auto; }
+.jb-profile-rich blockquote { margin-inline: 0; border-left: 2px solid #ab96db; padding-left: 14px; color: #d7cbe9; }
+.jb-profile-rich hr { margin-block: 22px; border: 0; border-top: 1px solid #ab96db66; }
+.jb-profile-rich a { color: #c4b2ff; }
+.jb-profile-meta { display: grid; gap: 13px; margin-top: 17px; color: #dedbe4; font-size: 11px; }
+.jb-profile-meta time { display: block; }
+.jb-profile-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.jb-profile-tags span { padding: 4px 8px; border: 1px solid #e2d8ef80; border-radius: 7px; color: #f0e7f8; font-size: 11px; line-height: 1.5; }
+.jb-profile-sidebar { min-width: 0; }
+.jb-profile-controls { margin-bottom: 24px; padding: 17px; border: 1px solid #ffffff1f; border-radius: 11px; background: #ffffff04; }
+.jb-profile-chat-actions { padding: 0; border: 0; }
+.jb-profile-chat-caption { margin: 0 0 12px; color: #d8c8f1; font: 600 20px/1.3 var(--jb-font-card, inherit); }
+.jb-profile-window .jb-profile-chat-actions .jb-button { width: 100%; min-height: 46px; padding: 12px 16px; border: 1px solid #c0a3ff80; background: linear-gradient(#c0aaff, #a58be9); box-shadow: inset 0 1px 0 #ffffff40, 0 3px 9px #0003; color: #241837; font-size: 15px; }
+.jb-profile-window .jb-profile-chat-actions .jb-button:hover:not(:disabled) { background: linear-gradient(#cdbbff, #b29aef); border-color: #d2beff; }
+.jb-profile-controls .jb-preview-actions { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0 0; }
+.jb-profile-controls .jb-preview-actions .jb-button { flex: 1 1 auto; min-height: 38px; padding: 8px 10px; font-size: 12px; }
+.jb-profile-controls .jb-preview-actions [aria-pressed=true] { background: #5a3b65; color: #ffb7f1; border-color: #bd8cbd; }
+.jb-profile-controls .jb-status { margin-bottom: 0; }
+.jb-profile-details { margin: 0; padding: 0; border: 0; }
+.jb-profile-definition-title { margin: 0 0 7px; color: #ded4ef; font: 600 21px/1.3 var(--jb-font-card, inherit); }
+.jb-profile-definition-help { margin: 0 0 18px; color: #b8b2c7; font-size: 12px; line-height: 1.6; }
+.jb-profile-field { margin: 0 0 11px; overflow: hidden; border: 1px solid #74609157; border-radius: 11px; background: #373347; box-shadow: 0 3px 9px #0001; }
+.jb-profile-field > summary { display: flex; align-items: center; gap: 9px; min-height: 49px; padding: 14px 15px; list-style: none; color: #ddd7e9; font: 600 13px/1.5 var(--jb-font-card, inherit); letter-spacing: .35px; text-transform: uppercase; cursor: pointer; }
+.jb-profile-field > summary::-webkit-details-marker { display: none; }
+.jb-profile-field > summary::after { content: ''; width: 8px; height: 8px; margin-left: auto; border: solid #ad91e2; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); flex: 0 0 auto; }
+.jb-profile-field[open] > summary::after { transform: rotate(225deg); }
+.jb-profile-field > summary:hover { background: #ae99ff0d; }
+.jb-profile-field-count { padding: 1px 7px; border-radius: 9px; background: #ffffff0b; color: #c3b2e6; font-size: 11px; }
+.jb-profile-field-body { padding: 4px 16px 16px; background: #2c2939; border-top: 1px solid #ae99ff17; }
+.jb-profile-field-body h3 { margin: 17px 0 8px; color: #cfb8f3; font-size: 13px; }
+.jb-profile-field-body p { margin: 12px 0 0; color: #e1dbe9; font-size: 13px; line-height: 1.75; white-space: pre-wrap; }
+.jb-profile-field-body .jb-profile-empty { color: #b7adc7; font-style: italic; }
+.jb-profile-window :is(button,summary,a,select):focus-visible { outline: 2px solid #c9adff; outline-offset: 3px; }
+@container (max-width: 680px) {
+  .jb-profile-layout { display: flex; flex-direction: column; gap: 18px; }
+  .jb-profile-card, .jb-profile-sidebar { display: contents; }
+  .jb-profile-heading { order: 1; width: 100%; padding: 13px; border: 1px solid #e7e6e9; border-radius: 10px; background: linear-gradient(145deg, #606164, #484a4f); }
+  .jb-profile-heading .jb-profile-title { font-size: 28px; }
+  .jb-profile-media .jb-profile-portrait { max-height: 560px; object-fit: contain; }
+  .jb-profile-controls { order: 2; width: 100%; margin: 0; }
+  .jb-profile-notes { order: 3; width: 100%; padding: 16px; border: 1px solid #ffffff26; }
+  .jb-profile-meta { order: 4; margin: 0; }
+  .jb-profile-details { order: 5; width: 100%; }
+  .jb-profile-window .jb-button, .jb-profile-field > summary, .jb-profile-notes > summary { min-height: 44px; }
+  .jb-profile-notes > summary { display: flex; align-items: center; }
+}

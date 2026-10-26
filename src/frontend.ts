@@ -15,6 +15,7 @@ import personaCreateCSS from './persona-create.css' with { type: 'text' };
 import tutorialCSS from './feature-tutorials.css' with { type: 'text' };
 import welcomeCSS from './welcome.css' with { type: 'text' };
 import visualCSS from './visual-style.css' with { type: 'text' };
+import characterProfileCSS from './character-profile.css' with { type: 'text' };
 import frauncesFont from '../assets/fonts/fraunces-latin.woff2';
 import juraFont from '../assets/fonts/jura-latin.woff2';
 import { createChatMemory } from './memory';
@@ -162,6 +163,7 @@ export function setup(ctx: SpindleFrontendContext) {
   cleanups.push(ctx.dom.addStyle(characterCreateCSS), ctx.dom.addStyle(personaCreateCSS), ctx.dom.addStyle(tutorialCSS), ctx.dom.addStyle(welcomeCSS), ctx.dom.addStyle(chatToolsCSS));
   cleanups.push(ctx.dom.addStyle(themeCSS), ctx.dom.addStyle(layoutCSS), ctx.dom.addStyle(uiCSS), ctx.dom.addStyle(settingsCSS), ctx.dom.addStyle(composerCSS), ctx.dom.addStyle(homeBannerCSS), ctx.dom.addStyle(cardImportCSS), ctx.dom.addStyle(myChatsCSS), ctx.dom.addStyle(soundCloudCSS), ctx.dom.addStyle(customizeCSS));
   cleanups.push(ctx.dom.addStyle(visualCSS.replace('__JB_FRAUNCES__', frauncesFont).replace('__JB_JURA__', juraFont)));
+  cleanups.push(ctx.dom.addStyle(characterProfileCSS));
   const status = el('p', 'jb-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   const navButtons: Array<{ node: HTMLButtonElement; view: View }> = [];
   async function invoke(ref: SpindleHostSurfaceRef, params?: Record<string, string>) {
@@ -514,7 +516,7 @@ export function setup(ctx: SpindleFrontendContext) {
     render(); return toggle;
   }
   function openProfile(characterId: string, name = 'Character profile', copies: Character[] = []) {
-    modal?.dismiss(); modal = ctx.ui.showModal({ title: name, width: 720, maxHeight: 800 });
+    modal?.dismiss(); modal = ctx.ui.showModal({ title: name, width: 1120, maxHeight: 1000 });
     const current = modal; current.root.classList.add('jb-preview', 'jb-profile-window');
     const actions = el('div', 'jb-preview-actions'); const localStatus = el('p', 'jb-status'); localStatus.setAttribute('role', 'status');
     const canStartChat = ctx.host.surfaces?.list(['entity_action']).some(s => s.id === 'character_chat' && s.invocable !== false) ?? false;
@@ -525,7 +527,7 @@ export function setup(ctx: SpindleFrontendContext) {
         if (disposed || modal !== current) return;
         chat.disabled = false; if (ok) current.dismiss(); else localStatus.textContent = 'Enable the extension’s Chats permission in Extensions to start chats here.';
       });
-    });
+    }, 'jb-button jb-primary');
     chat.disabled = !canStartChat;
     if (!canStartChat) localStatus.textContent = 'Starting a chat needs the extension’s Chats permission. You can still read and favorite this card.';
     const edit = button('Edit card', () => {
@@ -549,9 +551,11 @@ export function setup(ctx: SpindleFrontendContext) {
       select.addEventListener('change', () => { const copy = copies.find(copy => copy.id === select.value); if (copy && !disposed && modal === current) openProfile(copy.id, copy.name, copies); });
       label.append(select); picker.append(label, el('p', '', 'Choose a saved copy to read or use. Each keeps its own chats, favorites and lorebook links.')); current.root.append(picker);
     }
-    const body = el('div', 'jb-preview-body'); const chatActions = el('div', 'jb-profile-chat-actions'); chatActions.append(chat);
-    current.root.append(body, actions, localStatus, chatActions);
-    const cleanup = mountCharacterProfile(ctx, body, characterId);
+    const body = el('div', 'jb-preview-body'); const chatActions = el('div', 'jb-profile-chat-actions');
+    chatActions.append(el('p', 'jb-profile-chat-caption', 'Start a conversation'), chat);
+    const controls = el('div', 'jb-profile-controls'); controls.append(chatActions, actions, localStatus);
+    current.root.append(body);
+    const cleanup = mountCharacterProfile(ctx, body, characterId, { controls });
     current.onDismiss(() => { cleanup(); if (modal === current) modal = undefined; });
   }
   function preview(character: Character, copies?: Character[]) {

@@ -658,18 +658,18 @@ test('saved-copy selection keeps edited variants separate and uses the exact cop
   expect(groupedQueries).toHaveLength(0); expect(native.outerHTML).toBe(nativeMarkup);
 });
 
-test('opening an All Characters card offers collapsed Creator’s Notes without starting a conversation', async () => {
+test('opening an All Characters card shows the full introduction and definition panels without starting a conversation', async () => {
   let chatReads = 0; characterChatsResult = async () => { chatReads++; return []; };
   characterResult = async id => ({ id, name: 'Selected card', creator_notes: 'Public card introduction', description: 'Private definition' });
   start(); await flush(); (document.querySelector('.jb-card') as HTMLElement).click(); await flush();
   expect(document.querySelector('.jb-preview-body .jb-character-profile')).toBeNull();
   expect(document.querySelector('.jb-preview-body.jb-character-profile')).not.toBeNull();
-  const note = document.querySelector<HTMLDetailsElement>('.jb-profile-notes')!; expect(note.open).toBe(false);
-  expect(document.querySelector('.jb-profile-rich')!.childElementCount).toBe(0);
+  const note = document.querySelector<HTMLDetailsElement>('.jb-profile-notes')!; expect(note.open).toBe(true);
+  expect(document.querySelector('.jb-profile-rich')!.childElementCount).toBe(1);
   note.open = true; note.dispatchEvent(new dom.window.Event('toggle'));
   expect(document.querySelector('.jb-preview-body')!.textContent).toContain('Public card introduction');
   expect(document.querySelector('.jb-profile-details')!.textContent).toContain('Private definition');
-  expect((document.querySelector('.jb-profile-details') as HTMLDetailsElement).open).toBe(false);
+  expect([...document.querySelectorAll<HTMLDetailsElement>('.jb-profile-field')].every(field => !field.open)).toBe(true);
   expect(document.querySelector('[data-surface-id="character_preview_panel"]')).toBeNull();
   expect(surfaceHandlers.size).toBe(0); expect(chatReads).toBe(0); expect(calls).toHaveLength(0);
   expect([...document.querySelectorAll('.jb-preview button')].some(button => button.textContent === 'Pin')).toBe(false);
@@ -677,7 +677,8 @@ test('opening an All Characters card offers collapsed Creator’s Notes without 
   expect(findButton('Favorited')).not.toBeNull(); expect(findButton('Edit card')).not.toBeNull();
   expect(document.querySelector('.jb-profile-window')!.firstElementChild!.classList.contains('jb-character-profile')).toBe(true);
   expect(findButton('Start new chat').closest('.jb-profile-chat-actions')).not.toBeNull();
-  expect(findButton('Start new chat').classList.contains('jb-primary')).toBe(false);
+  expect(findButton('Start new chat').classList.contains('jb-primary')).toBe(true);
+  expect(findButton('Start new chat').closest('.jb-profile-sidebar')).not.toBeNull();
 });
 
 test('the separate explicit chat action starts a new chat rather than resuming the existing conversation', async () => {
@@ -712,11 +713,11 @@ test('Read Creator’s Notes stays on Home, renders the selected full note, and 
   start(); await flush(); (document.querySelector('.jb-card-cta')!.closest('button') as HTMLButtonElement).click(); await flush();
   expect(location.pathname).toBe('/'); expect(calls).toHaveLength(0);
   expect(document.querySelectorAll('[role=dialog]')).toHaveLength(1); expect(surfaceDestroyed).toBe(0);
-  const note = document.querySelector<HTMLDetailsElement>('.jb-profile-notes')!; expect(note.open).toBe(false); note.open = true; note.dispatchEvent(new dom.window.Event('toggle'));
+  const note = document.querySelector<HTMLDetailsElement>('.jb-profile-notes')!; expect(note.open).toBe(true);
   expect(document.querySelector('.jb-profile-notes')!.textContent).toContain('Full creator note.');
   expect(document.querySelector('.jb-profile-notes .jb-profile-rich h2')!.textContent).toBe('Public introduction');
   expect(document.querySelector('.jb-profile-details')!.textContent).toContain('Definition stays in details.');
-  expect((document.querySelector('.jb-profile-details') as HTMLDetailsElement).open).toBe(false);
+  expect([...document.querySelectorAll<HTMLDetailsElement>('.jb-profile-field')].every(field => !field.open)).toBe(true);
   expect(native.outerHTML).toBe(nativeMarkup);
   findButton('Edit card', document.querySelector('.jb-profile-window')!).click(); await flush();
   expect(calls).toEqual([{ ref: { kind: 'modal', id: 'character_editor' }, params: { id: 'char_0' } }]);
