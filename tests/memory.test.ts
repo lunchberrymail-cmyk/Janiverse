@@ -106,6 +106,17 @@ describe('native chat memory integration', () => {
     expect(roots[1].isConnected).toBe(false);
   });
 
+  test('Cancel is unavailable after Save starts and returns if the write fails', async () => {
+    let finish!: (value: Response) => void;
+    respond = async (_url, options) => options?.method === 'PATCH' ? new Promise(resolve => { finish = resolve; }) : json({ metadata: {} });
+    memory.open('chat'); await settle(); textarea().value = 'Facts'; saveButton().click(); await settle();
+    const cancel = [...roots[0].querySelectorAll('button')].find(button => button.textContent === 'Cancel')!;
+    expect(cancel.disabled).toBe(true); cancel.click(); expect(roots[0].isConnected).toBe(true);
+    finish(json({}, 500)); await settle();
+    expect(cancel.disabled).toBe(false); expect(textarea().value).toBe('Facts');
+    cancel.click(); expect(roots[0].isConnected).toBe(false);
+  });
+
   test('destroy during permission check prevents a pending write', async () => {
     let resolveGrant: (grant: string[]) => void = () => {};
     memory.destroy();

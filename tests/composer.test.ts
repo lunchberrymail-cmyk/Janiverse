@@ -17,6 +17,8 @@ let fetches: Array<{ url: string; signal?: AbortSignal | null }>;
 let callbacks: Set<() => void>;
 let subscriptions: Map<string, Set<() => void>>;
 let nativeBefore: string;
+let events: Map<string, Set<(payload:any)=>void>>;
+function emitGeneration(event:string, id=chatId, generationId='generation-1'){events.get(event)?.forEach(fn=>fn({chatId:id,generationId}));}
 let unavailableSelectors: Set<string>;
 const people = [
   { id: 'one', name: 'Avery', title: 'Explorer', image_id: 'avatar-one' },
@@ -31,6 +33,7 @@ function setup(actions: ComposerActions = {}) {
     getActiveChat: () => ({ chatId, characterId: 'character' }),
     composer: { getState: () => ({ mounted, chatId: composerChatId, text }), onChange(fn: () => void) { callbacks.add(fn); return () => callbacks.delete(fn); } },
     ui: { mount(point: string) { const root = document.createElement('div'); root.dataset.mount = point; document.body.append(root); return root; } },
+    events: {on(key:string,fn:(payload:any)=>void){const listeners=events.get(key)??new Set();listeners.add(fn);events.set(key,listeners);return()=>listeners.delete(fn);}},
     state: {
       get(key: string) { return key === 'persona.activeId' ? activePersonaId : key === 'setting:isStreaming' ? stream : null; },
       subscribe(key: string, fn: () => void) { if (unavailableSelectors.has(key)) throw new Error(`SELECTOR_UNKNOWN:${key}`); const rows = subscriptions.get(key) ?? new Set(); rows.add(fn); subscriptions.set(key, rows); return () => rows.delete(fn); },
@@ -49,7 +52,7 @@ beforeEach(() => {
   nativeBefore = selector('#native').outerHTML;
   chatId = composerChatId = 'chat-1'; activePersonaId = 'one'; text = ''; mounted = true; stream = false;
   granted = ['generation', 'chats']; grant = async () => [...granted]; requested = []; invoked = []; fetches = [];
-  callbacks = new Set(); subscriptions = new Map();
+  callbacks = new Set(); subscriptions = new Map(); events = new Map();
   unavailableSelectors = new Set();
   globalThis.fetch = (async (url, options) => {
     fetches.push({ url: String(url), signal: options?.signal });
@@ -66,7 +69,7 @@ describe('familiar composer controls preserve native draft and Send', () => {
     expect(buttons.map(button => button.textContent)).toEqual(['Enhance my draft', 'Write something for me', 'Summarize this chat']);
     expect(buttons.every(button => button.disabled)).toBe(true);
     expect(selector('#native').outerHTML).toBe(nativeBefore);
-    expect(fetches.every(call => call.url.startsWith('/api/v1/personas/'))).toBe(true);
+    expect(fetches.every(call => call.url.startsWith('/api/v1/personas/') || call.url.startsWith('/api/v1/generate/status/'))).toBe(true);
   });
 
   test('Enhance can open Hone setup without a draft and callbacks never send or replace the textarea', async () => {
@@ -86,9 +89,9 @@ describe('familiar composer controls preserve native draft and Send', () => {
     let writes = 0; setup({ onWriteForMe: () => { writes++; } }); await settle();
     composerChatId = 'old-chat'; emit(); expect(assistButton('Write something for me').disabled).toBe(true);
     assistButton('Write something for me').click(); expect(writes).toBe(0);
-    composerChatId = chatId; stream = true; emit('setting:isStreaming');
+    composerChatId = chatId; emitGeneration('GENERATION_STARTED');
     expect(assistButton('Write something for me').disabled).toBe(true);
-    stream = false; emit('setting:isStreaming');
+    emitGeneration('GENERATION_ENDED');
     expect(assistButton('Write something for me').disabled).toBe(false);
   });
 
@@ -168,4 +171,60 @@ describe('familiar composer controls preserve native draft and Send', () => {
     expect(assistButton('Write something for me').disabled).toBe(false);
     expect(callbacks.size).toBe(1); expect(subscriptions.has('chat.active')).toBe(true);
   });
+});
+
+test('initial status recovers a running reply even when another chat emits generation events', async () => {
+  const transport = globalThis.fetch; let finish!: (response: Response) => void;
+  globalThis.fetch = ((url: any, options: any) => String(url).includes('/generate/status/')
+    ? new Promise<Response>(resolve => { finish = resolve; }) : transport(url, options)) as typeof fetch;
+  setup({ onSummarize() {} });
+  emitGeneration('GENERATION_STARTED', 'other-chat');
+  finish(json({ active: true, generationId: 'existing' })); await settle();
+  expect(assistButton('Summarize this chat').disabled).toBe(true);
+  emitGeneration('GENERATION_STOPPED', chatId, 'existing');
+  expect(assistButton('Summarize this chat').disabled).toBe(false);
+});
+
+test('late initial status cannot revive a reply that already ended', async () => {
+  const transport = globalThis.fetch; let finish!: (response: Response) => void;
+  globalThis.fetch = ((url: any, options: any) => String(url).includes('/generate/status/')
+    ? new Promise<Response>(resolve => { finish = resolve; }) : transport(url, options)) as typeof fetch;
+  setup({ onSummarize() {} });
+  emitGeneration('GENERATION_ENDED', chatId, 'existing');
+  finish(json({ active: true, generationId: 'existing' })); await settle();
+  expect(assistButton('Summarize this chat').disabled).toBe(false);
+});
+
+test('persona edits invalidate the loaded picker and active persona chip', async () => {
+  const transport = globalThis.fetch; let renamed = false;
+  globalThis.fetch = ((url: any, options: any) => {
+    if (!renamed) return transport(url, options);
+    const updated = people.map(person => person.id === 'one' ? { ...person, name: 'Renamed' } : person);
+    return Promise.resolve(String(url).endsWith('/personas/one') ? json(updated[0]) : json({ data: updated, total: updated.length }));
+  }) as typeof fetch;
+  setup(); await settle(); selector<HTMLButtonElement>('.jb-composer-persona').click(); await settle();
+  renamed = true; events.get('PERSONA_CHANGED')?.forEach(callback => callback({})); await settle();
+  expect(selector('.jb-composer-persona-name').textContent).toBe('Renamed');
+  expect(personaOption('Renamed')).toBeDefined();
+});
+
+test('real generation events block summary without an unsupported state selector', async () => {
+  unavailableSelectors.add('setting:isStreaming');
+  let summarized=0; setup({onSummarize:()=>{summarized++;}}); await settle();
+  emitGeneration('GENERATION_STARTED');
+  selector<HTMLButtonElement>('.jb-assist-toggle').click();
+  expect(assistButton('Summarize this chat').disabled).toBe(true);
+  assistButton('Summarize this chat').click(); await settle(); expect(summarized).toBe(0);
+  emitGeneration('GENERATION_ENDED'); expect(assistButton('Summarize this chat').disabled).toBe(false);
+});
+test.each(['before','after'])('composer Escape shields host document listeners registered %s', async (order) => {
+  let stopped=0;
+  const host=(e:KeyboardEvent)=>{if(e.key==='Escape') stopped++;};
+  if(order==='before') document.addEventListener('keydown',host);
+  setup(); await settle();
+  if(order==='after') document.addEventListener('keydown',host);
+  selector<HTMLButtonElement>('.jb-assist-toggle').click();
+  assistButton('Enhance my draft').dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+  expect(selector<HTMLElement>('.jb-composer-popover').hidden).toBe(true); expect(stopped).toBe(0);
+  document.removeEventListener('keydown',host);
 });

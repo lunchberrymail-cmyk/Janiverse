@@ -124,9 +124,9 @@ export function createStreamingSettings(ctx: SpindleFrontendContext) {
       const states = Object.fromEntries(saved.prompt_order.filter(block => typeof block.id === 'string').map(block => [String(block.id), block.enabled === true]));
       const binding = await api<Binding>(`/preset-profiles/chat/${encodeURIComponent(loaded.scope.id)}`, 'PUT', { preset_id: saved.id, block_states: states, ...(loaded.resolved.binding?.prompt_variables ? { prompt_variables: clone(loaded.resolved.binding.prompt_variables) } : {}) });
       if (!binding) throw new Error('The native chat binding could not be confirmed. Reopen Customize.');
-      loaded.preset = clone(saved); loaded.resolved = { preset_id: saved.id, binding: clone(binding) }; loaded.enabled = enabled; loaded.pending = undefined;
       const verified = await resolver.effective(loaded.scope);
       if (verified.preset_id !== saved.id) throw new Error('The settings were saved, but the chat binding could not be verified. Reopen Customize.');
+      loaded.preset = clone(saved); loaded.resolved = { preset_id: saved.id, binding: clone(binding) }; loaded.enabled = enabled; loaded.pending = undefined;
       return { enabled, available: true };
     } catch (error) {
       if (attemptedUpdate) {

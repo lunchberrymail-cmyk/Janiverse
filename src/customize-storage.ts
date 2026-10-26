@@ -8,7 +8,7 @@ export type Appearance = {
 };
 export type WallpaperRef = { image_id: string; type: 'image' | 'video' };
 export type WallpaperSettings = Json & { global: WallpaperRef | null; mobile?: WallpaperRef | null; opacity: number; blur: number; fit: 'cover' | 'contain' | 'fill' };
-export type CustomizeSnapshot = { appearance: Appearance; appearanceEnabled: boolean; wallpaper: WallpaperSettings; chatWallpaper: WallpaperRef | null; canEditBackground: boolean };
+export type CustomizeSnapshot = { appearance: Appearance; appearanceEnabled: boolean; wallpaper: WallpaperSettings; chatWallpaper: WallpaperRef | null; fallbackWallpaper?: WallpaperRef | null; canEditBackground: boolean };
 export type CustomizeChanges = { appearance?: Appearance; wallpaper?: { opacity?: number; blur?: number; fit?: 'cover' | 'contain' | 'fill' }; background?: { file: File } | { remove: true } };
 export const appearanceOverrideName = 'JanitorBridgeChatAppearance';
 export const fontFamilies: Record<string, string> = {
@@ -64,13 +64,14 @@ function wallpaperValue(value: unknown): WallpaperSettings {
   const item = rec(value);
   return { ...item, global: reference(item.global), ...(Object.hasOwn(item, 'mobile') ? { mobile: reference(item.mobile) } : {}), opacity: typeof item.opacity === 'number' && Number.isFinite(item.opacity) ? Math.min(1, Math.max(0, item.opacity)) : defaultWallpaper.opacity, blur: typeof item.blur === 'number' && Number.isFinite(item.blur) ? Math.min(8, Math.max(0, item.blur)) : 0, fit: ['cover', 'contain', 'fill'].includes(String(item.fit)) ? item.fit as WallpaperSettings['fit'] : 'cover' };
 }
-export async function loadCustomize(ctx: SpindleFrontendContext, chatId: string, signal?: AbortSignal): Promise<CustomizeSnapshot> {
+export async function loadCustomize(ctx: SpindleFrontendContext, chatId: string, signal?: AbortSignal, mobile = false): Promise<CustomizeSnapshot> {
   const [overridesValue, wallpaper, grants] = await Promise.all([setting('componentOverrides', signal), setting('wallpaper', signal), ctx.permissions.getGranted()]);
   abortIfNeeded(signal);
   const entry = rec(rec(overridesValue)[appearanceOverrideName]);
   const canEditBackground = !!chatId && grants.includes('chats');
   const chat = canEditBackground ? rec(await request(`/chats/${encodeURIComponent(chatId)}?messages=false`, signal)) : {};
-  return { appearance: appearanceFromCSS(entry.css), appearanceEnabled: entry.enabled !== false, wallpaper: wallpaperValue(wallpaper), chatWallpaper: reference(rec(chat.metadata).wallpaper), canEditBackground };
+  const metadata = rec(chat.metadata), settings = wallpaperValue(wallpaper);
+  return { appearance: appearanceFromCSS(entry.css), appearanceEnabled: entry.enabled !== false, wallpaper: settings, chatWallpaper: reference(metadata[mobile ? 'mobile_wallpaper' : 'wallpaper']), fallbackWallpaper: mobile ? reference(metadata.wallpaper) ?? settings.mobile ?? settings.global : settings.global, canEditBackground };
 }
 export class CustomizeSaveError extends Error {
   readonly saved: string[];
@@ -78,7 +79,7 @@ export class CustomizeSaveError extends Error {
   constructor(message: string, saved: string[], uploadedImageId?: string) { super(message); this.name = 'CustomizeSaveError'; this.saved = [...saved]; this.uploadedImageId = uploadedImageId; }
 }
 /** Save only chosen categories, merging fresh native settings immediately before writes. */
-export async function saveCustomize(ctx: SpindleFrontendContext, chatId: string, changes: CustomizeChanges, signal?: AbortSignal): Promise<{ saved: string[] }> {
+export async function saveCustomize(ctx: SpindleFrontendContext, chatId: string, changes: CustomizeChanges, signal?: AbortSignal, mobile = false): Promise<{ saved: string[] }> {
   const appearance = changes.appearance === undefined ? undefined : validateAppearance(changes.appearance);
   const patch: Json = {};
   if (changes.wallpaper?.opacity !== undefined) patch.opacity = finite(changes.wallpaper.opacity, 0, 1, 'Background opacity');
@@ -112,7 +113,7 @@ export async function saveCustomize(ctx: SpindleFrontendContext, chatId: string,
         uploadedImageId = uploaded.id; wallpaper = { image_id: uploadedImageId, type: 'image' };
       }
       if (!(await ctx.permissions.getGranted()).includes('chats')) throw new Error('Chats permission is no longer enabled.');
-      await request(`/chats/${encodeURIComponent(chatId)}/metadata`, signal, 'PATCH', { wallpaper });
+      await request(`/chats/${encodeURIComponent(chatId)}/metadata`, signal, 'PATCH', { [mobile ? 'mobile_wallpaper' : 'wallpaper']: wallpaper });
       saved.push('chat background');
     }
     return { saved };

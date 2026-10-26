@@ -6,6 +6,15 @@ type Item = { key: number; source: string; kind: 'file' | 'link'; label: string;
 type Options = { onImported?: () => void; openCharacter?: (id: string) => void };
 type Session = { modal: SpindleModalHandle; abort: AbortController; closed: boolean };
 const maximum = 20;
+// Match known validation errors from before the host creates a character.
+// HTTP 400 alone is insufficient: subsequent image and module writes can fail.
+const preCreateErrors = new Set([
+  'Invalid JSON in uploaded file', 'file is required',
+  "Character card is missing required 'name' field",
+  'Invalid character card: expected a JSON object',
+  "PNG does not contain a character card (no 'chara' or 'ccv3' text chunk found)",
+  'JPEG file does not contain embedded character card data', 'Not a valid PNG file',
+]);
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') { const element = document.createElement(tag); element.className = className; element.textContent = text; return element; }
 function record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 function fileSize(bytes: number) { return bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`; }
@@ -59,7 +68,7 @@ export function createCardImport(ctx: SpindleFrontendContext, options: Options =
     const intro = el('p', 'jb-settings-intro', 'Add a character card to your Lumiverse library, then start chatting.');
     const drop = el('div', 'jb-import-drop');
     const dropIcon = el('div', 'jb-import-drop-icon'); dropIcon.append(icon('import'));
-    const fileInput = el('input', 'jb-import-file'); fileInput.type = 'file'; fileInput.name = 'character-cards'; fileInput.id = `${suffix}-files-input`; fileInput.multiple = true; fileInput.accept = '.png,.json,.charx,.jpg,.jpeg,image/png,application/json';
+    const fileInput = el('input', 'jb-import-file'); fileInput.type = 'file'; fileInput.name = 'character-cards'; fileInput.id = `${suffix}-files-input`; fileInput.multiple = true; fileInput.accept = '.png,.json,.charx,.zip,.jpg,.jpeg,image/png,application/json,application/zip';
     const choose = button('Choose card files', () => fileInput.click(), 'jb-button jb-primary'); controls.push(choose, fileInput);
     drop.append(dropIcon, el('strong', '', 'Drop character cards here'), el('p', 'jb-settings-help', 'PNG, JSON, or CHARX · up to 20 at a time'), choose, fileInput);
     filesPanel.append(drop, el('p', 'jb-settings-help jb-import-file-hint', 'A regular portrait image is not a character card. Choose the card download or export from your source.'));
@@ -121,7 +130,7 @@ export function createCardImport(ctx: SpindleFrontendContext, options: Options =
       if (!current() || running || starting) return;
       let added = 0, unsupported = 0, duplicate = 0, overflow = 0;
       for (const file of files) {
-        if (!/\.(png|json|charx|jpe?g)$/i.test(file.name) || !file.size) { unsupported++; continue; }
+        if (!/\.(png|json|charx|zip|jpe?g)$/i.test(file.name) || !file.size) { unsupported++; continue; }
         const source = `file:${file.name}:${file.size}:${file.lastModified}`;
         if (queue.some(item => item.source === source)) { duplicate++; continue; }
         if (queue.length >= maximum) { overflow++; continue; }
@@ -186,7 +195,7 @@ export function createCardImport(ctx: SpindleFrontendContext, options: Options =
           catch { if (!current()) return; item.state = 'uncertain'; item.message = 'The result could not be confirmed. Check your library before retrying.'; failed++; render(); continue; }
           if (!current()) return;
           if (!response.ok) {
-            const beforeCreate = item.kind === 'file' && (['file_too_large', 'archive_decompresses_too_large', 'invalid_archive', 'invalid_card', 'unsupported_format'].includes(String(result.code)) || result.error === 'Invalid JSON in uploaded file' || result.error === 'file is required');
+            const beforeCreate = item.kind === 'file' && (['file_too_large', 'archive_decompresses_too_large', 'invalid_archive', 'invalid_card', 'unsupported_format'].includes(String(result.code)) || preCreateErrors.has(String(result.error)));
             // Imports are not transactional: image/module work can fail after
             // the character was created. Do not automatically retry that row.
             item.state = beforeCreate ? 'error' : 'uncertain'; item.message = beforeCreate ? errorText(result, item) : `${errorText(result, item)} Check your library before retrying.`; failed++; render(); continue;

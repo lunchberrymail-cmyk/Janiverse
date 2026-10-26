@@ -112,7 +112,7 @@ export function profileMarkup(source: string): string {
 /** A read-only conversation browser. Opening a row never creates or changes a chat. */
 export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptions) {
   let disposed = false, active = false, offset = 0, query = '', request = 0, detailRequest = 0;
-  let groupedTotal = 0, chatTotal = 0, hasGroups = false, expanded = '';
+  let groupedTotal = 0, chatTotal = 0, expanded = '';
   let searchTimer: ReturnType<typeof setTimeout> | undefined, refreshTimer: ReturnType<typeof setTimeout> | undefined;
   let pageAbort: AbortController | undefined, detailAbort: AbortController | undefined;
   let profileInjection: Element | undefined;
@@ -158,7 +158,7 @@ export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptio
   function stopDetail() { detailRequest++; detailAbort?.abort(); detailAbort = undefined; clearProfile(); expanded = ''; }
   function updateSummary() {
     navCount.textContent = chatTotal.toLocaleString();
-    summary.textContent = `${groupedTotal.toLocaleString()} ${hasGroups ? 'characters & groups' : groupedTotal === 1 ? 'character' : 'characters'} · ${chatTotal.toLocaleString()} ${chatTotal === 1 ? 'chat' : 'chats'}`;
+    summary.textContent = `${groupedTotal.toLocaleString()} ${groupedTotal === 1 ? 'character or group' : 'characters & groups'} · ${chatTotal.toLocaleString()} ${chatTotal === 1 ? 'chat' : 'chats'}`;
   }
   function openChat(id: string) {
     if (!active || disposed || !id) return;
@@ -286,7 +286,11 @@ export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptio
           toggle.textContent = open ? 'Show less' : 'Read full creator note';
           if (!open) description.scrollTop = 0;
         };
-        toggle.addEventListener('click', toggleNote); profileCleanup = () => toggle.removeEventListener('click', toggleNote);
+        const measure = () => { if (current()) toggle.hidden = toggle.getAttribute('aria-expanded') !== 'true' && description.clientHeight > 0 && description.scrollHeight <= description.clientHeight; };
+        const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
+        observer?.observe(description); description.addEventListener('load', measure, true); document.defaultView?.addEventListener('resize', measure);
+        toggle.addEventListener('click', toggleNote); queueMicrotask(measure);
+        profileCleanup = () => { observer?.disconnect(); description.removeEventListener('load', measure, true); document.defaultView?.removeEventListener('resize', measure); toggle.removeEventListener('click', toggleNote); };
         note.append(toggle);
       }
       profile.append(note); const actions = el('div', 'jb-mc-character-actions');
@@ -303,10 +307,10 @@ export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptio
       const renderConversations = () => {
         if (!current()) return; conversationList.replaceChildren();
         const sorted = [...chats].sort((a, b) => conversationSort.value === 'name' ? text(a.name).localeCompare(text(b.name)) : (conversationSort.value === 'oldest' ? 1 : -1) * (count(a.updated_at) - count(b.updated_at)));
-        const dateGroups = conversationSort.value === 'oldest' ? ['Older', 'Yesterday', 'Today'] : ['Today', 'Yesterday', 'Older'];
+        const dateGroups = conversationSort.value === 'name' ? [''] : conversationSort.value === 'oldest' ? ['Older', 'Yesterday', 'Today'] : ['Today', 'Yesterday', 'Older'];
         for (const group of dateGroups) {
-          const grouped = sorted.filter(chat => dateGroup(chat.updated_at) === group); if (!grouped.length) continue;
-          conversationList.append(el('h4', 'jb-mc-date-heading', group));
+          const grouped = group ? sorted.filter(chat => dateGroup(chat.updated_at) === group) : sorted; if (!grouped.length) continue;
+          if (group) conversationList.append(el('h4', 'jb-mc-date-heading', group));
           for (const chat of grouped) {
           const card = button('', () => openChat(chat.id), 'jb-mc-conversation-card'); card.setAttribute('aria-label', `Continue ${text(chat.name) || 'Untitled chat'}`);
           const meta = el('span', 'jb-mc-conversation-meta'); meta.append(el('time', 'jb-mc-conversation-date', dateLabel(chat.updated_at))); addPersona(meta, chat);
@@ -346,7 +350,7 @@ export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptio
       }).catch(() => { /* A name is shown only when its native binding resolves. */ });
     } else { renderResume([]); status.append(el('p', '', 'Could not load your recent chats.')); }
     if (grouped.status === 'fulfilled' && Array.isArray(grouped.value.data)) {
-      groupedTotal = count(grouped.value.total); const rows = grouped.value.data.filter(row => text(record(row).character_id) && text(record(row).latest_chat_id)); hasGroups = rows.some(row => row.is_group);
+      groupedTotal = count(grouped.value.total); const rows = grouped.value.data.filter(row => text(record(row).character_id) && text(record(row).latest_chat_id));
       if (offset && offset >= groupedTotal) { offset = Math.max(0, Math.floor(Math.max(0, groupedTotal - 1) / PAGE_SIZE) * PAGE_SIZE); void load(); return; }
       renderRows(rows); previous.disabled = offset === 0; next.disabled = offset + PAGE_SIZE >= groupedTotal;
       pageLabel.textContent = groupedTotal ? `${offset + 1}–${Math.min(offset + PAGE_SIZE, groupedTotal)} of ${groupedTotal}` : '';
@@ -360,7 +364,7 @@ export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptio
   search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => setSearch(search.value), 200); });
   sort.addEventListener('change', () => { offset = 0; void load(); });
   function refresh() { if (!disposed && active) void load(); }
-  if (ctx.events?.on) for (const event of ['CHAT_CREATED', 'CHAT_CHANGED', 'CHAT_DELETED', 'MESSAGE_SENT', 'MESSAGE_EDITED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'CHARACTER_EDITED', 'CHARACTER_DELETED', 'CHARACTER_AVATAR_CHANGED', 'PERSONA_CREATED', 'PERSONA_EDITED', 'PERSONA_DELETED', 'jar_bridge:imported', 'jar_bridge:chat_imported']) {
+  if (ctx.events?.on) for (const event of ['CHAT_CREATED', 'CHAT_CHANGED', 'CHAT_DELETED', 'MESSAGE_SENT', 'MESSAGE_EDITED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'CHARACTER_EDITED', 'CHARACTER_DELETED', 'CHARACTER_AVATAR_CHANGED', 'PERSONA_CHANGED', 'jar_bridge:imported', 'jar_bridge:chat_imported']) {
     cleanups.push(ctx.events.on(event, () => { if (event.startsWith('PERSONA_')) personaNames.clear(); clearTimeout(refreshTimer); refreshTimer = setTimeout(refresh, 300); }));
   }
   return {

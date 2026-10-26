@@ -107,6 +107,16 @@ function frontend() {
   return { actions, roots, sent, memory, get state() { return state; }, edit(value: string) { state = { ...state, text: value }; }, switchChat() { state = { ...state, chatId: 'chat-2' }; changed(state); }, setGranted(v: string[]) { granted = v; }, reply(content = 'Suggestion') { listener({ type: 'janitor_bridge:composer', id: sent.at(-1).id, chatId: 'chat-1', content }); } };
 }
 describe('composer frontend review semantics', () => {
+  test('writing assistance renders and dispatches on LAN HTTP without secure-context UUID APIs', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto')!;
+    Object.defineProperty(globalThis, 'crypto', { configurable: true, value: { getRandomValues: crypto.getRandomValues.bind(crypto) } });
+    try {
+      const h = frontend(); h.actions.writeForMe(); await settle();
+      expect(h.roots[0].querySelector('textarea')).not.toBeNull();
+      expect(h.sent).toHaveLength(1); expect(h.state.text).toBe('Original draft');
+    } finally { Object.defineProperty(globalThis, 'crypto', descriptor); }
+  });
+
   test('preserves original draft and requires explicit replacement after concurrent editing', async () => {
     const h = frontend(); h.actions.enhanceDraft(); await settle(); expect(h.state.text).toBe('Original draft'); expect(h.sent).toHaveLength(1);
     h.edit('New edited draft'); h.reply(); const root = h.roots[0]; root.querySelector<HTMLButtonElement>('.jb-primary')!.click();

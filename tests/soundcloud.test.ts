@@ -64,6 +64,18 @@ describe('SoundCloud source boundaries', () => {
 });
 
 describe('host frame policy', () => {
+  test('a blocked controller script gives immediate external-listening guidance', async () => {
+    policy(allowedPolicy); setApi(undefined); setup(); await settle();
+    node<HTMLButtonElement>('.jb-soundcloud-play').click(); await settle();
+    expect(document.querySelector('script[src="https://w.soundcloud.com/player/api.js"]')).not.toBeNull();
+    const violation = new dom.window.Event('securitypolicyviolation');
+    Object.defineProperties(violation, { blockedURI: { value: 'https://w.soundcloud.com/player/api.js' }, effectiveDirective: { value: 'script-src-elem' }, disposition: { value: 'enforce' } });
+    document.dispatchEvent(violation);
+    expect(node('.jb-soundcloud-status').textContent).toContain('script policy');
+    expect(node('.jb-soundcloud-status').textContent).toContain('Open SoundCloud');
+    expect(document.querySelector('iframe')).toBeNull();
+  });
+
   test('respects all enforcing policies, directive fallbacks and response-header refusals', async () => {
     expect(soundCloudFrameAllowed()).toBe(false); policy(allowedPolicy); expect(soundCloudFrameAllowed()).toBe(true);
     for (const restricted of ["child-src 'self'", "default-src 'none'", "frame-src https://soundcloud.com", "frame-src https://w.soundcloud.com.evil.test", "frame-src https://w.soundcloud.com:444", "frame-src 'none'; frame-src https://w.soundcloud.com"]) { policy(restricted); expect(soundCloudFrameAllowed()).toBe(false); }

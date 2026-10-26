@@ -597,3 +597,36 @@ test('changing raw-chat mode while editing blocks saving before any native mutat
   metadata = { temporary: true, no_preset: true }; await start(); input('enable-chat-preset').checked = true; change('global-prompt', 'Draft'); metadata = { temporary: true, no_preset: false };
   await save(); expect(writes()).toHaveLength(0); expect(root.textContent).toContain('active chat or API configuration changed');
 });
+
+test('instruction-only copy saves preserve untouched native samplers outside editor bounds', async () => {
+  const source = presets.get('original')!;
+  source.parameters.samplerOverrides.maxTokens = 262144;
+  source.parameters.samplerOverrides.topK = 700;
+  await start(); change('global-prompt', 'Instruction-only edit'); await save();
+  expect(count).toBe(1);
+  expect(presets.get('copy-1')!.parameters.samplerOverrides).toMatchObject({maxTokens:262144,topK:700});
+});
+test('customizing a staged empty preset preserves native history and character markers', async () => {
+  presets.set('empty', { ...base(), id:'empty', name:'Empty imported preset', prompt_order:[] });
+  await start(); await choose('prompt-preset', 'empty');
+  change('global-prompt', 'Only my extra instructions'); await save();
+  expect(count).toBe(1);
+  const saved = presets.get('copy-1')!;
+  expect(saved.prompt_order.some((b:any) => b.marker === 'chat_history')).toBe(true);
+  expect(saved.prompt_order.some((b:any) => b.marker === 'char_description')).toBe(true);
+});
+test('regression: initially loaded empty preset preserves fallback layout', async () => {
+  presets.get('original')!.prompt_order = [];
+  await start(); change('global-prompt', 'Extra instructions'); await save();
+  expect(count).toBe(1);
+  expect(presets.get('copy-1')!.prompt_order.some((b:any) => b.marker === 'chat_history')).toBe(true);
+});
+test('instruction saving works without secure-context crypto APIs', async () => {
+  await start(); change('global-prompt', 'Extra instructions');
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  Object.defineProperty(globalThis, 'crypto', { configurable:true, value:{ getRandomValues:crypto.getRandomValues.bind(crypto) } });
+  try { await save(); expect(count).toBe(1); expect(root.textContent).toContain('Saved for this conversation'); }
+  finally { Object.defineProperty(globalThis, 'crypto', descriptor!); }
+});
+
+test('editing one sampler preserves untouched native values outside simplified bounds', async()=>{presets.get('original')!.parameters.samplerOverrides.topK=700;await start();change('temperature','1.2');await save();expect(count).toBe(1);expect(presets.get('copy-1')!.parameters.samplerOverrides).toMatchObject({temperature:1.2,topK:700});});

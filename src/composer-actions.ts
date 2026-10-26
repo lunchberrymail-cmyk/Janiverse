@@ -1,4 +1,5 @@
 import type { SpindleFrontendContext, SpindleModalHandle } from 'lumiverse-spindle-types';
+import { uuid } from './uuid';
 
 type Action = 'enhance' | 'write' | 'summarize';
 type Options = { openMemoryDraft: (chatId: string, text: string) => void };
@@ -29,7 +30,7 @@ export function createComposerActions(ctx: SpindleFrontendContext, options: Opti
     active?.modal.dismiss();
     const title = action === 'enhance' ? 'Enhance my draft' : action === 'write' ? 'Write something for me' : 'Summarize this chat';
     const modal = ctx.ui.showModal({ title, width: 680, maxHeight: 780 });
-    const session: Session = { modal, id: crypto.randomUUID(), chatId, closed: false, pending: false };
+    const session: Session = { modal, id: uuid(), chatId, closed: false, pending: false };
     active = session;
     const originalDraft = state.text;
     const current = () => !disposed && active === session && !session.closed && composer.getState().chatId === chatId && ctx.getActiveChat().chatId === chatId;
@@ -68,7 +69,7 @@ export function createComposerActions(ctx: SpindleFrontendContext, options: Opti
         if (!granted.includes('generation') || !granted.includes('chats')) { lock(false); allow.hidden = false; generate.hidden = false; status.textContent = 'Allow Chats and Generation to use your configured API for this action.'; return; }
         if (!ctx.frontendSessionId) { lock(false); status.textContent = 'This Lumiverse version cannot safely route writing suggestions. Update Lumiverse and reload.'; return; }
         const connection = object(ctx.state?.get('connections.active'));
-        session.id = crypto.randomUUID();
+        session.id = uuid();
         ctx.sendToBackend({ type: channel, command: 'generate', id: session.id, action, chatId, draft: originalDraft,
           connectionId: string(connection.activeProfileId), personaId: string(ctx.state?.get('persona.activeId')), presetId: string(ctx.state?.get('loom.activePresetId')) });
         session.timer = setTimeout(() => { if (current() && session.pending) { cancelRequest(); complete({ error: 'cancelled' }); } }, 125_000);

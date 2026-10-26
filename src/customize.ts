@@ -16,6 +16,7 @@ export function createCustomize(ctx: SpindleFrontendContext, navigation: Navigat
     const activeChatId = ctx.getActiveChat()?.chatId;
     if (!activeChatId) return;
     const chatId: string = activeChatId;
+    const mobile = document.defaultView?.matchMedia?.('(max-width: 767px)').matches === true;
     close?.();
     const abort = new AbortController(), streaming = createStreamingSettings(ctx);
     let closed = false, busy = false, writing = false, collapsed = false, needsReload = false, resetText = false, snapshot: CustomizeSnapshot | undefined;
@@ -47,8 +48,9 @@ export function createCustomize(ctx: SpindleFrontendContext, navigation: Navigat
     background.append(el('p', 'jb-customize-help', 'For this chat. Opacity and blur apply to your Lumiverse backgrounds.'));
     const upload = button('', () => file.click(), 'jb-customize-upload'); upload.setAttribute('aria-label', 'Choose background image');
     const image = el('img', 'jb-customize-background-preview'); image.alt = 'Background preview'; image.hidden = true;
+    const video = el('video', 'jb-customize-background-preview'); video.muted = true; video.playsInline = true; video.preload = 'metadata'; video.hidden = true; video.setAttribute('aria-label', 'Background video preview');
     const uploadLabel = el('span', '', 'Drag & drop an image here, or click to select'); const camera = el('span', 'jb-customize-camera'); camera.setAttribute('aria-hidden', 'true'); camera.append(icon('camera'));
-    upload.append(image, camera, uploadLabel);
+    upload.append(image, video, camera, uploadLabel);
     const file = el('input'); file.type = 'file'; file.accept = 'image/png,image/jpeg,image/webp'; file.hidden = true; file.setAttribute('aria-label', 'Background image file');
     const backgroundActions = el('div', 'jb-customize-background-actions');
     const clearBackground = button('Remove chat background', () => { pendingFile = undefined; removeBackground = true; revokePreview(); renderBackground(); update(); }, 'jb-customize-link');
@@ -94,7 +96,7 @@ export function createCustomize(ctx: SpindleFrontendContext, navigation: Navigat
     const reload = button('Reload saved settings', () => { if (!busy) void load(); }, 'jb-customize-link jb-customize-reload'); content.append(reload);
     panel.append(header, content, footer); document.body.append(panel); close = finish;
     const stopChat = ctx.state?.subscribe('chat.active', () => { if (ctx.getActiveChat()?.chatId !== chatId) finish(); });
-    const onEscape = (event: KeyboardEvent) => { if (event.key === 'Escape' && panel.contains(event.target as Node)) { event.stopPropagation(); finish(); } }; panel.addEventListener('keydown', onEscape);
+    const onEscape = (event: KeyboardEvent) => { if (event.key === 'Escape' && panel.contains(event.target as Node)) { event.preventDefault(); event.stopPropagation(); if (!writing) finish(); } }; panel.addEventListener('keydown', onEscape);
     function finish() { if (closed) return; closed = true; abort.abort(); streaming.dispose(); stopChat?.(); revokePreview(); panel.remove(); if (close === finish) close = undefined; if (previousFocus?.isConnected) previousFocus.focus(); }
     function revokePreview() { if (previewUrl) URL.revokeObjectURL(previewUrl); previewUrl = undefined; }
     function message(value: string, tone = '') { if (!closed) { status.textContent = value; status.dataset.tone = tone; } }
@@ -103,15 +105,19 @@ export function createCustomize(ctx: SpindleFrontendContext, navigation: Navigat
     function preview() {
       const value = appearance(); if (fontSize.valid()) sampleBody.style.fontSize = `${value.fontSize}px`; sampleBody.style.fontFamily = fontFamilies[value.fontFamily] || fontFamilies.Default;
       for (const [node, key] of [[regular, 'text'], [italic, 'italic'], [bold, 'bold'], [code, 'code'], [dialogue, 'dialogue']] as const) if (/^#[\da-f]{6}$/i.test(value.colors[key])) node.style.color = value.colors[key];
-      if (opacity.valid()) image.style.opacity = String(opacity.get() / 100); if (blur.valid()) image.style.filter = `blur(${blur.get()}px)`;
+      for (const media of [image, video]) { if (opacity.valid()) media.style.opacity = String(opacity.get() / 100); if (blur.valid()) media.style.filter = `blur(${blur.get()}px)`; }
     }
     function renderBackground() {
       const ref = !removeBackground && snapshot?.chatWallpaper;
-      const inherited = snapshot?.wallpaper.global;
+      const inherited = snapshot?.fallbackWallpaper ?? snapshot?.wallpaper.global;
       const shown = ref || inherited;
-      const id = shown?.type === 'image' ? shown.image_id : undefined;
+      const id = shown?.image_id;
       const src = previewUrl || (id ? `/api/v1/images/${encodeURIComponent(id)}` : '');
-      image.hidden = !src; if (src) image.src = src; else image.removeAttribute('src'); camera.hidden = !!src;
+      const isVideo = !previewUrl && shown?.type === 'video';
+      image.hidden = !src || isVideo; video.hidden = !src || !isVideo;
+      if (src && !isVideo) image.src = src; else image.removeAttribute('src');
+      if (src && isVideo) { if (video.getAttribute('src') !== src) video.src = src; } else video.removeAttribute('src');
+      camera.hidden = !!src;
       uploadLabel.textContent = pendingFile ? pendingFile.name : removeBackground ? 'Chat background removed · Save to apply' : src ? 'Click to change background image' : 'Drag & drop an image here, or click to select';
       clearBackground.hidden = !pendingFile && !snapshot?.chatWallpaper;
       upload.disabled = clearBackground.disabled = busy || !snapshot?.canEditBackground;
@@ -120,10 +126,10 @@ export function createCustomize(ctx: SpindleFrontendContext, navigation: Navigat
     }
     function valid() { return fontSize.valid() && opacity.valid() && blur.valid() && [...colors.values()].every(value => /^#[\da-f]{6}$/i.test(value.hex.value)); }
     function changes() { return !!snapshot && (resetText || !equal(appearance(), snapshot.appearance) || opacity.get() !== Math.round(snapshot.wallpaper.opacity * 100) || blur.get() !== snapshot.wallpaper.blur || !!pendingFile || removeBackground || (canStream && stream.checked !== initialStreaming)); }
-    function update() { for (const control of controls) control.disabled = busy || !snapshot; stream.disabled = busy || !canStream; settings.disabled = memory.disabled = busy; reload.disabled = busy; save.disabled = busy || needsReload || !snapshot || !valid() || !changes(); save.textContent = writing ? 'Saving…' : 'Save'; panel.setAttribute('aria-busy', String(busy)); renderBackground(); }
+    function update() { for (const control of controls) control.disabled = busy || !snapshot; dismiss.disabled = writing; stream.disabled = busy || !canStream; settings.disabled = memory.disabled = busy; reload.disabled = busy; save.disabled = busy || needsReload || !snapshot || !valid() || !changes(); save.textContent = writing ? 'Saving…' : 'Save'; panel.setAttribute('aria-busy', String(busy)); renderBackground(); }
     async function load() {
       busy = true; update(); message('Loading saved customization…');
-      const results = await Promise.allSettled([loadCustomize(ctx, chatId!, abort.signal), streaming.read(chatId!)]);
+      const results = await Promise.allSettled([loadCustomize(ctx, chatId!, abort.signal, mobile), streaming.read(chatId!)]);
       if (!current()) return;
       if (results[0].status === 'fulfilled') { snapshot = results[0].value; fillAppearance(snapshot.appearance); opacity.set(Math.round(snapshot.wallpaper.opacity * 100)); blur.set(snapshot.wallpaper.blur); pendingFile = undefined; removeBackground = false; resetText = needsReload = false; revokePreview(); appearanceNotice.hidden = snapshot.appearanceEnabled; appearanceNotice.textContent = 'This saved text style is disabled in Lumiverse. Saving text changes enables it again.'; message(snapshot.canEditBackground ? 'Changes preview here. Save when you’re happy.' : 'Enable Janiverse’s Chats permission to change this chat’s background.'); }
       else { snapshot = undefined; message(results[0].reason instanceof Error ? results[0].reason.message : 'Could not load customization. Reload to try again.', 'error'); }
@@ -138,10 +144,11 @@ export function createCustomize(ctx: SpindleFrontendContext, navigation: Navigat
         const value = appearance();
         const draft = { ...(resetText || !equal(value, snapshot.appearance) ? { appearance: value } : {}), ...(opacity.get() !== Math.round(snapshot.wallpaper.opacity * 100) || blur.get() !== snapshot.wallpaper.blur ? { wallpaper: { opacity: opacity.get() / 100, blur: blur.get() } } : {}), ...(pendingFile ? { background: { file: pendingFile } } : removeBackground ? { background: { remove: true as const } } : {}) };
         if (Object.keys(draft).length) {
-          await saveCustomize(ctx, chatId, draft, abort.signal);
+          await saveCustomize(ctx, chatId, draft, abort.signal, mobile);
           if (!current()) return;
-          snapshot = await loadCustomize(ctx, chatId, abort.signal);
+          snapshot = await loadCustomize(ctx, chatId, abort.signal, mobile);
           if (!current()) return;
+          appearanceNotice.hidden = snapshot.appearanceEnabled;
           pendingFile = undefined; removeBackground = false; resetText = false; revokePreview();
         }
         if (canStream && stream.checked !== initialStreaming) { const result = await streaming.save(stream.checked); if (!current()) return; initialStreaming = result.enabled; }

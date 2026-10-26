@@ -109,6 +109,7 @@ export function createChatMemory(ctx: SpindleFrontendContext, options: MemoryOpt
     text.addEventListener('input', countTokens);
     const setEditable = (enabled: boolean) => {
       text.disabled = !enabled; depth.disabled = !enabled; role.disabled = !enabled; save.disabled = !enabled;
+      cancel.disabled = saving;
       modal.root.setAttribute('aria-busy', String(saving));
     };
     async function load() {

@@ -489,3 +489,32 @@ describe('API settings preserve native connection and chat scope', () => {
     expect(applied).toBe(0);
   });
 });
+
+test('changing scope preserves a new connection model draft', async () => {
+  api.open(); await settle(); choose('api-connection','');
+  control('api-model').value = 'my-typed-model';
+  choose('api-scope','default');
+  expect(control('api-model').value).toBe('my-typed-model');
+});
+test('changing scope preserves a saved connection model draft', async () => {
+  api.open(); await settle();
+  control('api-model').value = 'my-typed-model'; choose('api-scope','default');
+  expect(control('api-model').value).toBe('my-typed-model');
+});
+test('failed chat reads leave the default-scope connection editor usable', async () => {
+  const originalRespond = respond;
+  respond = async (url, options) => url.startsWith('/api/v1/chats/') ? json({},404) : originalRespond(url,options);
+  api.open(); await settle();
+  expect(button('Save & Use').disabled).toBe(false);
+  expect(control('api-scope').disabled).toBe(false);
+  expect(control('api-scope').value).toBe('default');
+  expect(root().textContent).toContain('This chat could not be loaded');
+});
+test('Generation-only grant leaves Chats permission recovery visible', async () => {
+  granted = ['generation']; api.open(); await settle();
+  expect(button('Save & Use').disabled).toBe(false);
+  const permissionButton = [...root().querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent?.startsWith('Allow'))!;
+  expect(permissionButton.closest('[hidden]')).toBeNull();
+  button('Save & Use').click(); await settle();
+  expect(root().textContent).toContain('Enable Janiverse’s Chats permission');
+});

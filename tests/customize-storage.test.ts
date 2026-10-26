@@ -80,6 +80,18 @@ test('background uploads only during save and atomically patches only this chat 
   calls = []; await saveCustomize(ctx, 'chat-1', { background: { remove: true } });
   expect(calls).toEqual([{ path: '/chats/chat-1/metadata', method: 'PATCH', body: { wallpaper: null } }]);
 });
+test('mobile backgrounds inherit the regular chat wallpaper and save only the mobile override', async () => {
+  const value = await loadCustomize(ctx, 'chat-1', undefined, true);
+  expect(value.chatWallpaper).toBeNull();
+  expect(value.fallbackWallpaper).toEqual({ image_id: 'chat-image', type: 'image' });
+  calls = [];
+  await saveCustomize(ctx, 'chat-1', { background: { file: new File(['image'], 'mobile.png', { type: 'image/png' }) } }, undefined, true);
+  expect(calls[1].body).toEqual({ mobile_wallpaper: { image_id: 'uploaded-image', type: 'image' } });
+  calls = [];
+  await saveCustomize(ctx, 'chat-1', { background: { remove: true } }, undefined, true);
+  expect(calls).toEqual([{ path: '/chats/chat-1/metadata', method: 'PATCH', body: { mobile_wallpaper: null } }]);
+});
+
 test('denied Chats permission and unsupported file input stop before upload or any settings save', async () => {
   grants = [];
   await expect(saveCustomize(ctx, 'chat-1', { appearance: defaultAppearance, background: { remove: true } })).rejects.toThrow('Chats permission');

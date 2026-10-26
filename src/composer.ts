@@ -32,6 +32,9 @@ export function createComposer(ctx: SpindleFrontendContext, actions: ComposerAct
   let disposed = false, busy = false, popover: 'assist' | 'persona' | null = null;
   let personas: Persona[] = [], personaRequest = 0, listRequest = 0, actionRequest = 0;
   let currentChatId = ctx.getActiveChat()?.chatId ?? null;
+  const generations = new Map<string, Set<string>>();
+  const generationVersions = new Map<string, number>();
+  let statusRequest = 0;
   const cleanups: Array<() => void> = [];
   const abort = new AbortController();
   const toolsRoot = ctx.ui.mount('chat_input_tools_left');
@@ -75,7 +78,21 @@ export function createComposer(ctx: SpindleFrontendContext, actions: ComposerAct
     try { const value = ctx.composer?.getState(); if (value) return value; } catch { /* Older hosts can leave the composer unmounted between chats. */ }
     return { mounted: false, chatId: null, text: '' };
   }
-  function streaming() { try { return ctx.state?.get('setting:isStreaming') === true; } catch { return false; } }
+  function streaming() { return !!generations.get(ctx.getActiveChat()?.chatId ?? '')?.size; }
+  async function readGeneration() {
+    const chatId = ctx.getActiveChat()?.chatId, ticket = ++statusRequest;
+    if (!chatId) return;
+    const version = generationVersions.get(chatId) ?? 0;
+    try {
+      const response = await fetch(`/api/v1/generate/status/${encodeURIComponent(chatId)}`, { credentials: 'same-origin', signal: abort.signal });
+      if (!response.ok) return;
+      const value = record(await response.json());
+      if (disposed || ticket !== statusRequest || version !== (generationVersions.get(chatId) ?? 0) || ctx.getActiveChat()?.chatId !== chatId) return;
+      if (value.active === true) generations.set(chatId, new Set([typeof value.generationId === 'string' ? value.generationId : chatId]));
+      else generations.delete(chatId);
+      sync();
+    } catch { /* Live events continue to guard actions if recovery is unavailable. */ }
+  }
   function activePersonaId(): string | null { try { const id = ctx.state?.get('persona.activeId'); return typeof id === 'string' ? id : null; } catch { return null; } }
   function avatar(target: HTMLElement, value: Persona | null) {
     target.replaceChildren();
@@ -98,7 +115,7 @@ export function createComposer(ctx: SpindleFrontendContext, actions: ComposerAct
   function sync() {
     if (disposed) return;
     const value = snapshot(); const chatId = ctx.getActiveChat()?.chatId ?? null;
-    if (chatId !== currentChatId) { currentChatId = chatId; ++actionRequest; busy = false; close(); void refreshPersona(); }
+    if (chatId !== currentChatId) { currentChatId = chatId; ++actionRequest; busy = false; close(); void refreshPersona(); void readGeneration(); }
     const ready = value.mounted && value.chatId === chatId && !!chatId;
     assist.disabled = !ready || busy; picker.disabled = !chatId || busy;
     for (const action of actionButtons) {
@@ -213,7 +230,7 @@ export function createComposer(ctx: SpindleFrontendContext, actions: ComposerAct
   const outside = (event: Event) => { const target = event.target as Node | null; if (target && !tools.contains(target) && !popup.contains(target)) close(); };
   const keys = (event: KeyboardEvent) => {
     if (popup.hidden) return;
-    if (event.key === 'Escape') { event.preventDefault(); close(true); return; }
+    if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); close(true); return; }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || event.target === search) return;
     const choices = Array.from((popover === 'persona' ? personaList : assistMenu).querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
     if (!choices.length) return;
@@ -221,17 +238,34 @@ export function createComposer(ctx: SpindleFrontendContext, actions: ComposerAct
     const next = event.key === 'Home' ? 0 : event.key === 'End' ? choices.length - 1 : (index + (event.key === 'ArrowUp' ? -1 : 1) + choices.length) % choices.length;
     event.preventDefault(); choices[next]?.focus();
   };
-  document.addEventListener('pointerdown', outside, true); document.addEventListener('keydown', keys);
-  cleanups.push(() => document.removeEventListener('pointerdown', outside, true), () => document.removeEventListener('keydown', keys));
+  document.addEventListener('pointerdown', outside, true); document.addEventListener('keydown', keys, true);
+  cleanups.push(() => document.removeEventListener('pointerdown', outside, true), () => document.removeEventListener('keydown', keys, true));
+  if (ctx.events?.on) {
+    for (const event of ['GENERATION_STARTED', 'GENERATION_IN_PROGRESS', 'GENERATION_ENDED', 'GENERATION_STOPPED']) {
+      cleanups.push(ctx.events.on(event, payload => {
+        const value = record(payload), chatId = value.chatId;
+        if (typeof chatId !== 'string') return;
+        generationVersions.set(chatId, (generationVersions.get(chatId) ?? 0) + 1);
+        const id = typeof value.generationId === 'string' ? value.generationId : chatId;
+        const running = generations.get(chatId) ?? new Set<string>();
+        if (event === 'GENERATION_STARTED' || event === 'GENERATION_IN_PROGRESS') running.add(id);
+        else if (typeof value.generationId !== 'string') running.clear();
+        else { running.delete(id); running.delete(chatId); }
+        if (running.size) generations.set(chatId, running); else generations.delete(chatId);
+        sync();
+      }));
+    }
+    cleanups.push(ctx.events.on('PERSONA_CHANGED', () => { personas = []; void refreshPersona(); if (popover === 'persona') void loadPersonas(); }));
+  }
   if (ctx.composer?.onChange) cleanups.push(ctx.composer.onChange(sync));
   if (ctx.state?.subscribe) {
     for (const [selector, handler] of [
-      ['chat.active', sync], ['persona.activeId', () => { void refreshPersona(); }], ['setting:isStreaming', sync],
+      ['chat.active', sync], ['persona.activeId', () => { void refreshPersona(); }],
     ] as const) {
       try { cleanups.push(ctx.state.subscribe(selector, handler)); } catch { /* Optional selectors differ by Lumiverse version. */ }
     }
   }
-  renderChip(null); sync(); void refreshPersona();
+  renderChip(null); sync(); void refreshPersona(); void readGeneration();
   return { destroy() {
     if (disposed) return; disposed = true; ++actionRequest; ++personaRequest; ++listRequest; abort.abort();
     cleanups.splice(0).forEach(cleanup => cleanup()); tools.remove(); popup.remove(); toolsRoot.remove(); popoverRoot.remove();

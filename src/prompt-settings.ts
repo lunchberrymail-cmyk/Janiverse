@@ -1,6 +1,7 @@
 import type { SpindleFrontendContext, SpindleModalHandle } from 'lumiverse-spindle-types';
 import { createNativePresetResolution, type Binding, type Scope } from './native-preset-scope';
 import { createCustomDefault } from './custom-default';
+import { uuid } from './uuid';
 
 type Json = Record<string, unknown>;
 type Preset = { id: string; name: string; provider: string; engine: string; parameters: Json; prompts: Json; metadata: Json; prompt_order: Json[]; cache_revision: number };
@@ -30,7 +31,7 @@ function node<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''
 }
 function string(value: unknown) { return typeof value === 'string' && value.trim() ? value : null; }
 function block(name: string, marker: string | null = null): Json {
-  return { id: crypto.randomUUID(), name, content: '', role: 'system', enabled: true, position: 'pre_history', depth: 0, marker, isLocked: !!marker, color: null, injectionTrigger: [], characterTagTrigger: [], group: null, categoryMode: null };
+  return { id: uuid(), name, content: '', role: 'system', enabled: true, position: 'pre_history', depth: 0, marker, isLocked: !!marker, color: null, injectionTrigger: [], characterTagTrigger: [], group: null, categoryMode: null };
 }
 function isNativeDefault(preset: Preset) { return preset.provider === 'loom' && preset.metadata._lumiverse_preset_slug === defaultSlug && rec(preset.metadata[markerKey]).owner !== owner; }
 function validPreset(preset: Preset | null): preset is Preset { return !!preset && Array.isArray(preset.prompt_order) && !!preset.parameters && !!preset.prompts && !!preset.metadata; }
@@ -70,6 +71,7 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
     const suffix = `jb-prompt-${++ids}`;
     let loaded: Loaded | undefined, saving = false, loading = false, selected = initial, loadVersion = 0;
     let promptDirty = false, prefillDirty = false, samplersDirty = false;
+    const editedSamplers = new Set<string>();
     let promptMode: PromptMode = 'custom', customizeCopy = false, sourceDirty = false, sourceLoading = false, sourceVersion = 0;
     let staged: PromptBase | undefined, choices: PresetChoice[] = [], unresolvedScope: Scope | undefined;
     const heading = node('h2', '', 'Instructions');
@@ -149,7 +151,7 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
     advancedGeneration.append(node('summary', '', 'Advanced generation controls'), advancedGrid);
     const basicHints: Record<string, string> = { temperature: 'Lower is steadier; higher adds variety.', maxTokens: 'How long a reply can be.', contextSize: 'How much conversation the model can use.' };
     for (const item of samplerFields) {
-      const input = node('input', 'jb-settings-input'); input.type = 'number'; input.name = item.key; input.min = String(item.min); input.max = String(item.max); input.step = String(item.step); input.placeholder = 'Default'; input.title = item.hint; input.addEventListener('input', () => { samplersDirty = true; input.removeAttribute('aria-invalid'); }); inputs.set(item.key, input);
+      const input = node('input', 'jb-settings-input'); input.type = 'number'; input.name = item.key; input.min = String(item.min); input.max = String(item.max); input.step = String(item.step); input.placeholder = 'Default'; input.title = item.hint; input.addEventListener('input', () => { samplersDirty = true; editedSamplers.add(item.key); input.removeAttribute('aria-invalid'); }); inputs.set(item.key, input);
       const label = field(item.title, input, basicHints[item.key] || item.hint);
       let wrapper: HTMLElement = label;
       if (inline && basicHints[item.key]) {
@@ -157,7 +159,7 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
         const control = node('span', 'jb-settings-slider-control'); control.append(slider, input); sliders.set(item.key, slider);
         const title = node('label', 'jb-settings-label', item.title); title.htmlFor = input.id;
         wrapper = node('div', 'jb-settings-field jb-settings-slider-field'); wrapper.append(title, control, label.querySelector('small')!);
-        slider.addEventListener('input', () => { input.value = slider.value; samplersDirty = true; input.removeAttribute('aria-invalid'); syncSlider(item.key); });
+        slider.addEventListener('input', () => { input.value = slider.value; samplersDirty = true; editedSamplers.add(item.key); input.removeAttribute('aria-invalid'); syncSlider(item.key); });
         input.addEventListener('input', () => syncSlider(item.key));
       }
       (basicHints[item.key] ? grid : advancedGrid).append(wrapper);
@@ -274,6 +276,7 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
       if (!preserveDraft || !prefillDirty) prefill.value = typeof rec(base.preset.prompts.completionSettings).assistantPrefill === 'string' ? String(rec(base.preset.prompts.completionSettings).assistantPrefill) : '';
       replyPrefix.open = !!prefill.value;
       if (!preserveDraft || !samplersDirty) {
+        editedSamplers.clear();
         const sampler = rec(base.preset.parameters.samplerOverrides); enabled.checked = sampler.enabled === true;
         for (const item of samplerFields) { const input = inputs.get(item.key)!; input.value = typeof sampler[item.key] === 'number' ? String(sampler[item.key]) : ''; syncSlider(item.key); }
       }
@@ -327,7 +330,7 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
         loaded = { scope, preset, binding: resolved.binding, blockId: sourceBlock(preset, resolved.binding, promptMode), sourceId: resolved.preset_id };
         nativeInfo.textContent = 'Your character, persona, and chat memory stay included.';
         renderSource(loaded);
-        scopeInfo.textContent = `Applies to: ${scope.label}`; presetInfo.textContent = `Native preset: ${preset.id ? preset.name : 'Created on first save'}`;
+        scopeInfo.textContent = `Applies to: ${scope.label}`; presetInfo.textContent = `Currently applied preset: ${preset.id ? preset.name : 'Created on first save'}`;
         rawLabel.hidden = !scope.raw; raw.checked = false; promptDirty = prefillDirty = samplersDirty = false; lock(false);
         if (scope.raw) message('This temporary test chat bypasses presets. Tick “Use a native preset” to apply these settings.', 'warning');
         else if (!loaded.blockId && !useSavedOriginal()) {
@@ -351,7 +354,8 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
       if (!loaded || saving || sourceLoading) return;
       if (loaded.scope.raw && !raw.checked) { message('Tick “Use a native preset” to apply settings to this raw test chat.', 'warning'); raw.focus(); return; }
       const values: Json = {};
-      if (!useSavedOriginal()) for (const item of samplerFields) {
+      if (!useSavedOriginal() && samplersDirty) for (const item of samplerFields) {
+        if (!editedSamplers.has(item.key)) continue;
         const input = inputs.get(item.key)!; const value = input.value.trim() === '' ? null : Number(input.value);
         if (value !== null && (!Number.isFinite(value) || value < item.min || value > item.max || (item.step === 1 && !Number.isInteger(value)))) { show('generation'); if (!basicHints[item.key]) advancedGeneration.open = true; input.setAttribute('aria-invalid', 'true'); message(`${item.title} must be ${item.step === 1 ? 'a whole number ' : ''}between ${item.min} and ${item.max}.`, 'error'); input.focus(); return; }
         values[item.key] = value;
@@ -389,7 +393,7 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
           return;
         }
         const next = copy(preset); const owned = rec(next.metadata[markerKey]);
-        if (!next.prompt_order.length) next.prompt_order = copy(base.preset.prompt_order);
+        if (!useSavedOriginal() && !next.prompt_order.length) next.prompt_order = copy((await getDefault()).prompt_order);
         // Binding state remains authoritative on every Save, including later
         // edits after the native editor changed a checkbox in this copy.
         next.prompt_order = next.prompt_order.map(b => ({ ...b, ...(Object.hasOwn(sourceBinding?.block_states ?? {}, String(b.id)) ? { enabled: sourceBinding!.block_states[String(b.id)] } : {}) }));
@@ -443,7 +447,7 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
         const resolved = await effective(loaded.scope);
         if (!current()) return;
         if (resolved.preset_id !== saved.id) throw new Error('binding-not-active');
-        promptDirty = prefillDirty = samplersDirty = sourceDirty = false; staged = undefined; renderSource(loaded); scopeInfo.textContent = `Applies to: ${loaded.scope.label}`; presetInfo.textContent = `Native preset: ${saved.name}`;
+        promptDirty = prefillDirty = samplersDirty = sourceDirty = false; staged = undefined; renderSource(loaded); scopeInfo.textContent = `Applies to: ${loaded.scope.label}`; presetInfo.textContent = `Currently applied preset: ${saved.name}`;
         message(loaded.scope.kind === 'chat' ? 'Saved for this conversation.' : 'Saved for this API configuration. Chats with their own instructions keep them.', 'success');
       } catch (error) {
         if (!current()) return;

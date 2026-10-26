@@ -236,6 +236,7 @@ export function createSoundCloud(ctx: SpindleFrontendContext) {
   open.addEventListener('click', event => { if (!sourceCurrent()) { event.preventDefault(); clear(); void load(); } });
   const onPolicyViolation = (event: Event) => {
     const violation = event as SecurityPolicyViolationEvent;
+    if (pending && violation.disposition !== 'report' && ['script-src', 'script-src-elem'].includes(violation.effectiveDirective) && [API_SCRIPT, PLAYER_ORIGIN].includes(violation.blockedURI)) { closePlayer(); message('SoundCloud’s controller is blocked by this site’s script policy. Open SoundCloud to listen.'); return; }
     if (!frame || violation.disposition === 'report' || !['frame-src', 'child-src', 'default-src'].includes(violation.effectiveDirective)) return;
     try { if (new URL(violation.blockedURI).origin !== PLAYER_ORIGIN) return; } catch { return; }
     headerBlocked = true; closePlayer(); updatePolicy();

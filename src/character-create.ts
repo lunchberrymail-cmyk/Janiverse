@@ -4,7 +4,7 @@ import { icon } from './icons';
 type Options = { onCreated?: (id: string) => void; openCharacter?: (id: string) => void };
 type Session = { modal: SpindleModalHandle; abort: AbortController; closed: boolean; previewUrl?: string };
 type NativeCharacter = { id: string; name?: string };
-const portraitLimit = 10 * 1024 * 1024;
+const portraitLimit = 10 * 1024 * 1024 - 64 * 1024; // Leave room for multipart framing in the host's 10 MiB request cap.
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') { const node = document.createElement(tag); node.className = className; node.textContent = text; return node; }
 function record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 
@@ -49,7 +49,7 @@ export function createCharacterCreate(ctx: SpindleFrontendContext, options: Opti
     const cardLetter = el('span', 'jb-character-card-letter', '?'); cardMedia.append(cardImage, cardLetter); const cardBio = el('p', 'jb-character-card-bio', 'Your character’s bio will appear here.'); const cardTags = el('div', 'jb-character-card-tags');
     card.append(cardTitle, cardMedia, cardBio, cardTags); rail.append(nav, el('p', 'jb-character-preview-label', 'Card preview'), card);
     const portraitBox = el('div', 'jb-character-portrait');
-    const preview = el('button', 'jb-character-portrait-preview'); preview.type = 'button'; preview.setAttribute('aria-label', 'Upload character image'); const placeholder = el('div', 'jb-character-portrait-placeholder'); placeholder.append(icon('camera'), el('span', '', 'Click to upload or drag & drop'), el('small', '', 'PNG, JPG, WebP or GIF · up to 10 MB'));
+    const preview = el('button', 'jb-character-portrait-preview'); preview.type = 'button'; preview.setAttribute('aria-label', 'Upload character image'); const placeholder = el('div', 'jb-character-portrait-placeholder'); placeholder.append(icon('camera'), el('span', '', 'Click to upload or drag & drop'), el('small', '', 'PNG, JPG, WebP or GIF · up to 9.9 MiB'));
     const image = el('img'); image.alt = 'Selected character portrait'; image.hidden = true; preview.append(placeholder, image);
     const fileInput = el('input', 'jb-character-portrait-file'); fileInput.type = 'file'; fileInput.name = 'portrait'; fileInput.id = `${prefix}-portrait`; fileInput.accept = '.png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif'; fileInput.setAttribute('aria-label', 'Choose character portrait');
     const remove = button('Remove image', () => selectPortrait(undefined), 'jb-settings-link'); remove.hidden = true;
@@ -60,7 +60,7 @@ export function createCharacterCreate(ctx: SpindleFrontendContext, options: Opti
     function selectPortrait(file: File | undefined) {
       if (busy || created || uncertain) return;
       if (file && (!/\.(?:png|jpe?g|webp|gif)$/i.test(file.name) || (file.type && !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)))) { message('Choose a PNG, JPG, WebP or GIF picture.', 'error'); return; }
-      if (file && (!file.size || file.size > portraitLimit)) { message('Choose a picture between 1 byte and 10 MB.', 'error'); return; }
+      if (file && (!file.size || file.size > portraitLimit)) { message('Choose a picture between 1 byte and 9.9 MiB.', 'error'); return; }
       clearPreview(); portrait = file; image.removeAttribute('src'); cardImage.removeAttribute('src'); image.hidden = !file; cardImage.hidden = !file; cardLetter.hidden = !!file; placeholder.hidden = !!file; remove.hidden = !file;
       if (file) { try { session.previewUrl = URL.createObjectURL(file); image.src = session.previewUrl; cardImage.src = session.previewUrl; } catch { image.hidden = true; cardImage.hidden = true; cardLetter.hidden = false; placeholder.hidden = false; } }
       message('');
@@ -155,7 +155,7 @@ export function createCharacterCreate(ctx: SpindleFrontendContext, options: Opti
       try {
         const response = await fetch(`/api/v1/characters/${encodeURIComponent(created.id)}/avatar`, { method: 'POST', credentials: 'same-origin', body, signal: session.abort.signal });
         if (!current()) return;
-        if (!response.ok) { portraitFailed(); return; }
+        if (!response.ok) { portraitFailed(); if (response.status === 413) message('Character created. This portrait exceeds the server’s upload limit. Open the character to choose a smaller picture.', 'warning'); return; }
         portraitPending = false; message('Character created and ready to chat.', 'success');
       } catch { if (current()) portraitFailed(); }
     }

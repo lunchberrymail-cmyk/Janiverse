@@ -54,11 +54,11 @@ The optional **Global prompt** section offers **Custom prompt · Default base** 
 
 **Memory:** only `authors_note` changes; the native insertion depth and role remain intact. Raw or no-block prompts can omit the note, so the editor explains when conversion is needed.
 
-**Appearance:** uploads accept static PNG/JPEG/WebP images, save to the wallpaper library, and update the active chat's wallpaper reference. Removing it restores normal fallback. Opacity and blur use native global wallpaper preferences. Text styling saves a native component-style override across chats. Safe Theme Mode and the emergency style-disable shortcut remain effective. No external fonts are downloaded.
+**Appearance:** uploads accept static PNG/JPEG/WebP images, save to the wallpaper library, and update the active chat's wallpaper reference. On phones, Customize edits the mobile override and preserves the regular chat wallpaper. Existing video wallpapers also appear in the preview. Removing an override restores normal fallback. Opacity and blur use native global wallpaper preferences. Text styling saves a native component-style override across chats. Safe Theme Mode and the emergency style-disable shortcut remain effective. No external fonts are downloaded.
 
 **Streaming:** follows the selected native preset. Normal saved presets are read-only here; edit them in Advanced Presets or explicitly customize a copy in Settings. Janiverse's existing chat-scoped copies can save streaming changes in place. Changing streaming never silently creates a preset. Custom request bodies or raw chats that prevent the toggle from working show an explanation. Autoscroll follows Lumiverse's native behavior: scrolling upward pauses following new text.
 
-Customize edits remain drafts until **Save**. Closing discards drafts; collapsing preserves them. Saved connections, presets, memory, wallpapers, and text styles remain available when Janiverse is disabled. The compatible native text-style override is named `JanitorBridgeChatAppearance`; manage or disable it in Lumiverse's component-style editor.
+Customize edits remain drafts until **Save**. Closing discards drafts; collapsing preserves them. While saving, Close waits so the panel can report any partial failure. Saved connections, presets, memory, wallpapers, and text styles remain available when Janiverse is disabled. The compatible native text-style override is named `JanitorBridgeChatAppearance`; manage or disable it in Lumiverse's component-style editor.
 
 ## Mobile
 

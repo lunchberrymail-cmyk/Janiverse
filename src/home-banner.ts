@@ -180,6 +180,7 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
   next.addEventListener('click', () => { index = (index + 1) % ideas.length; render(); });
   tryButton.addEventListener('click', () => {
     if (disposed) return;
+    status.textContent = '';
     void ideas[index].open().then(ok => {
       if (!disposed && !ok) status.textContent = 'This tool is unavailable right now. You can try another idea.';
     }).catch(() => { if (!disposed) status.textContent = 'Could not open this tool. Please try again from Lumiverse’s sidebar.'; });

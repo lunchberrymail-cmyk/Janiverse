@@ -130,6 +130,23 @@ test('portrait validation is local and object URLs are revoked on replacement, r
   choose(picture()); creator.open(); expect(revoked).toEqual(['blob:portrait-1', 'blob:portrait-2', 'blob:portrait-3']); expect(requests).toHaveLength(0); expect(checks).toBe(0);
 });
 
+test('portrait selection leaves multipart headroom below the native 10 MiB request limit', () => {
+  choose(new File([new Uint8Array(10 * 1024 * 1024)], 'exact-limit.png', { type: 'image/png' }));
+  expect(previewCount).toBe(0); expect(root().textContent).toContain('9.9 MiB');
+  choose(new File([new Uint8Array(10 * 1024 * 1024 - 64 * 1024)], 'fits.png', { type: 'image/png' }));
+  expect(previewCount).toBe(1); expect(requests).toHaveLength(0);
+});
+
+test('a server portrait limit preserves the created character and explains the recovery', async () => {
+  draft(); choose(picture());
+  respond = async url => url.endsWith('/avatar') ? json({}, 413) : json({ id: 'created' });
+  submit(); await settle();
+  expect(createdIds).toEqual(['created']);
+  expect(root().textContent).toContain('server’s upload limit');
+  expect(root().textContent).toContain('smaller picture');
+  submit(); await settle(); expect(requests).toHaveLength(2);
+});
+
 test('refresh callback failure cannot turn a saved card into a retryable Create', async () => {
   creator.destroy(); creator = createCharacterCreate(ctx, { onCreated: () => { throw new Error('refresh failed'); } }); creator.open(); draft(); submit(); await settle();
   expect(requests).toHaveLength(1); expect(root().textContent).toContain('ready to chat'); expect(button('Create Character').hidden).toBe(true); submit(); await settle(); expect(requests).toHaveLength(1);

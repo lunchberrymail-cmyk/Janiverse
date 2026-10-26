@@ -80,7 +80,7 @@ export function createApiSettings(ctx: SpindleFrontendContext, navigation: ApiSe
     const chatId = ctx.getActiveChat()?.chatId ?? null;
     let rows: Profile[] = [], selected: Profile | undefined, providerId = 'openai';
     let providers = [...fallbackProviders];
-    let boundId = '', boundModel = '', globalId = '', loaded = false, busy = false, hasGeneration = false;
+    let boundId = '', boundModel = '', globalId = '', loaded = false, busy = false, hasGeneration = false, hasChats = false, chatAvailable = true;
     let savedFields = '';
     let preferences: { destroy(): void; refresh?(): void } | undefined;
     let preferencesRoot: HTMLElement | undefined, preferencesObserver: MutationObserver | undefined;
@@ -186,7 +186,7 @@ export function createApiSettings(ctx: SpindleFrontendContext, navigation: ApiSe
       addConnection.disabled = !loaded || locked;
       if (nativeSettings) nativeSettings.disabled = locked;
       for (const tab of callbackTabs) tab.disabled = locked;
-      allow.disabled = cancel.disabled = locked; access.hidden = hasGeneration;
+      allow.disabled = cancel.disabled = locked; access.hidden = hasGeneration && (scope.value !== 'chat' || hasChats);
       apply.disabled = !loaded || locked || !hasGeneration || (!selected && !editable());
       apply.textContent = 'Save & Use';
       models.disabled = !loaded || locked || !hasGeneration || (!selected && !editable());
@@ -251,9 +251,9 @@ export function createApiSettings(ctx: SpindleFrontendContext, navigation: ApiSe
     key.addEventListener('input', renderSummary);
     scope.addEventListener('change', () => {
       const unchanged = fieldsSignature() === savedFields;
-      model.value = scope.value === 'chat' && selected?.id === boundId && boundModel ? boundModel : selected?.model ?? '';
+      if (selected && unchanged) model.value = scope.value === 'chat' && selected.id === boundId && boundModel ? boundModel : selected.model;
       if (unchanged) savedFields = fieldsSignature();
-      renderScope();
+      renderScope(); controls();
     });
     async function request<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
       const response = await fetch(`/api/v1${path}`, { ...options, credentials: 'same-origin', signal: session.abort.signal });
@@ -263,7 +263,7 @@ export function createApiSettings(ctx: SpindleFrontendContext, navigation: ApiSe
     async function permissions(needChat = false) {
       const granted = await ctx.permissions.getGranted();
       if (!current()) return false;
-      hasGeneration = granted.includes('generation'); controls();
+      hasGeneration = granted.includes('generation'); hasChats = granted.includes('chats'); controls();
       if (!hasGeneration) { status.textContent = 'Allow connection settings before saving, switching, loading models, or testing.'; return false; }
       if (needChat && !granted.includes('chats')) { status.textContent = 'Enable Janiverse’s Chats permission to apply a connection to this chat.'; return false; }
       return true;
@@ -293,9 +293,9 @@ export function createApiSettings(ctx: SpindleFrontendContext, navigation: ApiSe
     }
     async function requestPermission() {
       status.textContent = 'Waiting for permission approval…';
-      await ctx.permissions.request(['generation'], { reason: 'Save native API profiles and credentials, choose connections, and load models or test a provider only when you click those actions.' });
+      await ctx.permissions.request(scope.value === 'chat' ? ['generation', 'chats'] : ['generation'], { reason: 'Save native API profiles and credentials, and apply the selected connection when you choose Save & Use.' });
       if (!current()) return;
-      if (await permissions()) status.textContent = 'Connection settings enabled. Choose Save & Use when ready.';
+      if (await permissions(scope.value === 'chat')) status.textContent = 'Connection settings enabled. Choose Save & Use when ready.';
     }
     async function loadModels() {
       if (!await permissions()) return;
@@ -404,19 +404,20 @@ export function createApiSettings(ctx: SpindleFrontendContext, navigation: ApiSe
       navigation.onApplied?.();
     }
     async function initialize() {
-      loaded = false; retry.hidden = true; controls(); status.textContent = 'Loading connections…';
+      loaded = false; chatAvailable = true; retry.hidden = true; controls(); status.textContent = 'Loading connections…';
       try {
         const [profilesValue, granted, chatValue, catalog] = await Promise.all([
           connections?.list ? connections.list() : request('/connections?limit=100&offset=0'),
           ctx.permissions.getGranted(),
-          chatId ? request(`/chats/${encodeURIComponent(chatId)}?messages=false`) : Promise.resolve(null),
+          chatId ? request(`/chats/${encodeURIComponent(chatId)}?messages=false`).catch(error => { if (session.abort.signal.aborted) throw error; chatAvailable = false; return null; }) : Promise.resolve(null),
           request('/providers').catch(() => null),
         ]);
         if (!current()) return;
         providers = providerCatalog(catalog);
         const list = Array.isArray(profilesValue) ? profilesValue : object(profilesValue).data;
         rows = Array.isArray(list) ? list.map(profile).filter((item): item is Profile => !!item) : [];
-        hasGeneration = granted.includes('generation');
+        hasGeneration = granted.includes('generation'); hasChats = granted.includes('chats');
+        if (chatId) { const chatScope = scope.querySelector<HTMLOptionElement>('option[value="chat"]'); if (chatScope) chatScope.disabled = !chatAvailable; if (!chatAvailable) scope.value = 'default'; }
         const metadata = object(object(chatValue).metadata);
         boundId = typeof metadata.connection_profile_id === 'string' ? metadata.connection_profile_id : '';
         boundModel = typeof metadata.connection_model === 'string' ? metadata.connection_model : '';
@@ -425,6 +426,7 @@ export function createApiSettings(ctx: SpindleFrontendContext, navigation: ApiSe
         globalId = typeof activeValue.activeProfileId === 'string' ? activeValue.activeProfileId : '';
         selected = rows.find(row => row.id === boundId) ?? rows.find(row => row.id === globalId) ?? rows.find(row => row.is_default) ?? rows[0];
         loaded = true; savedOptions(); selectProfile(selected?.id ?? '');
+        if (!chatAvailable) { status.textContent = 'This chat could not be loaded. Default connections are available; retry loading to check this chat again.'; retry.hidden = false; }
       } catch { if (current()) { status.textContent = 'Could not load API settings. Try again.'; retry.hidden = false; } }
     }
     void initialize();

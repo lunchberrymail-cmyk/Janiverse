@@ -190,7 +190,7 @@ test('My Chats activates its own grouped browser only on demand and routes its C
   expect(myChats).not.toBeNull(); expect(myChats.hidden).toBe(true); expect(groupedQueries).toHaveLength(0);
   findButton('My Chats', nav).click(); await flush();
   expect(myChats.hidden).toBe(false); expect(groupedQueries).toEqual([{ limit: 12, offset: 0, sort: 'recent', direction: 'desc' }]);
-  expect(myChats.querySelectorAll('.jb-mc-character')).toHaveLength(1); expect(myChats.querySelector('.jb-mc-summary')!.textContent).toBe('1 character · 1 chat');
+  expect(myChats.querySelectorAll('.jb-mc-character')).toHaveLength(1); expect(myChats.querySelector('.jb-mc-summary')!.textContent).toBe('1 character or group · 1 chat');
   (myChats.querySelector('.jb-mc-resume-card') as HTMLButtonElement).click(); await flush();
   expect(calls.at(-1)).toEqual({ ref: { kind: 'route', id: '/chat/:chatId' }, params: { chatId: 'chat_123' } });
   findButton('Home', nav).click(); await flush(); expect(myChats.hidden).toBe(true); expect(native.outerHTML).toBe(nativeMarkup);
@@ -285,7 +285,7 @@ test('Memory tab advertises memory tools and opens native setup without running 
   expect(calls).toEqual([{ ref: { kind: 'drawer_tab', id: 'summary' }, params: undefined }]);
   expect(document.querySelector('.jb-settings-window-root')).toBeNull();
   expect(document.querySelector('.jb-settings-window-footer')).toBeNull();
-  expect(requests.every(request => !/\/(?:generate|generation)(?:\/|$)/.test(request.url.pathname))).toBe(true);
+  expect(requests.every(request => !/\/(?:generate|generation)(?:\/|$)/.test(request.url.pathname) || request.options?.method === undefined && request.url.pathname.includes('/generate/status/'))).toBe(true);
   expect(native.outerHTML).toBe(nativeMarkup);
 });
 
@@ -325,7 +325,7 @@ test('preset management and Illarin connection open only after explicit help act
   findButton('Connect Illarin', panel).click(); await flush();
   expect(calls[1]).toEqual({ ref: { kind: 'settings_tab', id: 'illarin' }, params: { anchorId: 'setsec-illarin-general' } });
   expect(document.querySelector('.jb-settings-window-root')).toBeNull();
-  expect(requests.every(request => !/\/(?:generate|generation)(?:\/|$)/.test(request.url.pathname))).toBe(true);
+  expect(requests.every(request => !/\/(?:generate|generation)(?:\/|$)/.test(request.url.pathname) || request.options?.method === undefined && request.url.pathname.includes('/generate/status/'))).toBe(true);
   expect(native.outerHTML).toBe(nativeMarkup);
 });
 

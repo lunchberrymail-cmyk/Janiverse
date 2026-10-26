@@ -107,6 +107,35 @@ test('an uncertain save requires Reload before another write attempt', async () 
   rejectedSave = false; button('Reload saved settings').click(); await settle(); expect(input('Font size value').value).toBe('15'); change('Font size value', '21'); await save(); expect(writes()).toHaveLength(2); expect(button('Save').disabled).toBe(true);
 });
 
+test('Close and Escape keep an in-flight multi-setting save open to report a partial failure', async () => {
+  await open(); change('Font size value', '20'); change('Background opacity value', '50');
+  const transport = globalThis.fetch; let finish!: (value: Response) => void;
+  globalThis.fetch = (async (url: any, init: RequestInit = {}) => {
+    if (String(url) === '/api/v1/settings/wallpaper' && init.method === 'PUT') return new Promise<Response>(resolve => { finish = resolve; });
+    return transport(url, init);
+  }) as typeof fetch;
+  button('Save').click(); await settle();
+  expect(button('Close panel').disabled).toBe(true);
+  button('Close panel').click();
+  panel().dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  expect(panel()).not.toBeNull(); expect(finish).toBeDefined();
+  finish(json({}, 500)); await settle();
+  expect(panel().textContent).toContain('Saved text.');
+  expect(panel().textContent).toContain('Reload saved settings');
+  expect(button('Close panel').disabled).toBe(false);
+});
+
+test('mobile Customize previews a video override and removes only the mobile background', async () => {
+  Object.defineProperty(dom.window, 'matchMedia', { configurable: true, value: () => ({ matches: true }) });
+  metadata = { wallpaper: { image_id: 'desktop', type: 'image' }, mobile_wallpaper: { image_id: 'phone-video', type: 'video' } };
+  await open();
+  const video = panel().querySelector('video')!;
+  expect(video.hidden).toBe(false); expect(video.getAttribute('src')).toContain('phone-video');
+  button('Remove chat background').click(); await save();
+  expect(writes().at(-1)?.body).toEqual({ mobile_wallpaper: null });
+  expect(metadata.wallpaper).toEqual({ image_id: 'desktop', type: 'image' });
+});
+
 test('header navigation closes the panel and preserves the captured chat for Memory', async () => {
   await open(); button('Memory').click(); expect(panel()).toBeNull(); expect(navigation).toEqual(['memory:chat-1']); expect(writes()).toEqual([]);
   await open(); button('Settings').click(); expect(panel()).toBeNull(); expect(navigation).toEqual(['memory:chat-1', 'settings']); expect(writes()).toEqual([]);

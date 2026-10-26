@@ -120,6 +120,15 @@ describe('My Chats reads native conversations without changing them', () => {
     expect(root().textContent).not.toContain('Older conversation'); expect(root().querySelector('.jb-mc-description b')?.textContent).toBe('Creator note');
     expect(mutations).toHaveLength(0); expect(started).toHaveLength(0); expect(invoked).toHaveLength(0);
   });
+  test('Name A–Z orders every conversation together across date boundaries', async () => {
+    setup().activate(); await flush();
+    btn('Ada, 4 chats').click(); await flush();
+    const sort = root().querySelector<HTMLSelectElement>('select[aria-label="Sort conversations"]')!;
+    sort.value = 'name'; sort.dispatchEvent(new dom.window.Event('change')); await flush();
+    expect([...root().querySelectorAll('.jb-mc-conversation-name')].map(node => node.textContent)).toEqual(['Older conversation', 'Today conversation', 'Yesterday conversation']);
+    expect(root().querySelectorAll('.jb-mc-date-heading')).toHaveLength(0);
+  });
+
   test('conversation navigation, profile view and Start new chat are separate explicit native actions', async () => {
     const pending = deferred<boolean>(); startResult = () => pending.promise;
     setup().activate(); await flush(); btn('Ada, 4 chats').click(); await flush();

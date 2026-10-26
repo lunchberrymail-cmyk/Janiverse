@@ -98,6 +98,26 @@ test('retrying parser failures imports only failed rows and never reimports succ
   expect(button('Import').disabled).toBe(true); expect(button('Retry failed').hidden).toBe(true);
 });
 
+test('native parser errors are retryable without classifying every HTTP 400 as safe', async () => {
+  choose([file('bad.json')]);
+  respond = async () => json({ error: 'Invalid JSON in uploaded file' }, 400);
+  await run();
+  expect(rows()[0].dataset.importState).toBe('error');
+  expect(button('Retry failed').hidden).toBe(false);
+  respond = async () => json({ error: 'Image upload failed' }, 400);
+  await run('Retry failed');
+  expect(rows()[0].dataset.importState).toBe('uncertain');
+  expect(button('Retry failed').hidden).toBe(true);
+});
+
+test('a ZIP CHARX card is passed intact to the native importer', async () => {
+  const card = file('character.zip'); choose([card]);
+  expect(rows()).toHaveLength(1);
+  await run();
+  expect(((requests[0].init.body as FormData).get('file') as File).name).toBe('character.zip');
+  expect(rows()[0].dataset.importState).toBe('success');
+});
+
 test('network or partially durable server errors require checking the library before any retry', async () => {
   choose([file('partial.png')]); respond = async () => json({ error: 'Image upload failed' }, 400);
   await run(); expect(rows()[0].dataset.importState).toBe('uncertain'); expect(button('Retry failed').hidden).toBe(true); expect(button('Import').disabled).toBe(true); expect(root().textContent).toContain('Check your library');
