@@ -110,7 +110,8 @@ export function createApiSettings(ctx: SpindleFrontendContext, navigation: ApiSe
     const providerGrid = node('div', 'jb-settings-grid');
     const configCard = node('section', 'jb-settings-card jb-api-config-card');
     const configHeading = node('div', 'jb-settings-card-heading');
-    const addConnection = button('+ New', () => selectProfile(''));
+    const openNative = () => { if (current() && !busy && navigation.openNativeConnections) { modal.dismiss(); navigation.openNativeConnections(); } };
+    const addConnection = button('+ New', () => navigation.openNativeConnections ? openNative() : selectProfile(''));
     const configTitle = node('h2', '', 'API connection');
     configHeading.append(configTitle, addConnection);
     configCard.append(configHeading);
@@ -166,6 +167,13 @@ export function createApiSettings(ctx: SpindleFrontendContext, navigation: ApiSe
     const applyHelp = node('p', 'jb-settings-help');
     actions.append(applyHelp, retry, cancel, apply);
     configCard.append(selectionGrid, providerCard, grid, connectionSummary, modelOptions, destinationGrid, details, about, access, status, actions);
+    const nativeSetup = navigation.openNativeConnections ? node('section', 'jb-settings-card jb-api-native-setup') : undefined;
+    const nativeSetupButton = nativeSetup ? button('Open Lumiverse Connections', openNative, 'jb-button jb-primary') : undefined;
+    if (nativeSetup && nativeSetupButton) {
+      nativeSetup.append(node('h2', '', 'API connection'), node('p', 'jb-settings-help', 'Add your provider, API key, and model in Lumiverse’s Connections drawer.'), nativeSetupButton);
+      configCard.hidden = true;
+      panel.append(nativeSetup);
+    }
     panel.append(configCard); modal.root.append(tabs, panel);
     if (navigation.mountPreferences) {
       modal.root.classList.add('jb-settings-combined');
@@ -191,6 +199,7 @@ export function createApiSettings(ctx: SpindleFrontendContext, navigation: ApiSe
       // new connection, rather than retargeting an existing credential.
       providerSelect.disabled = !loaded || locked;
       addConnection.disabled = !loaded || locked;
+      if (nativeSetupButton) nativeSetupButton.disabled = locked;
       if (nativeSettings) nativeSettings.disabled = locked;
       for (const tab of callbackTabs) tab.disabled = locked;
       allow.disabled = cancel.disabled = locked; access.hidden = hasGeneration && (scope.value !== 'chat' || hasChats);
@@ -206,6 +215,7 @@ export function createApiSettings(ctx: SpindleFrontendContext, navigation: ApiSe
       providerSelect.replaceChildren(...options); providerSelect.value = providerId;
     }
     function renderProvider() {
+      if (nativeSetup) { nativeSetup.hidden = !!selected; configCard.hidden = !selected; }
       renderProviderOptions();
       configTitle.textContent = selected ? 'API connection' : 'New connection';
       addConnection.hidden = !selected;
@@ -253,7 +263,7 @@ export function createApiSettings(ctx: SpindleFrontendContext, navigation: ApiSe
       for (const row of rows) { const option = node('option', '', `${row.name}${row.id === globalId ? ' · Default selected' : ''}`); option.value = row.id; saved.append(option); }
       saved.value = selected?.id ?? '';
     }
-    saved.addEventListener('change', () => selectProfile(saved.value));
+    saved.addEventListener('change', () => { if (!saved.value && navigation.openNativeConnections) openNative(); else selectProfile(saved.value); });
     providerSelect.addEventListener('change', () => {
       const provider = providers.find(provider => provider.id === providerSelect.value);
       if (!provider || provider.id === providerId) return;

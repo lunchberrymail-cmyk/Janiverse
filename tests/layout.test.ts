@@ -215,9 +215,9 @@ test('chat header opens owned settings, preserves native chat actions, and refle
   const api = header.querySelector('.jb-api-status') as HTMLButtonElement;
   expect(api.title).toContain('model-one'); expect(api.getAttribute('aria-label')).toBe('API Settings');
   api.click(); await flush();
-  expect(document.querySelector('.jb-api-settings input[name="api-model"]')).not.toBeNull();
+  expect(document.querySelector<HTMLElement>('.jb-api-native-setup')!.hidden).toBe(false);
   expect(calls.some(call => call.ref.id === 'connections')).toBe(false);
-  findButton('Cancel', document.querySelector('.jb-api-settings')!).click();
+  findButton('×', document.querySelector('.jb-settings-window-root')!).click();
   expect(header.querySelector('summary[aria-label="Chat menu"]')).not.toBeNull();
   findButton('New Chat', header).click(); await flush();
   expect(calls.at(-1)).toEqual({ ref: { kind: 'entity_action', id: 'character_chat' }, params: { characterId: 'char_current', mode: 'new' } });
@@ -238,15 +238,15 @@ test('chat header opens owned settings, preserves native chat actions, and refle
   expect(api.title).toContain('model-two'); expect(api.classList.contains('jb-api-missing')).toBe(false);
 });
 
-test('Settings composes native API, prompt and generation editors with a persistent footer and cleans them on tab changes', async () => {
+test('Settings composes connection setup, prompt and generation editors with a persistent footer and cleans them on tab changes', async () => {
   dom.window.history.replaceState({}, '', '/chat/active_chat');
   activeChat = { chatId: 'active_chat', characterId: 'char_current' }; start(); await flush();
   findButton('Settings', roots.get('chat_header_left')!).click(); await flush();
   const window = document.querySelector('.jb-settings-window-root')!;
   const api = window.querySelector('.jb-api-settings')!;
   const promo = api.querySelector('.jb-preset-promo')!;
-  const provider = api.querySelector('.jb-api-provider-card')!;
-  expect(promo.compareDocumentPosition(provider) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+  const connection = api.querySelector('.jb-api-native-setup')!;
+  expect(promo.compareDocumentPosition(connection) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
   expect([...promo.querySelectorAll('a')].map(anchor => [anchor.textContent, anchor.href])).toEqual([
     ['Browse presets', 'https://illarin.com/browse?type=preset'],
     ['Presets on Discord', 'https://discord.com/channels/1484149939167821915/1484156801447497792'],
@@ -867,15 +867,35 @@ test('an in-flight response after disable cannot restore removed cards', async (
   expect(document.querySelector('.jb-card')).toBeNull(); expect(document.querySelectorAll('style')).toHaveLength(0);
 });
 
-test.each([
-  ['1. Add API connection', '.jb-api-settings'],
-  ['3. Preset or prompt (optional)', '.jb-settings-prompt'],
-])('basics shortcut %s opens its editor without saving settings or requesting access', async (label, selector) => {
+test('Add API connection opens the native Connections drawer without loading the custom form or requesting access', async () => {
   let permissionRequests = 0;
   ctx.permissions.request = async () => { permissionRequests++; return []; };
   start(); await flush();
-  findButton(label, roots.get('landing_hero')!).click(); await flush();
-  expect(document.querySelector(selector)).not.toBeNull();
+  const previousRequests = requests.length;
+  findButton('1. Add API connection', roots.get('landing_hero')!).click(); await flush();
+  expect(calls).toEqual([{ ref: { kind: 'drawer_tab', id: 'connections' }, params: undefined }]);
+  expect(document.querySelector('.jb-api-settings')).toBeNull();
+  expect(requests).toHaveLength(previousRequests);
+  expect(permissionRequests).toBe(0);
+});
+
+test('opening native Connections from Settings closes the Janiverse window', async () => {
+  start(); await flush();
+  findButton('API Settings', roots.get('landing_header')!).click(); await flush();
+  const window = document.querySelector('.jb-settings-window-root')!;
+  expect(window.querySelector<HTMLElement>('.jb-api-native-setup')!.hidden).toBe(false);
+  findButton('Open Lumiverse Connections', window).click(); await flush();
+  expect(calls).toEqual([{ ref: { kind: 'drawer_tab', id: 'connections' }, params: undefined }]);
+  expect(document.querySelector('.jb-settings-window-root')).toBeNull();
+  expect(requests.every(request => !request.options.method || request.options.method === 'GET')).toBe(true);
+});
+
+test('the optional preset or prompt shortcut opens its editor without saving settings or requesting access', async () => {
+  let permissionRequests = 0;
+  ctx.permissions.request = async () => { permissionRequests++; return []; };
+  start(); await flush();
+  findButton('3. Preset or prompt (optional)', roots.get('landing_hero')!).click(); await flush();
+  expect(document.querySelector('.jb-settings-prompt')).not.toBeNull();
   expect(permissionRequests).toBe(0);
   expect(requests.every(request => !request.options.method || request.options.method === 'GET')).toBe(true);
   expect(calls).toEqual([]);

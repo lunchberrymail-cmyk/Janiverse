@@ -98,6 +98,29 @@ beforeEach(() => {
 afterEach(() => { api.destroy(); globalThis.fetch = originalFetch; globalThis.MutationObserver = originalObserver; dom.window.close(); });
 
 describe('API settings preserve native connection and chat scope', () => {
+  test('fresh setup opens native Connections even when extension access cannot be loaded', async () => {
+    profiles = [];
+    getGranted = async () => { throw new Error('PERMISSION_DENIED'); };
+    let nativeOpened = 0; navigation.openNativeConnections = () => { nativeOpened++; };
+    api.open(); await settle();
+    expect(root().querySelector<HTMLElement>('.jb-api-native-setup')!.hidden).toBe(false);
+    expect(root().querySelector<HTMLElement>('.jb-api-config-card')!.hidden).toBe(true);
+    button('Open Lumiverse Connections').click();
+    expect(nativeOpened).toBe(1); expect(root().isConnected).toBe(false);
+    expect(updates).toHaveLength(0); expect(activeSwitches).toHaveLength(0);
+    expect(calls.every(call => !call.options?.method)).toBe(true);
+    button('Open Lumiverse Connections').click(); expect(nativeOpened).toBe(1);
+  });
+
+  test.each(['button', 'picker'])('the saved connection %s creates new connections in Lumiverse', async action => {
+    let nativeOpened = 0; navigation.openNativeConnections = () => { nativeOpened++; };
+    api.open(); await settle();
+    if (action === 'button') button('+ New').click(); else choose('api-connection', '');
+    expect(nativeOpened).toBe(1); expect(root().isConnected).toBe(false);
+    expect(updates).toHaveLength(0); expect(activeSwitches).toHaveLength(0);
+    expect(calls.every(call => !call.options?.method)).toBe(true);
+  });
+
   test('saved Vertex models are editable for this chat without changing provider credentials or shared model', async () => {
     profiles[1].provider = 'vertex';
     profiles[1].metadata = { project_id: 'keep-project', region: 'keep-region', credential: { native: 'keep' } };
@@ -225,10 +248,11 @@ describe('API settings preserve native connection and chat scope', () => {
 
   test('regional providers use native advanced setup rather than creating incomplete credentials', async () => {
     let nativeOpened = 0; navigation.openNativeConnections = () => { nativeOpened++; };
-    api.open(); await settle(); choose('api-connection', ''); choose('api-provider', 'google_vertex');
-    expect(button('Save & Use').disabled).toBe(true); expect(button('Load models').disabled).toBe(true);
+    profiles[1].provider = 'google_vertex';
+    api.open(); await settle();
+    expect(button('Save & Use').disabled).toBe(false); expect(button('Load models').disabled).toBe(false);
     expect(control('api-key').disabled).toBe(true); expect(control('api-base-url').disabled).toBe(true);
-    expect(root().textContent).toContain('Set up Google Vertex AI in Advanced provider settings');
+    expect(root().textContent).toContain('Google Vertex AI uses its saved Lumiverse setup');
     expect(calls.every(call => !call.options?.method)).toBe(true);
     button('Advanced provider settings').click();
     expect(nativeOpened).toBe(1); expect(root().isConnected).toBe(false); expect(updates).toHaveLength(0);

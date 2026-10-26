@@ -96,7 +96,7 @@ export function setup(ctx: SpindleFrontendContext) {
     invoke,
   });
   const promptSettings = createPromptSettings(settingsWindow.context('settings'), {
-    openConnection: openApi,
+    openConnection: openConnections,
     openPresetManager: () => {
       void invoke({ kind: 'drawer_tab', id: 'loom' }).then(opened => {
         if (opened) settingsWindow.close();
@@ -111,7 +111,7 @@ export function setup(ctx: SpindleFrontendContext) {
   const apiSettings = createApiSettings(settingsWindow.context('settings'), {
     openInstructions: () => openPrompt('prompt'),
     openGeneration: () => openPrompt('generation'),
-    openNativeConnections: () => { void invoke({ kind: 'drawer_tab', id: 'connections' }); },
+    openNativeConnections: openConnections,
     mountPreferences: target => {
       const preferences = promptSettings.mount(target);
       const footer = target.querySelector<HTMLElement>('.jb-prompt-settings-inline > .jb-settings-actions');
@@ -137,6 +137,12 @@ export function setup(ctx: SpindleFrontendContext) {
   });
   const customize = createCustomize(ctx, { settings: () => openPrompt('generation'), memory: chatId => openMemory(chatId) });
   function openApi() { apiSettings.open(); }
+  function openConnections() {
+    if (disposed) return;
+    void invoke({ kind: 'drawer_tab', id: 'connections' }).then(opened => {
+      if (opened) settingsWindow.close();
+    });
+  }
   function openPrompt(tab: 'prompt' | 'generation') { promptSettings.open(tab); }
   function openMemory(chatId: string, draft?: string) { memory.open(chatId, draft); }
   function openCustomize() {
@@ -290,7 +296,7 @@ export function setup(ctx: SpindleFrontendContext) {
     } catch { /* The settings dialog reports unavailable saved configurations. */ }
   }
   const home = el('section', 'jb-home'); home.setAttribute('aria-label', 'Character browsing');
-  const homeBanner = createHomeBanner(ctx, { invoke, openApi, openImport, openPrompt: () => openPrompt('prompt'), openTutorial }); home.append(homeBanner.root);
+  const homeBanner = createHomeBanner(ctx, { invoke, openApi: openConnections, openImport, openPrompt: () => openPrompt('prompt'), openTutorial }); home.append(homeBanner.root);
   const recentSection = el('section', 'jb-recent-section'); const recentHeading = el('div', 'jb-section-heading');
   recentHeading.append(el('h2', '', 'My chats'), button('View all →', () => setView('chats'), 'jb-text-button'));
   const recent = el('div', 'jb-recent'); recentSection.append(recentHeading, recent); home.append(recentSection);
@@ -588,7 +594,7 @@ export function setup(ctx: SpindleFrontendContext) {
       if (location.pathname !== '/' && !await invoke({ kind: 'route', id: '/' })) return false;
       setView('browse', false); return true;
     },
-    openApi,
+    openApi: openConnections,
     openImport,
   });
   cleanups.push(() => welcome.destroy());
