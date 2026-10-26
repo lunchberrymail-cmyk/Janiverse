@@ -82,9 +82,9 @@ export function createHone(ctx: SpindleFrontendContext, options: HoneOptions = {
   win?.addEventListener('popstate', checkNavigation); win?.addEventListener('hashchange', checkNavigation);
   const escape = (event: KeyboardEvent) => {
     if (event.key !== 'Escape' || !active || !current(active)) return;
-    event.preventDefault(); event.stopPropagation(); close(active);
+    event.preventDefault(); event.stopImmediatePropagation(); close(active);
   };
-  document.addEventListener('keydown', escape);
+  document.addEventListener('keydown', escape, true);
 
   const drawer = (id: string, owner?: string) => ctx.host?.surfaces?.list(['drawer_tab']).find(surface => surface.id === id && surface.invocable !== false && (owner === undefined || surface.owner === owner));
   function honePanel(session: Session) {
@@ -118,7 +118,7 @@ export function createHone(ctx: SpindleFrontendContext, options: HoneOptions = {
           ? { notice: 'More than one Hone installation is enabled. Choose one in Extensions before using its controls.' }
           : matches.length
             ? { notice: 'Hone is installed. Enable it in Extensions and check its startup status.' }
-            : { notice: 'Install Hone once to add its writing tools beside the message box.', administrator: payload.isPrivileged === false };
+            : { notice: 'Hone is optional. Install it to add its own draft button beside the message box.', administrator: payload.isPrivileged === false };
       session.installation = result; return result;
     } catch {
       if (!current(session) || revision !== session.read) return;
@@ -229,7 +229,7 @@ export function createHone(ctx: SpindleFrontendContext, options: HoneOptions = {
     const back = button('Back'), next = button('Next', true), recheck = button('Recheck Hone'), done = button('Close');
     navigation.append(back, next, recheck, done);
     const documentation = external('Hone documentation', HONE_QUICK_START);
-    const footer = element('p', 'jb-hone-notice', 'Setup opens Hone’s own controls. Choosing Enhance here never sends your message.'); footer.append(document.createTextNode(' '), documentation);
+    const footer = element('p', 'jb-hone-notice', 'Setup opens Hone’s own controls. Finding Hone here never sends your message.'); footer.append(document.createTextNode(' '), documentation);
     modal.root.append(progress, heading, visual, instruction, detail, tools, status, navigation, footer);
     let checking = false;
     const isOpen = () => current(session) && session.modal === modal;
@@ -237,7 +237,7 @@ export function createHone(ctx: SpindleFrontendContext, options: HoneOptions = {
     function render(moveFocus = false) {
       if (!isOpen()) return;
       const data = [
-        { title: 'Install and enable Hone', instruction: session.installation?.administrator ? 'Ask this Lumiverse instance’s administrator to install Hone with the repository below.' : 'Open Extensions → Add Extension. Paste the repository into GitHub repo URL... and choose Install from Source.', detail: session.installation?.administrator ? 'This account cannot install extensions. Your administrator can use Extensions → Add Extension → Install from Source.' : 'Keep the Default branch. Enable Hone and review its permissions. Return to your chat → Writing tools → Enhance my draft; Setup guide is available there for the remaining steps.', image: 'hone-install' },
+        { title: 'Install and enable Hone', instruction: session.installation?.administrator ? 'Ask this Lumiverse instance’s administrator to install Hone with the repository below.' : 'Open Extensions → Add Extension. Paste the repository into GitHub repo URL... and choose Install from Source.', detail: session.installation?.administrator ? 'This account cannot install extensions. Your administrator can use Extensions → Add Extension → Install from Source.' : 'Keep the Default branch. Enable Hone and review its permissions. Return to your chat → Help → Find Hone; Setup guide is available there for the remaining steps.', image: 'hone-install' },
         { title: 'Choose the model', instruction: 'Open Hone → Models. Leave Model Profile: Default to use Lumiverse’s default connection.', detail: 'Have a working Lumiverse API connection first. For a different model, choose Duplicate or + New, then select its Connection. Changes save as you choose them.', image: 'hone-models' },
         { title: 'Choose the draft instructions', instruction: 'In Hone → Input, find Hone Input Preset: and choose Input Single Pass 1.0.', detail: 'This is the built-in default. Selecting a preset activates it immediately; there is no separate Save. These instructions refine your own draft, separately from AI-reply settings.', image: 'hone-input' },
         { title: 'Refine, review, then send', instruction: 'Return to your chat and type an unsent draft. Click Hone’s button beside the message box.', detail: 'Hone replaces the draft with its revision. Review or edit it; the same button offers Undo. Use Send only when you are ready. Clicking Hone while it is working cancels that request.', image: 'hone-toolbar' },
@@ -304,7 +304,7 @@ export function createHone(ctx: SpindleFrontendContext, options: HoneOptions = {
     destroy() {
       if (disposed) return; disposed = true; if (active) { active.skipRestore = true; close(active); }
       cleanups.splice(0).forEach(cleanup => cleanup());
-      win?.removeEventListener('popstate', checkNavigation); win?.removeEventListener('hashchange', checkNavigation); document.removeEventListener('keydown', escape);
+      win?.removeEventListener('popstate', checkNavigation); win?.removeEventListener('hashchange', checkNavigation); document.removeEventListener('keydown', escape, true);
     },
   };
 }

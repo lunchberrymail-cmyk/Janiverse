@@ -1,0 +1,21 @@
+.jb-chat-help-button { flex: 0 0 auto; min-width: 44px; min-height: 44px; padding: 5px 9px; border: 1px solid #ffffff20; border-radius: 6px; background: #ffffff06; color: #d9cae7; font: inherit; cursor: pointer; }
+.jb-chat-help-button:hover { background: #aa82bd22; }
+.jb-chat-layouts { min-width: 0; margin: 20px 0 0; padding: 0; border: 0; }
+.jb-chat-layouts legend { margin-bottom: 10px; font-weight: 700; }
+.jb-chat-layout { display: flex; align-items: flex-start; gap: 12px; padding: 14px; margin: 0 0 9px; border: 1px solid #575861; border-radius: 9px; cursor: pointer; }
+.jb-chat-layout.jb-selected { border-color: #b993d1; background: #ad83c012; }
+.jb-chat-layout input { flex: 0 0 auto; width: 18px; height: 18px; margin: 2px 0 0; accent-color: #b993d1; }
+.jb-chat-layout strong, .jb-chat-layout-detail { display: block; }
+.jb-chat-layout-detail { margin-top: 4px; color: #c1bcc8; font-size: 13px; line-height: 1.5; }
+.jb-chat-help h3 { margin: 22px 0 0; font-size: 16px; }
+.jb-chat-help-row { display: flex; align-items: center; gap: 16px; padding: 15px 0; border-bottom: 1px solid #ffffff13; }
+.jb-chat-help-row > div { flex: 1; min-width: 0; }
+.jb-chat-help-row h4 { margin: 0 0 4px; font-size: 14px; }
+.jb-chat-help-row p { margin: 0; color: #c1bcc8; font-size: 13px; line-height: 1.5; }
+.jb-chat-help-row button { flex: 0 0 auto; min-height: 44px; }
+.jb-chat-help :is(button,input):focus-visible, .jb-chat-help-button:focus-visible { outline: 2px solid #c7a0df; outline-offset: 3px; }
+@media (max-width: 480px) {
+  .jb-chat-help-row { flex-wrap: wrap; gap: 10px; }
+  .jb-chat-help-row > div { flex-basis: 100%; }
+  .jb-chat-help-row button { width: 100%; }
+}

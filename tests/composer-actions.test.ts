@@ -31,6 +31,16 @@ function backend() {
   return { request, replies, calls, setGranted(v: string[]) { granted = v; }, setQuiet(fn: typeof quiet) { quiet = fn; }, setAssemble(fn: typeof assemble) { assemble = fn; }, setProfiles(v: typeof profiles) { profiles = v; }, setGetConnection(fn: typeof getConnection) { getConnection = fn; } };
 }
 describe('composer backend native context and account routing', () => {
+  test('invalid and oversized requests immediately reply to the sender without starting generation', async () => {
+    const h = backend();
+    h.request({ draft: 'x'.repeat(100_001) });
+    h.request({ action: 'invalid' }); h.request({ chatId: '' });
+    expect(h.calls).toEqual([]);
+    expect(h.replies.map(reply => reply[0].error)).toEqual(['draft-too-long', 'invalid-request', 'invalid-request']);
+    expect(h.replies.every(reply => reply[1] === 'user-1' && reply[2].frontendSessionId === 'session-1')).toBe(true);
+    h.request({ draft: 'x'.repeat(100_000) }); await settle();
+    expect(h.replies.at(-1)[0].content).toBe('Suggested text');
+  });
   test('uses chat pin, assembled native context/model, and replies only to sender document', async () => {
     const h = backend(); h.request(); await settle();
     expect(h.calls.find(c => c[0] === 'assemble')).toEqual(['assemble', { chatId: 'chat-1', connectionId: 'pinned', personaId: 'persona', presetId: 'selected', generationType: 'normal' }, 'user-1']);

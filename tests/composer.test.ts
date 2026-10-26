@@ -28,10 +28,10 @@ const selector = <T extends Element = HTMLElement>(query: string) => document.qu
 const assistButton = (name: string) => Array.from(document.querySelectorAll<HTMLButtonElement>('.jb-assist-action')).find(button => button.textContent === name)!;
 const personaOption = (name: string) => Array.from(document.querySelectorAll<HTMLButtonElement>('.jb-composer-persona-option')).find(button => button.textContent?.includes(name))!;
 function emit(key?: string) { if (key) subscriptions.get(key)?.forEach(fn => fn()); else callbacks.forEach(fn => fn()); }
-function setup(actions: ComposerActions = {}) {
+function setup(actions: ComposerActions = {}, enabled = true) {
   composer = createComposer({
     getActiveChat: () => ({ chatId, characterId: 'character' }),
-    composer: { getState: () => ({ mounted, chatId: composerChatId, text }), onChange(fn: () => void) { callbacks.add(fn); return () => callbacks.delete(fn); } },
+    composer: { getState: () => ({ mounted, chatId: composerChatId, text }), onChange(fn: () => void) { callbacks.add(fn); return () => callbacks.delete(fn); }, focus() { selector<HTMLTextAreaElement>('#native textarea').focus(); } },
     ui: { mount(point: string) { const root = document.createElement('div'); root.dataset.mount = point; document.body.append(root); return root; } },
     events: {on(key:string,fn:(payload:any)=>void){const listeners=events.get(key)??new Set();listeners.add(fn);events.set(key,listeners);return()=>listeners.delete(fn);}},
     state: {
@@ -43,7 +43,7 @@ function setup(actions: ComposerActions = {}) {
       list(kinds: string[]) { return kinds.includes('entity_action') ? [{ kind: 'entity_action', id: 'switch_persona', invocable: granted.includes('personas') }] : [{ kind: 'drawer_tab', id: 'personas', invocable: true }]; },
       async invoke(ref: { id: string }, params: { personaId?: string }) { invoked.push({ ref, params }); if (ref.id === 'switch_persona') { activePersonaId = params.personaId!; emit('persona.activeId'); } },
     } },
-  } as any, actions);
+  } as any, actions, { enabled });
   return composer;
 }
 beforeEach(() => {
@@ -63,6 +63,18 @@ beforeEach(() => {
 afterEach(() => { composer?.destroy(); composer = undefined; globalThis.fetch = originalFetch; dom.window.close(); });
 
 describe('familiar composer controls preserve native draft and Send', () => {
+  test('switching layouts preserves the native textarea and closes hidden writing actions', async () => {
+    let writes = 0; setup({ onWriteForMe() { writes++; } }, false); await settle();
+    const textarea = selector<HTMLTextAreaElement>('#native textarea'); textarea.value = 'An unsent IME draft';
+    const send = selector<HTMLButtonElement>('#native button'); let sends = 0; send.addEventListener('click', () => sends++);
+    expect(document.documentElement.dataset.jbComposer).toBe('false');
+    selector<HTMLButtonElement>('.jb-assist-toggle').click(); expect(selector('.jb-composer-popover').hidden).toBe(true);
+    composer!.setEnabled(true); await settle(); selector<HTMLButtonElement>('.jb-assist-toggle').click();
+    expect(selector('.jb-composer-popover').hidden).toBe(false);
+    composer!.setEnabled(false); expect(selector('.jb-composer-popover').hidden).toBe(true);
+    expect(document.querySelector('#native textarea')).toBe(textarea); expect(textarea.value).toBe('An unsent IME draft');
+    send.click(); expect(sends).toBe(1); expect(writes).toBe(0);
+  });
   test('matches the three writing actions and disables unavailable callbacks', async () => {
     setup(); await settle(); selector<HTMLButtonElement>('.jb-assist-toggle').click();
     const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.jb-assist-action'));

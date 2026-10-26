@@ -4,6 +4,7 @@ import themeCSS from './theme.css' with { type: 'text' };
 import layoutCSS from './layout.css' with { type: 'text' };
 import settingsCSS from './settings.css' with { type: 'text' };
 import composerCSS from './composer.css' with { type: 'text' };
+import chatToolsCSS from './chat-tools.css' with { type: 'text' };
 import homeBannerCSS from './home-banner.css' with { type: 'text' };
 import cardImportCSS from './card-import.css' with { type: 'text' };
 import myChatsCSS from './my-chats.css' with { type: 'text' };
@@ -19,6 +20,7 @@ import { createPromptSettings } from './prompt-settings';
 import { icon } from './icons';
 import { createComposer } from './composer';
 import { createComposerActions } from './composer-actions';
+import { createChatTools } from './chat-tools';
 import { createHomeBanner, createMemoryPromo, createPresetPromo } from './home-banner';
 import { createCardImport } from './card-import';
 import { createMyChats } from './my-chats';
@@ -64,8 +66,6 @@ export function setup(ctx: SpindleFrontendContext) {
   let favoriteQueue = Promise.resolve();
   const mounts = [ctx.ui.mount('landing_header'), ctx.ui.mount('chat_header_left'), ctx.ui.mount('landing_hero')];
   const oldView = document.documentElement.getAttribute('data-janitor-bridge-view');
-  const oldTools = document.documentElement.getAttribute('data-jb-tools');
-  document.documentElement.setAttribute('data-jb-tools', 'false');
   const settingsWindow = createSettingsWindow(ctx, {
     hasChat: () => !!ctx.getActiveChat()?.chatId && location.pathname.startsWith('/chat/'),
     navigate: section => {
@@ -86,14 +86,18 @@ export function setup(ctx: SpindleFrontendContext) {
     },
   });
   const composerActions = createComposerActions(ctx, { openMemoryDraft: (chatId, text) => openMemory(chatId, text) });
-  const hone = createHone(ctx, { screenshots: honeScreenshots, revealTools: () => {
-    document.documentElement.setAttribute('data-jb-tools', 'true');
-    toolsToggle.setAttribute('aria-pressed', 'true'); homeToolsToggle.setAttribute('aria-pressed', 'true');
-  } });
+  const hone = createHone(ctx, { screenshots: honeScreenshots, revealTools: () => { void chatTools.setLayout('lumiverse'); } });
   const composer = createComposer(ctx, {
-    onEnhanceDraft: () => hone.enhanceDraft(),
+    onEnhanceDraft: () => composerActions.enhanceDraft(),
     onWriteForMe: () => composerActions.writeForMe(),
     onSummarize: () => composerActions.summarizeChat(),
+  });
+  const chatTools = createChatTools(ctx, {
+    onLayoutChange: layout => composer.setEnabled(layout === 'janitorai'),
+    openApi,
+    openMemory: () => { const chatId = ctx.getActiveChat()?.chatId; if (chatId) openMemory(chatId); },
+    openPersonas: () => { void invoke({ kind: 'drawer_tab', id: 'personas' }); },
+    openHone: () => hone.enhanceDraft(),
   });
   const promptSettings = createPromptSettings(settingsWindow.context('settings'), {
     openConnection: openApi,
@@ -162,7 +166,7 @@ export function setup(ctx: SpindleFrontendContext) {
       }).catch(() => { if (!disposed) status.textContent = 'Your character is saved. Open it from the character library.'; });
     },
   });
-  cleanups.push(ctx.dom.addStyle(characterCreateCSS), ctx.dom.addStyle(honeCSS), ctx.dom.addStyle(tutorialCSS), ctx.dom.addStyle(welcomeCSS));
+  cleanups.push(ctx.dom.addStyle(characterCreateCSS), ctx.dom.addStyle(honeCSS), ctx.dom.addStyle(tutorialCSS), ctx.dom.addStyle(welcomeCSS), ctx.dom.addStyle(chatToolsCSS));
   cleanups.push(ctx.dom.addStyle(themeCSS), ctx.dom.addStyle(layoutCSS), ctx.dom.addStyle(uiCSS), ctx.dom.addStyle(settingsCSS), ctx.dom.addStyle(composerCSS), ctx.dom.addStyle(homeBannerCSS), ctx.dom.addStyle(cardImportCSS), ctx.dom.addStyle(myChatsCSS), ctx.dom.addStyle(soundCloudCSS), ctx.dom.addStyle(customizeCSS));
   const status = el('p', 'jb-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   const navButtons: Array<{ node: HTMLButtonElement; view: View }> = [];
@@ -213,12 +217,7 @@ export function setup(ctx: SpindleFrontendContext) {
   for (const [label, id] of [['My Personas', 'personas'], ['Advanced Presets', 'loom'], ['Lorebooks', 'lorebook'], ['Extensions', 'spindle']]) {
     menu.append(button(label, () => { more.open = false; void invoke({ kind: 'drawer_tab', id }); }, 'jb-menu-link'));
   }
-  function toggleTools() {
-    const visible = document.documentElement.getAttribute('data-jb-tools') !== 'true';
-    document.documentElement.setAttribute('data-jb-tools', String(visible));
-    toolsToggle.setAttribute('aria-pressed', String(visible)); homeToolsToggle.setAttribute('aria-pressed', String(visible));
-  }
-  const homeToolsToggle = button('Lumiverse tools', toggleTools, 'jb-menu-link'); homeToolsToggle.setAttribute('aria-pressed', 'false'); menu.append(homeToolsToggle);
+  menu.append(button('Chat tools & help', () => { more.open = false; chatTools.openHelp(); }, 'jb-menu-link'));
   more.append(moreLabel, menu);
   const create = button('Create a Character', () => characterCreate.open(), 'jb-create-link');
   masthead.append(nav); mounts[0].append(masthead);
@@ -227,29 +226,36 @@ export function setup(ctx: SpindleFrontendContext) {
   const chatBar = el('div', 'jb-chat-bar'); const chatRight = el('div', 'jb-chat-right');
   const back = button('‹ Back', () => setView('chats'), 'jb-back');
   const api = button('API Settings', openApi, 'jb-api-status'); api.setAttribute('aria-label', 'API Settings');
-  const memoryButton = button('Chat Memory', () => { const chatId = ctx.getActiveChat()?.chatId; if (chatId) openMemory(chatId); }, 'jb-memory-button');
+  const helpButton = button('Help', () => { chatMenu.open = false; chatTools.openHelp(); }, 'jb-chat-help-button'); helpButton.setAttribute('aria-label', 'Chat tools & help');
   const chatMenu = el('details', 'jb-more jb-chat-menu'); const chatMenuLabel = el('summary', '', '☰'); chatMenuLabel.setAttribute('aria-label', 'Chat menu');
   chatMenuLabel.replaceChildren(icon('menu'));
-  const chatMenuItems = el('div', 'jb-more-menu');
+  const chatMenuItems = el('div', 'jb-more-menu'); chatMenuItems.setAttribute('role', 'menu'); chatMenuItems.setAttribute('aria-label', 'Chat actions');
   const chatAction = (label: string, action: () => void, picture: Parameters<typeof icon>[0]) => {
-    const item = button(label, () => { chatMenu.open = false; action(); }, 'jb-menu-link'); item.prepend(icon(picture)); chatMenuItems.append(item);
+    const item = button(label, () => { chatMenu.open = false; action(); }, 'jb-menu-link'); item.setAttribute('role', 'menuitem'); item.prepend(icon(picture)); chatMenuItems.append(item); return item;
   };
   chatAction('Settings', openApi, 'settings');
-  chatAction('Chat Memory', () => { const chatId = ctx.getActiveChat()?.chatId; if (chatId) openMemory(chatId); }, 'memory');
+  const memoryMenuItem = chatAction('Chat Memory', () => { const chatId = ctx.getActiveChat()?.chatId; if (chatId) openMemory(chatId); }, 'memory');
   chatAction('Customize', openCustomize, 'customize');
   chatAction('New Chat', () => { const characterId = ctx.getActiveChat()?.characterId; if (characterId) void invoke({ kind: 'entity_action', id: 'character_chat' }, { characterId, mode: 'new' }); }, 'new-chat');
   chatAction('All Chats', () => setView('chats'), 'all-chats');
-  chatAction('Prompt', () => openPrompt('prompt'), 'prompt');
-  chatAction('My Persona', () => { void invoke({ kind: 'drawer_tab', id: 'personas' }); }, 'persona');
-  const toolsToggle = button('Lumiverse tools', () => { toggleTools(); chatMenu.open = false; }, 'jb-menu-link'); toolsToggle.prepend(icon('tools')); toolsToggle.setAttribute('aria-pressed', 'false'); chatMenuItems.append(toolsToggle);
-  chatMenu.append(chatMenuLabel, chatMenuItems); chatRight.append(api, memoryButton, chatMenu); chatBar.append(back, chatRight);
+  chatMenu.append(chatMenuLabel, chatMenuItems); chatRight.append(api, helpButton, chatMenu); chatBar.append(back, chatRight);
+  chatMenu.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && chatMenu.open) { event.preventDefault(); event.stopPropagation(); chatMenu.open = false; chatMenuLabel.focus(); return; }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    const choices = [...chatMenuItems.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
+    if (!choices.length) return;
+    event.preventDefault(); event.stopPropagation(); chatMenu.open = true;
+    const index = choices.indexOf(document.activeElement as HTMLButtonElement);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? choices.length - 1 : index < 0 ? (event.key === 'ArrowUp' ? choices.length - 1 : 0) : (index + (event.key === 'ArrowUp' ? -1 : 1) + choices.length) % choices.length;
+    choices[next].focus();
+  });
   const chatTitle = button('Conversation', () => { void invoke({ kind: 'drawer_tab', id: 'profile' }); }, 'jb-chat-title');
   const soundCloud = createSoundCloud(ctx);
   chatHeader.append(chatBar, chatTitle, soundCloud.root); mounts[1].append(chatHeader);
   let titleRequest = 0;
   async function refreshChatHeader() {
     const active = ctx.getActiveChat(); const generation = ++titleRequest;
-    memoryButton.disabled = !active?.chatId;
+    memoryMenuItem.disabled = !active?.chatId;
     chatTitle.textContent = 'Conversation';
     if (active?.characterId) {
       try { const character = payload(await ctx.characters.get(active.characterId)); if (!disposed && generation === titleRequest && typeof character.name === 'string') chatTitle.textContent = character.name; } catch { /* Native profile stays available. */ }
@@ -594,6 +600,6 @@ export function setup(ctx: SpindleFrontendContext) {
     disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); tutorialWindow?.destroy(); characterCreate.destroy(); hone.destroy(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); composerActions.destroy(); memory.destroy(); apiSettings.destroy(); promptSettings.destroy(); settingsWindow.destroy();
     cleanups.reverse().forEach(cleanup => cleanup()); mounts.forEach(root => root.replaceChildren());
     if (oldView === null) document.documentElement.removeAttribute('data-janitor-bridge-view'); else document.documentElement.setAttribute('data-janitor-bridge-view', oldView);
-    if (oldTools === null) document.documentElement.removeAttribute('data-jb-tools'); else document.documentElement.setAttribute('data-jb-tools', oldTools);
+    chatTools.destroy();
   };
 }

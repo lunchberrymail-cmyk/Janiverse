@@ -25,7 +25,9 @@ export function setupComposerBackend(api: SpindleAPI) {
     const action = text(request.action) as Action;
     const chatId = text(request.chatId);
     const draft = text(request.draft);
-    if (!['enhance', 'write', 'summarize'].includes(action) || !chatId || chatId.length > 200 || draft.length > 100_000) return;
+    const reject = (error: string) => api.sendToFrontend({ type: channel, id, chatId, error }, userId, { frontendSessionId });
+    if (!['enhance', 'write', 'summarize'].includes(action) || !chatId || chatId.length > 200) { reject('invalid-request'); return; }
+    if (draft.length > 100_000) { reject('draft-too-long'); return; }
     const prior = jobs.get(owner);
     if (prior) { prior.abort.abort(); clearTimeout(prior.timer); }
     const abort = new AbortController();

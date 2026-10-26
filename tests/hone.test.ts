@@ -28,6 +28,15 @@ const state = () => document.querySelector('.jb-hone-state')?.textContent ?? '';
 const hint = () => document.querySelector('.jb-hone-hint-status')?.textContent ?? '';
 const escape = () => document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 
+for (const order of ['before', 'after']) test(`closing Hone with Escape shields a host stop listener registered ${order}`, async () => {
+  let stops = 0; const host = (event: KeyboardEvent) => { if (event.key === 'Escape') stops++; };
+  if (order === 'before') document.addEventListener('keydown', host);
+  setup(); if (order === 'after') document.addEventListener('keydown', host);
+  await hone!.enhanceDraft(); expect(document.querySelector('.jb-hone')).not.toBeNull();
+  document.activeElement!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  expect(stops).toBe(0); expect(document.querySelector('.jb-hone')).toBeNull(); document.removeEventListener('keydown', host);
+});
+
 function toolbar(title = 'Hone your draft', parent = document.querySelector('[data-component="InputArea"]')!) {
   const node = document.createElement('button'); node.dataset.honeInputBtn = ''; node.title = title; node.setAttribute('aria-disabled', 'false');
   node.getClientRects = () => [{ width: 25, height: 25 }] as any;
@@ -137,9 +146,9 @@ describe('Hone toolbar hand-off', () => {
 
 describe('Hone setup wizard', () => {
   test('uses a short exact native install / Models / Input / draft path, with no automatic install or model call', async () => {
-    activeChat = null; setup(); await hone!.enhanceDraft(); expect(roots).toHaveLength(1); expect(state()).toContain('Install Hone once'); expect(document.querySelector('.jb-hone-progress')?.textContent).toBe('Step 1 of 4');
+    activeChat = null; setup(); await hone!.enhanceDraft(); expect(roots).toHaveLength(1); expect(state()).toContain('Hone is optional'); expect(document.querySelector('.jb-hone-progress')?.textContent).toBe('Step 1 of 4');
     expect(document.querySelector('.jb-hone-instruction')?.textContent).toContain('Extensions → Add Extension'); expect(document.querySelector('.jb-hone-instruction')?.textContent).toContain('GitHub repo URL...');
-    expect(document.querySelector('.jb-hone-detail')?.textContent).toContain('Writing tools → Enhance my draft'); expect(document.querySelector('.jb-hone-detail')?.textContent).toContain('Setup guide');
+    expect(document.querySelector('.jb-hone-detail')?.textContent).toContain('Help → Find Hone'); expect(document.querySelector('.jb-hone-detail')?.textContent).toContain('Setup guide');
     expect(document.querySelector<HTMLInputElement>('input')?.value).toBe(HONE_REPOSITORY); expect(button('Back').disabled).toBe(true);
     button('Next').click(); expect(document.querySelector('.jb-hone-instruction')?.textContent).toContain('Hone → Models'); expect(document.querySelector('.jb-hone-instruction')?.textContent).toContain('Model Profile: Default'); expect(document.querySelector('.jb-hone-detail')?.textContent).toContain('Duplicate or + New');
     button('Next').click(); expect(document.querySelector('.jb-hone-instruction')?.textContent).toContain('Hone Input Preset:'); expect(document.querySelector('.jb-hone-instruction')?.textContent).toContain('Input Single Pass 1.0'); expect(document.querySelector('.jb-hone-detail')?.textContent).toContain('no separate Save');
@@ -212,7 +221,7 @@ describe('Hone setup wizard', () => {
     let release: ((response: Response) => void) | undefined; read = () => new Promise(resolve => { release = resolve; }); setup();
     const pending = hone!.enhanceDraft(); expect(roots).toHaveLength(0); const firstSignal = signals[0];
     read = async () => Response.json({ extensions: [] }); await hone!.enhanceDraft(); expect(firstSignal.aborted).toBe(true); const oldOpen = button('Open Extensions');
-    release!(Response.json({ extensions: [installed()] })); await pending; expect(state()).toContain('Install Hone once'); expect(revealCount).toBe(0);
+    release!(Response.json({ extensions: [installed()] })); await pending; expect(state()).toContain('Hone is optional'); expect(revealCount).toBe(0);
     dom.window.history.pushState({}, '', '/'); dom.window.dispatchEvent(new dom.window.PopStateEvent('popstate')); expect(document.querySelector('.jb-hone')).toBeNull(); oldOpen.click(); await settle(); expect(invocations).toHaveLength(0);
     let late: ((response: Response) => void) | undefined; read = () => new Promise(resolve => { late = resolve; }); const final = hone!.enhanceDraft(); hone!.destroy(); late!(Response.json({ extensions: [installed()] })); await final;
     expect(signals.every(signal => signal.aborted)).toBe(true); expect(document.querySelector('.jb-hone-hint')).toBeNull(); expect(document.querySelector('.jb-hone')).toBeNull(); await hone!.enhanceDraft(); expect(calls).toHaveLength(3);

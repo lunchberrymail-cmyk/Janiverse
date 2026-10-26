@@ -56,7 +56,7 @@ export function createComposerActions(ctx: SpindleFrontendContext, options: Opti
       clearTimeout(session.timer); lock(false); generate.hidden = false; generate.textContent = 'Try again';
       const content = string(payload.content);
       if (content) { result.value = content; apply.disabled = false; status.textContent = 'Ready to review.'; result.focus(); }
-      else status.textContent = payload.error === 'permission' ? 'Allow Chats and Generation before generating a suggestion.' : payload.error === 'connection-unavailable' ? 'Choose an API configuration first.' : payload.error === 'empty' ? 'The model returned no text. You can try again.' : payload.error === 'cancelled' ? 'Generation was cancelled or timed out. You can try again.' : 'Could not generate a suggestion. Check the API configuration and try again.';
+      else status.textContent = payload.error === 'draft-too-long' ? 'This draft is too long for writing assistance. Shorten it to 100,000 characters or fewer, then reopen Writing tools. Your draft is unchanged.' : payload.error === 'invalid-request' ? 'This writing request is invalid. Close this window, reopen the chat, and try again.' : payload.error === 'permission' ? 'Allow Chats and Generation before generating a suggestion.' : payload.error === 'connection-unavailable' ? 'Choose an API configuration first.' : payload.error === 'empty' ? 'The model returned no text. You can try again.' : payload.error === 'cancelled' ? 'Generation was cancelled or timed out. You can try again.' : 'Could not generate a suggestion. Check the API configuration and try again.';
     };
     onResult = complete;
     async function run() {

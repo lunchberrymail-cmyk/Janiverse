@@ -1,4 +1,5 @@
 /* The native textarea, mirror, keyboard handling, uploads and Send stay mounted. */
+.jb-composer-tools-root[hidden], .jb-composer-popover-root[hidden] { display: none !important; }
 html[data-jb-composer="true"] [data-component="InputArea"] { min-height: 120px; padding-top: 10px; border-color: #a78bce; background: #303238 !important; border-radius: 9px; }
 html[data-jb-composer="true"] [data-component="InputArea"]:focus-within { border-color: #c4a3e5; }
 html[data-jb-composer="true"] [data-component="InputArea"] [class*="_inputRow_"] { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 8px; }
@@ -12,7 +13,7 @@ html[data-jb-composer="true"] [data-component="InputArea"] [class*="_sendBtnShel
 html[data-jb-composer="true"] [data-component="InputArea"] [class*="_sendBtn_"] { width: 35px; height: 35px; border: 1px solid #ffffff09; border-radius: 8px; background: #ffffff03; color: #b8a8ce; }
 /* Replace only the native paper-plane artwork; Stop, queue and loading icons retain their states. */
 html[data-jb-composer="true"] [data-component="InputArea"] [class*="_sendBtnIcon_"] svg.lucide-send { display: none; }
-html[data-jb-composer="true"] [data-component="InputArea"] [class*="_sendBtnIcon_"]:has(svg.lucide-send)::after { content: ''; display: block; width: 23px; height: 23px; background: currentColor; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 20V4m-7 7 7-7 7 7' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; }
+html[data-jb-composer="true"] [data-component="InputArea"] [class*="_sendBtnIcon_"]:has(svg.lucide-send)::after { content: ''; display: block; width: 23px; height: 23px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 20V4m-7 7 7-7 7 7' fill='none' stroke='%23b8a8ce' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; }
 html[data-jb-composer="true"][data-jb-tools="false"] [data-component="InputArea"] [class*="_inputRow_"] > [class*="_attachBtn_"] { display: none; }
 /* The accessible Lumiverse tools menu restores attachments and recording controls. */
 .jb-composer-tools-root { min-width: 0; max-width: 100%; }

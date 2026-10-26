@@ -229,7 +229,7 @@ test('chat header opens owned settings, preserves native chat actions, and refle
   expect(document.querySelector('.jb-customize')).not.toBeNull();
   expect(calls.some(call => call.ref.kind === 'settings_tab' && call.ref.id === 'display')).toBe(false);
   findButton('×', document.querySelector('.jb-customize')!).click();
-  findButton('My Persona', header).click(); await flush(); expect(calls.at(-1)!.ref).toEqual({ kind: 'drawer_tab', id: 'personas' });
+  findButton('Help', header).click(); findButton('Manage personas', document.querySelector('.jb-chat-help')!).click(); await flush(); expect(calls.at(-1)!.ref).toEqual({ kind: 'drawer_tab', id: 'personas' });
   connectionProjection = { activeProfileId: null, provider: null, model: null };
   subscriptions.get('connections.active')!.forEach(handler => handler());
   expect(api.textContent).toBe('API not ready · Set up'); expect(api.classList.contains('jb-api-missing')).toBe(true);
@@ -385,26 +385,60 @@ test('leaving a chat unloads its SoundCloud frame even when the native active ch
   expect(bindings.every(events => events.size === 0)).toBe(true); expect(document.querySelectorAll('script')).toHaveLength(1);
 });
 
-test('chat menu uses icons and owned prompt controls without altering native chat content', async () => {
+test('chat menu keeps the reference order and icons while extra shortcuts live in Help', async () => {
   start(); await flush();
   const menu = roots.get('chat_header_left')!.querySelector('.jb-chat-menu')!;
-  for (const label of ['Settings', 'Chat Memory', 'Customize', 'New Chat', 'All Chats', 'Prompt']) {
+  const labels = ['Settings', 'Chat Memory', 'Customize', 'New Chat', 'All Chats'];
+  expect([...menu.querySelectorAll('button')].map(button => button.textContent)).toEqual(labels);
+  for (const label of labels) {
     expect(findButton(label, menu).querySelector('svg[aria-hidden="true"]')).not.toBeNull();
   }
-  findButton('Prompt', menu).click(); await flush();
+  findButton('Settings', menu).click(); await flush();
   expect(document.querySelector('.jb-settings textarea[name="global-prompt"]')).not.toBeNull();
   expect(native.outerHTML).toBe(nativeMarkup);
 });
 
-test('Lumiverse tools can be revealed from either menu and the prior attribute is restored on disable', async () => {
-  start(); await flush(); expect(document.documentElement.getAttribute('data-jb-tools')).toBe('false');
-  const homeToggle = findButton('Lumiverse tools', roots.get('landing_header')!);
-  const chatToggle = findButton('Lumiverse tools', roots.get('chat_header_left')!);
-  homeToggle.click(); expect(document.documentElement.getAttribute('data-jb-tools')).toBe('true');
-  expect(homeToggle.getAttribute('aria-pressed')).toBe('true'); expect(chatToggle.getAttribute('aria-pressed')).toBe('true');
-  chatToggle.click(); expect(document.documentElement.getAttribute('data-jb-tools')).toBe('false');
-  expect(homeToggle.getAttribute('aria-pressed')).toBe('false'); expect(chatToggle.getAttribute('aria-pressed')).toBe('false');
+test('chat menu keyboard navigation stays within supported actions and Escape shields generation', async () => {
+  start(); await flush(); const menu = roots.get('chat_header_left')!.querySelector<HTMLDetailsElement>('.jb-chat-menu')!;
+  const summary = menu.querySelector('summary')!; summary.focus(); let stops = 0;
+  const host = (event: KeyboardEvent) => { if (event.key === 'Escape') stops++; }; document.addEventListener('keydown', host);
+  summary.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+  expect(menu.open).toBe(true); expect(document.activeElement).toBe(findButton('All Chats', menu));
+  document.activeElement!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+  expect(document.activeElement).toBe(findButton('Settings', menu));
+  document.activeElement!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  expect(menu.open).toBe(false); expect(stops).toBe(0); expect(document.activeElement).toBe(summary); document.removeEventListener('keydown', host);
+});
+
+test('native chat tools are the default and the home menu or chat Help can open the optional familiar layout', async () => {
+  start(); await flush(); expect(document.documentElement.getAttribute('data-jb-tools')).toBe('true');
+  expect(document.documentElement.getAttribute('data-jb-composer')).toBe('false');
+  const header = roots.get('chat_header_left')!;
+  expect(header.querySelector('.jb-memory-button')).toBeNull();
+  expect([...header.querySelectorAll('button')].filter(button => button.textContent === 'Chat Memory')).toHaveLength(1);
+  findButton('Chat tools & help', roots.get('landing_header')!).click();
+  document.querySelector<HTMLInputElement>('input[value="janitorai"]')!.click();
+  expect(document.documentElement.getAttribute('data-jb-tools')).toBe('false');
+  expect(document.documentElement.getAttribute('data-jb-composer')).toBe('true');
+  findButton('Close', document.querySelector('.jb-chat-help')!).click();
+  findButton('Help', header).click();
+  document.querySelector<HTMLInputElement>('input[value="lumiverse"]')!.click();
+  expect(document.documentElement.getAttribute('data-jb-tools')).toBe('true');
+  expect(document.documentElement.getAttribute('data-jb-composer')).toBe('false');
+  expect(native.outerHTML).toBe(nativeMarkup);
   stop!(); stop = undefined; expect(document.documentElement.getAttribute('data-jb-tools')).toBe('saved');
+});
+
+test('optional familiar Enhance uses native writing assistance without opening or checking Hone', async () => {
+  activeChat = { chatId: 'chat-1', characterId: 'char-1' }; const sent: any[] = [];
+  ctx.composer = { getState: () => ({ mounted: true, chatId: 'chat-1', text: 'An unsent draft' }), onChange: () => () => {}, focus() {} };
+  ctx.frontendSessionId = 'session-1'; ctx.permissions.getGranted = async () => ['chats', 'generation']; ctx.sendToBackend = (payload: unknown) => sent.push(payload);
+  const read = ctx.state.get; ctx.state.get = (key: string) => ['persona.activeId', 'loom.activePresetId'].includes(key) ? null : read(key);
+  start(); await flush(); findButton('Help', roots.get('chat_header_left')!).click();
+  document.querySelector<HTMLInputElement>('input[value="janitorai"]')!.click(); findButton('Close', document.querySelector('.jb-chat-help')!).click();
+  document.querySelector<HTMLButtonElement>('.jb-assist-toggle')!.click(); findButton('Enhance my draft', document.querySelector('.jb-assist-menu')!).click(); await flush();
+  expect(sent).toHaveLength(1); expect(sent[0].action).toBe('enhance'); expect(sent[0].draft).toBe('An unsent draft');
+  expect(document.querySelector('.jb-hone')).toBeNull(); expect(requests.some(request => request.url.pathname === '/api/v1/spindle')).toBe(false);
 });
 
 test('grouped gallery pages reuse the native summary index while search, sort and favorites reset it', async () => {

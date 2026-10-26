@@ -28,7 +28,8 @@ function sparkle() {
 }
 
 /** Familiar composer controls around Lumiverse's existing IME-aware input and Send button. */
-export function createComposer(ctx: SpindleFrontendContext, actions: ComposerActions = {}) {
+export function createComposer(ctx: SpindleFrontendContext, actions: ComposerActions = {}, options: { enabled?: boolean } = {}) {
+  let enabled = options.enabled ?? false;
   let disposed = false, busy = false, popover: 'assist' | 'persona' | null = null;
   let personas: Persona[] = [], personaRequest = 0, listRequest = 0, actionRequest = 0;
   let currentChatId = ctx.getActiveChat()?.chatId ?? null;
@@ -40,7 +41,8 @@ export function createComposer(ctx: SpindleFrontendContext, actions: ComposerAct
   const toolsRoot = ctx.ui.mount('chat_input_tools_left');
   const popoverRoot = ctx.ui.mount('chat_composer_above');
   const oldMarker = document.documentElement.getAttribute('data-jb-composer');
-  document.documentElement.setAttribute('data-jb-composer', 'true');
+  document.documentElement.setAttribute('data-jb-composer', String(enabled));
+  toolsRoot.toggleAttribute('hidden', !enabled); popoverRoot.toggleAttribute('hidden', !enabled);
   toolsRoot.classList.add('jb-composer-tools-root'); popoverRoot.classList.add('jb-composer-popover-root');
   const tools = node('div', 'jb-composer-tools');
   const assist = node('button', 'jb-assist-toggle'); assist.type = 'button'; assist.append(sparkle());
@@ -115,9 +117,9 @@ export function createComposer(ctx: SpindleFrontendContext, actions: ComposerAct
   function sync() {
     if (disposed) return;
     const value = snapshot(); const chatId = ctx.getActiveChat()?.chatId ?? null;
-    if (chatId !== currentChatId) { currentChatId = chatId; ++actionRequest; busy = false; close(); void refreshPersona(); void readGeneration(); }
-    const ready = value.mounted && value.chatId === chatId && !!chatId;
-    assist.disabled = !ready || busy; picker.disabled = !chatId || busy;
+    if (chatId !== currentChatId) { currentChatId = chatId; ++actionRequest; busy = false; close(); if (enabled) { void refreshPersona(); void readGeneration(); } }
+    const ready = enabled && value.mounted && value.chatId === chatId && !!chatId;
+    assist.disabled = !ready || busy; picker.disabled = !enabled || !chatId || busy;
     for (const action of actionButtons) {
       action.button.disabled = !ready || busy || streaming() || !action.callback || (action.needsDraft && !value.text.trim());
       action.button.title = !action.callback ? 'This writing action is unavailable in this installation.'
@@ -126,7 +128,7 @@ export function createComposer(ctx: SpindleFrontendContext, actions: ComposerAct
     if (!ready && popover === 'assist') close();
   }
   function open(which: 'assist' | 'persona') {
-    if (disposed || busy) return;
+    if (disposed || !enabled || busy) return;
     if (popover === which) { close(); return; }
     popover = which; popup.hidden = false; status.textContent = '';
     assistMenu.hidden = which !== 'assist'; personaMenu.hidden = which !== 'persona';
@@ -143,7 +145,7 @@ export function createComposer(ctx: SpindleFrontendContext, actions: ComposerAct
   }
   async function runAction(callback: (() => void | Promise<void>) | undefined, needsDraft: boolean) {
     const value = snapshot(); const chatId = ctx.getActiveChat()?.chatId;
-    if (disposed || busy || !callback || streaming() || !value.mounted || !chatId || value.chatId !== chatId || (needsDraft && !value.text.trim())) return;
+    if (disposed || !enabled || busy || !callback || streaming() || !value.mounted || !chatId || value.chatId !== chatId || (needsDraft && !value.text.trim())) return;
     const request = ++actionRequest; busy = true; close(); sync();
     try { await callback(); }
     catch { if (!disposed && request === actionRequest && ctx.getActiveChat()?.chatId === chatId) { popup.hidden = false; assistMenu.hidden = personaMenu.hidden = true; status.textContent = 'Could not complete this writing action. Your draft is still in the message box.'; } }
@@ -255,18 +257,25 @@ export function createComposer(ctx: SpindleFrontendContext, actions: ComposerAct
         sync();
       }));
     }
-    cleanups.push(ctx.events.on('PERSONA_CHANGED', () => { personas = []; void refreshPersona(); if (popover === 'persona') void loadPersonas(); }));
+    cleanups.push(ctx.events.on('PERSONA_CHANGED', () => { personas = []; if (enabled) void refreshPersona(); if (popover === 'persona') void loadPersonas(); }));
   }
   if (ctx.composer?.onChange) cleanups.push(ctx.composer.onChange(sync));
   if (ctx.state?.subscribe) {
     for (const [selector, handler] of [
-      ['chat.active', sync], ['persona.activeId', () => { void refreshPersona(); }],
+      ['chat.active', sync], ['persona.activeId', () => { if (enabled) void refreshPersona(); }],
     ] as const) {
       try { cleanups.push(ctx.state.subscribe(selector, handler)); } catch { /* Optional selectors differ by Lumiverse version. */ }
     }
   }
-  renderChip(null); sync(); void refreshPersona(); void readGeneration();
-  return { destroy() {
+  renderChip(null); sync(); if (enabled) { void refreshPersona(); void readGeneration(); }
+  return { setEnabled(value: boolean) {
+    if (disposed || value === enabled) return;
+    const ownedFocus = toolsRoot.contains(document.activeElement) || popoverRoot.contains(document.activeElement);
+    enabled = value; close(); toolsRoot.toggleAttribute('hidden', !enabled); popoverRoot.toggleAttribute('hidden', !enabled);
+    document.documentElement.setAttribute('data-jb-composer', String(enabled)); sync();
+    if (enabled) { void refreshPersona(); void readGeneration(); }
+    else if (ownedFocus) ctx.composer?.focus();
+  }, destroy() {
     if (disposed) return; disposed = true; ++actionRequest; ++personaRequest; ++listRequest; abort.abort();
     cleanups.splice(0).forEach(cleanup => cleanup()); tools.remove(); popup.remove(); toolsRoot.remove(); popoverRoot.remove();
     if (oldMarker === null) document.documentElement.removeAttribute('data-jb-composer'); else document.documentElement.setAttribute('data-jb-composer', oldMarker);
