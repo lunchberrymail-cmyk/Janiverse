@@ -1,7 +1,7 @@
 /* Extension-owned settings. The host modal supplies its close button and scrolling. */
 .jb-settings {
   --jb-settings-gutter: 24px;
-  --jb-settings-bg: #303238;
+  --jb-settings-bg: #313338;
   --jb-settings-field-bg: #27292f;
   --jb-settings-raised: #3a3c43;
   --jb-settings-border: #575861;
@@ -27,7 +27,7 @@
   margin: 20px calc(-1 * var(--jb-settings-gutter)) calc(-1 * var(--jb-settings-gutter));
   padding: 14px var(--jb-settings-gutter);
   border-top: 1px solid #ffffff18;
-  background: #303238;
+  background: #313338;
 }
 @media (max-width: 600px) { .jb-settings { --jb-settings-gutter: 16px; } }
 .jb-settings *, .jb-settings *::before, .jb-settings *::after { box-sizing: border-box; }
@@ -183,7 +183,7 @@
   overflow: hidden !important;
   border: 1px solid #4c4e58 !important;
   border-radius: 14px !important;
-  background: #303238 !important;
+  background: #313338 !important;
   box-shadow: 0 12px 38px #0005 !important;
   pointer-events: auto;
 }
@@ -203,7 +203,7 @@
   min-height: 0;
   width: 100%;
   color: #e9e7ed;
-  background: #303238;
+  background: #313338;
   font: 14px/1.5 Arial, Helvetica, sans-serif;
   color-scheme: dark;
 }
@@ -219,7 +219,7 @@
 .jb-settings-window-root :is(button, a, input, select, textarea, summary):focus-visible { outline: 2px solid #c7a0df; outline-offset: 2px; }
 .jb-settings-window-content { flex: 1 1 auto; min-height: 0; min-width: 0; overflow: auto; overscroll-behavior: contain; overflow-anchor: none; scrollbar-width: thin; }
 .jb-settings-window-editor.jb-settings { --jb-settings-gutter: 16px; width: 100%; max-width: none; padding: 16px; }
-.jb-settings-window-editor > .jb-settings-tabs { position: sticky; top: -16px; z-index: 6; margin: -16px -16px 18px; padding: 3px 12px 0; border-bottom-color: #4c4d56; background: #303238; }
+.jb-settings-window-editor > .jb-settings-tabs { position: sticky; top: -16px; z-index: 6; margin: -16px -16px 18px; padding: 3px 12px 0; border-bottom-color: #4c4d56; background: #313338; }
 .jb-settings-window-editor .jb-settings-tab { flex: 1 1 0; padding: 11px 7px; font-size: 13px; }
 .jb-settings-window-editor .jb-settings-grid { gap: 14px 12px; }
 .jb-settings-window-editor .jb-settings-intro { margin-bottom: 16px; }
@@ -271,7 +271,7 @@
 .jb-settings-combined > .jb-settings-tabs { display: none; }
 .jb-settings-combined > .jb-settings-section { margin: 0; padding: 0; border: 0; }
 .jb-settings-combined .jb-memory-promo { margin-bottom: 10px; }
-.jb-settings-combined .jb-settings-card { margin-bottom: 10px; padding: 12px; border-radius: 11px; background: #303238; border-color: #4b4d56; }
+.jb-settings-combined .jb-settings-card { margin-bottom: 10px; padding: 12px; border-radius: 11px; background: #313338; border-color: #4b4d56; }
 .jb-settings-combined .jb-settings-card h2 { margin: 0 0 10px; font-size: 14px; }
 .jb-settings-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .jb-settings-card-heading h2 { margin-bottom: 0 !important; }

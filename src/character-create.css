@@ -41,7 +41,7 @@
 .jb-character-create .jb-character-add-message { justify-self: start; }
 .jb-character-create .jb-settings-advanced { margin-top: 0; }
 .jb-character-create .jb-character-advanced-fields { display: grid; gap: 22px; }
-.jb-character-create .jb-character-actions { position: sticky; bottom: calc(-1 * var(--jb-settings-gutter)); z-index: 5; margin: 22px calc(-1 * var(--jb-settings-gutter)) calc(-1 * var(--jb-settings-gutter)); padding: 14px var(--jb-settings-gutter); background: #303238; }
+.jb-character-create .jb-character-actions { position: sticky; bottom: calc(-1 * var(--jb-settings-gutter)); z-index: 5; margin: 22px calc(-1 * var(--jb-settings-gutter)) calc(-1 * var(--jb-settings-gutter)); padding: 14px var(--jb-settings-gutter); background: #313338; }
 .jb-character-create .jb-character-close-note { margin-top: 12px; }
 @media (max-width: 780px) {
   .jb-character-create .jb-character-create-layout { grid-template-columns: minmax(0, 1fr); gap: 22px; }

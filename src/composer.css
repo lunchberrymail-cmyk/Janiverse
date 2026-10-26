@@ -1,6 +1,6 @@
 /* The native textarea, mirror, keyboard handling, uploads and Send stay mounted. */
 .jb-composer-tools-root[hidden], .jb-composer-popover-root[hidden] { display: none !important; }
-html[data-jb-composer="true"] [data-component="InputArea"] { min-height: 120px; padding-top: 10px; border-color: #a78bce; background: #303238 !important; border-radius: 9px; }
+html[data-jb-composer="true"] [data-component="InputArea"] { min-height: 120px; padding-top: 10px; border-color: #a78bce; background: #313338 !important; border-radius: 9px; }
 html[data-jb-composer="true"] [data-component="InputArea"]:focus-within { border-color: #c4a3e5; }
 html[data-jb-composer="true"] [data-component="InputArea"] [class*="_inputRow_"] { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 8px; }
 html[data-jb-composer="true"] [data-component="InputArea"] [class*="_inputWrapper_"] { order: 0; flex: 1 0 100%; min-width: 0; min-height: 62px; background: transparent; box-shadow: none; }

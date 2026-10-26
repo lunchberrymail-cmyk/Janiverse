@@ -1,5 +1,5 @@
 /* Native layout only. CSS-module fragments are scoped to public components. */
-[data-component="LandingPage"], [data-component="ChatView"] { background: #303238; }
+[data-component="LandingPage"], [data-component="ChatView"] { background: #313338; }
 [data-component="LandingPage"] [data-landing-background-glow], [data-component="LandingPage"] [data-landing-background-grid] { opacity: 0; }
 [data-component="LandingPageCharacters"] { max-width: 1480px !important; padding: 12px 32px 28px !important; }
 [data-component="LandingPageHeader"] { min-height: 62px; gap: 18px; margin: 0 0 24px !important; padding: 0 0 12px !important; border-bottom: 1px solid #ffffff12; }
@@ -47,7 +47,7 @@ html[data-jb-tools="false"] [data-component="InputArea"] > [class*="_actionBar_"
 
 /* Both native message modes become quiet, borderless left-avatar rows. */
 [data-component="BubbleMessage"][data-part], [data-component="MinimalMessage"][data-part] {
-  --long-message-fade-color: #303238;
+  --long-message-fade-color: #313338;
   border: 0 !important; border-radius: 0; background: transparent !important; box-shadow: none !important;
   backdrop-filter: none !important; font-family: Arial, Helvetica, sans-serif;
 }

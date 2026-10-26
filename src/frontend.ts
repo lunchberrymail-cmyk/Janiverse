@@ -13,6 +13,9 @@ import customizeCSS from './customize.css' with { type: 'text' };
 import characterCreateCSS from './character-create.css' with { type: 'text' };
 import tutorialCSS from './feature-tutorials.css' with { type: 'text' };
 import welcomeCSS from './welcome.css' with { type: 'text' };
+import visualCSS from './visual-style.css' with { type: 'text' };
+import frauncesFont from '../assets/fonts/fraunces-latin.woff2';
+import juraFont from '../assets/fonts/jura-latin.woff2';
 import { createChatMemory } from './memory';
 import { createApiSettings } from './api-settings';
 import { createPromptSettings } from './prompt-settings';
@@ -161,6 +164,7 @@ export function setup(ctx: SpindleFrontendContext) {
   });
   cleanups.push(ctx.dom.addStyle(characterCreateCSS), ctx.dom.addStyle(tutorialCSS), ctx.dom.addStyle(welcomeCSS), ctx.dom.addStyle(chatToolsCSS));
   cleanups.push(ctx.dom.addStyle(themeCSS), ctx.dom.addStyle(layoutCSS), ctx.dom.addStyle(uiCSS), ctx.dom.addStyle(settingsCSS), ctx.dom.addStyle(composerCSS), ctx.dom.addStyle(homeBannerCSS), ctx.dom.addStyle(cardImportCSS), ctx.dom.addStyle(myChatsCSS), ctx.dom.addStyle(soundCloudCSS), ctx.dom.addStyle(customizeCSS));
+  cleanups.push(ctx.dom.addStyle(visualCSS.replace('__JB_FRAUNCES__', frauncesFont).replace('__JB_JURA__', juraFont)));
   const status = el('p', 'jb-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   const navButtons: Array<{ node: HTMLButtonElement; view: View }> = [];
   async function invoke(ref: SpindleHostSurfaceRef, params?: Record<string, string>) {
