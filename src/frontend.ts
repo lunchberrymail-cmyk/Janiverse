@@ -229,7 +229,7 @@ export function setup(ctx: SpindleFrontendContext) {
   const chatHeader = el('header', 'jb-chat-header');
   const chatBar = el('div', 'jb-chat-bar'); const chatRight = el('div', 'jb-chat-right');
   const back = button('‹ Back', () => setView('chats'), 'jb-back');
-  const api = button('API Settings', openApi, 'jb-api-status'); api.setAttribute('aria-label', 'API Settings');
+  const api = button('API Settings', openConnections, 'jb-api-status'); api.setAttribute('aria-label', 'API Settings');
   const helpButton = button('?', () => { chatMenu.open = false; chatTools.openHelp(); }, 'jb-chat-help-button'); helpButton.setAttribute('aria-label', 'Chat tools & help'); helpButton.title = 'Chat tools & help';
   const chatMenu = el('details', 'jb-more jb-chat-menu'); const chatMenuLabel = el('summary', '', '☰'); chatMenuLabel.setAttribute('aria-label', 'Chat menu');
   chatMenuLabel.replaceChildren(icon('menu'));

@@ -209,15 +209,18 @@ test('My Chats expands read-only and opens profiles locally while keeping new ch
   expect(native.outerHTML).toBe(nativeMarkup); stop!(); stop = undefined; expect(document.querySelector('.jb-my-chats')).toBeNull();
 });
 
-test('chat header opens owned settings, preserves native chat actions, and reflects connection changes', async () => {
+test('chat API Settings opens native Connections, preserves chat settings, and reflects connection changes', async () => {
+  dom.window.history.replaceState({}, '', '/chat/active_chat');
   activeChat = { chatId: 'active_chat', characterId: 'char_current' }; start(); await flush();
   const header = roots.get('chat_header_left')!;
   const api = header.querySelector('.jb-api-status') as HTMLButtonElement;
   expect(api.title).toContain('model-one'); expect(api.getAttribute('aria-label')).toBe('API Settings');
+  const previousRequests = requests.length;
   api.click(); await flush();
-  expect(document.querySelector<HTMLElement>('.jb-api-native-setup')!.hidden).toBe(false);
-  expect(calls.some(call => call.ref.id === 'connections')).toBe(false);
-  findButton('×', document.querySelector('.jb-settings-window-root')!).click();
+  expect(calls).toEqual([{ ref: { kind: 'drawer_tab', id: 'connections' }, params: undefined }]);
+  expect(document.querySelector('.jb-settings-window-root')).toBeNull();
+  expect(requests).toHaveLength(previousRequests);
+  expect(activeChat).toEqual({ chatId: 'active_chat', characterId: 'char_current' });
   expect(header.querySelector('summary[aria-label="Chat menu"]')).not.toBeNull();
   findButton('New Chat', header).click(); await flush();
   expect(calls.at(-1)).toEqual({ ref: { kind: 'entity_action', id: 'character_chat' }, params: { characterId: 'char_current', mode: 'new' } });
@@ -233,6 +236,9 @@ test('chat header opens owned settings, preserves native chat actions, and refle
   connectionProjection = { activeProfileId: null, provider: null, model: null };
   subscriptions.get('connections.active')!.forEach(handler => handler());
   expect(api.textContent).toBe('API not ready · Set up'); expect(api.classList.contains('jb-api-missing')).toBe(true);
+  api.click(); await flush();
+  expect(calls.at(-1)!.ref).toEqual({ kind: 'drawer_tab', id: 'connections' });
+  expect(document.querySelector('.jb-settings-window-root')).toBeNull();
   connectionProjection = { activeProfileId: 'connection_2', provider: 'other-provider', model: 'model-two' };
   subscriptions.get('connections.active')!.forEach(handler => handler());
   expect(api.title).toContain('model-two'); expect(api.classList.contains('jb-api-missing')).toBe(false);
@@ -890,11 +896,23 @@ test('opening native Connections from Settings closes the Janiverse window', asy
   expect(requests.every(request => !request.options.method || request.options.method === 'GET')).toBe(true);
 });
 
+test('Create a persona opens the native Personas drawer without requesting permission or saving', async () => {
+  let permissionRequests = 0;
+  ctx.permissions.request = async () => { permissionRequests++; return []; };
+  start(); await flush();
+  const previousRequests = requests.length;
+  findButton('3. Create a persona', roots.get('landing_hero')!).click(); await flush();
+  expect(calls).toEqual([{ ref: { kind: 'drawer_tab', id: 'personas' }, params: undefined }]);
+  expect(requests).toHaveLength(previousRequests);
+  expect(permissionRequests).toBe(0);
+  expect(document.querySelector('[role=dialog]')).toBeNull();
+});
+
 test('the optional preset or prompt shortcut opens its editor without saving settings or requesting access', async () => {
   let permissionRequests = 0;
   ctx.permissions.request = async () => { permissionRequests++; return []; };
   start(); await flush();
-  findButton('3. Preset or prompt (optional)', roots.get('landing_hero')!).click(); await flush();
+  findButton('4. Preset or prompt (optional)', roots.get('landing_hero')!).click(); await flush();
   expect(document.querySelector('.jb-settings-prompt')).not.toBeNull();
   expect(permissionRequests).toBe(0);
   expect(requests.every(request => !request.options.method || request.options.method === 'GET')).toBe(true);

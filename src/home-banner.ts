@@ -74,9 +74,10 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
   const actions = make('div', 'jb-discover-actions');
   const tryButton = make('button', 'jb-discover-primary'); tryButton.type = 'button';
   const cardButton = make('button', 'jb-discover-import', '2. Add a card'); cardButton.type = 'button'; cardButton.prepend(icon('import'));
-  const promptButton = make('button', 'jb-discover-import', '3. Preset or prompt (optional)'); promptButton.type = 'button'; promptButton.prepend(icon('prompt'));
+  const personaButton = make('button', 'jb-discover-import', '3. Create a persona'); personaButton.type = 'button'; personaButton.prepend(icon('persona'));
+  const promptButton = make('button', 'jb-discover-import', '4. Preset or prompt (optional)'); promptButton.type = 'button'; promptButton.prepend(icon('prompt'));
   const cortexButton = make('button', 'jb-discover-import', 'Explore Memory Cortex'); cortexButton.type = 'button'; cortexButton.prepend(icon('embeddings'));
-  actions.append(tryButton, cardButton, promptButton, cortexButton);
+  actions.append(tryButton, cardButton, personaButton, promptButton, cortexButton);
   const footer = make('div', 'jb-discover-footer');
   const progress = make('span', 'jb-discover-progress'); progress.setAttribute('aria-live', 'polite');
   const next = make('button', 'jb-discover-next', 'Next idea'); next.type = 'button'; next.append(icon('arrow'));
@@ -115,7 +116,7 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
   const ideas = [
     {
       name: 'Basics', title: 'Let’s do the basics.',
-      description: 'Add an AI connection and a character card to get chatting. A preset or prompt is optional.',
+      description: 'Connect your AI, add a character card, and create the persona you’ll chat as. A preset or prompt is optional.',
       action: '1. Add API connection', picture: 'settings',
       tutorial: 'import',
       open: async () => { options.openApi(); return true; },
@@ -171,7 +172,7 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
     tutorial.textContent = isBasics ? 'Card import guide' : 'Full tutorial';
     root.classList.toggle('jb-discover-lunch', isLunch);
     root.classList.toggle('jb-discover-basics', isBasics);
-    cardButton.hidden = promptButton.hidden = !isBasics;
+    cardButton.hidden = personaButton.hidden = promptButton.hidden = !isBasics;
     cortexButton.hidden = idea.name !== 'Memory';
     root.dataset.idea = idea.name.toLowerCase(); title.textContent = idea.title; description.textContent = idea.description;
     tryButton.replaceChildren(icon(idea.picture), document.createTextNode(idea.action));
@@ -206,6 +207,11 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
     catch { status.textContent = 'Could not open this setup step. Please try again from Janiverse’s More menu.'; }
   }
   cardButton.addEventListener('click', () => openBasicStep(options.openImport));
+  personaButton.addEventListener('click', () => openBasicStep(() => {
+    void options.invoke({ kind: 'drawer_tab', id: 'personas' }).then(ok => {
+      if (!disposed && index === 0 && !ok) status.textContent = 'Personas is unavailable right now. Open it from Lumiverse’s sidebar.';
+    }).catch(() => { if (!disposed && index === 0) status.textContent = 'Could not open Personas. Please try again from Lumiverse’s sidebar.'; });
+  }));
   promptButton.addEventListener('click', () => openBasicStep(options.openPrompt));
   render();
   return { root, destroy() { disposed = true; picksModal?.dismiss(); root.remove(); } };

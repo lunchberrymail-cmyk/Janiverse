@@ -69,20 +69,28 @@ test('introduces one optional feature and opens it directly without changing con
   expect(find('Card import guide').hidden).toBe(false);
 });
 
-test('basics opens connection, card import and optional prompt setup only when selected', async () => {
-  const api = find('1. Add API connection'), card = find('2. Add a card'), prompt = find('3. Preset or prompt (optional)');
+test('basics opens connection, card import, persona and optional prompt setup only when selected', async () => {
+  const api = find('1. Add API connection'), card = find('2. Add a card'), persona = find('3. Create a persona'), prompt = find('4. Preset or prompt (optional)');
   expect(apiOpens + imports + promptOpens).toBe(0);
   expect(banner.root.textContent).toContain('A preset or prompt is optional.');
-  expect(card.hidden || prompt.hidden).toBe(false);
-  api.click(); await flush(); card.click(); prompt.click();
+  expect(card.hidden || persona.hidden || prompt.hidden).toBe(false);
+  api.click(); await flush(); card.click(); persona.click(); prompt.click(); await flush();
   expect([apiOpens, imports, promptOpens]).toEqual([1, 1, 1]);
-  expect(invoked).toEqual([]); expect(modals).toEqual([]);
+  expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'personas' }]); expect(modals).toEqual([]);
   find('Next idea').click();
-  expect(card.hidden && prompt.hidden).toBe(true);
-  card.click(); prompt.click();
+  expect(card.hidden && persona.hidden && prompt.hidden).toBe(true);
+  card.click(); persona.click(); prompt.click();
   expect([apiOpens, imports, promptOpens]).toEqual([1, 1, 1]);
-  banner.destroy(); api.click(); card.click(); prompt.click(); await flush();
+  banner.destroy(); api.click(); card.click(); persona.click(); prompt.click(); await flush();
   expect([apiOpens, imports, promptOpens]).toEqual([1, 1, 1]);
+  expect(invoked).toHaveLength(1);
+});
+
+test('persona setup reports an unavailable native drawer without creating anything', async () => {
+  invokeResult = async () => false;
+  find('3. Create a persona').click(); await flush();
+  expect(banner.root.querySelector('[role=status]')!.textContent).toContain('Personas is unavailable');
+  expect(modals).toHaveLength(0);
 });
 
 test('full tutorials open only on request with the right feature and preserve the banner selection', () => {
