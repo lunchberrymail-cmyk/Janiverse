@@ -32,7 +32,7 @@ test('introduces one optional feature and opens it directly without changing con
   expect(find('Explore Memory Cortex').hidden).toBe(false);
   find('Set up summaries').click(); await flush();
   find('Explore Memory Cortex').click(); await flush();
-  expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'summary' }, { kind: 'drawer_tab', id: 'cortex' }]);
+  expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'summary' }, { kind: 'settings_tab', id: 'memoryCortex' }]);
   find('Next idea').click();
   expect(banner.root.querySelector('h2')!.textContent).toBe('Build a world beyond the character card.');
   expect(find('Explore Memory Cortex').hidden).toBe(true);
@@ -141,7 +141,7 @@ test('unavailable memory destinations give an actionable fallback without select
   find('Next idea').click();
   find('Explore Memory Cortex').click(); await flush();
   expect(banner.root.querySelector('[role="status"]')!.textContent).toContain('You can still try Summary');
-  expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'cortex' }]);
+  expect(invoked).toEqual([{ kind: 'settings_tab', id: 'memoryCortex' }]);
   expect(imports).toBe(0);
   expect(banner.root.dataset.idea).toBe('memory');
 });
@@ -153,7 +153,7 @@ test('compact settings promo opens only native setup destinations and becomes in
   const buttons = [...promo.root.querySelectorAll('button')];
   expect(invoked).toEqual([]);
   buttons[0]!.click(); await flush(); buttons[1]!.click(); await flush();
-  expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'summary' }, { kind: 'drawer_tab', id: 'cortex' }]);
+  expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'summary' }, { kind: 'settings_tab', id: 'memoryCortex' }]);
   promo.destroy(); buttons[0]!.click(); buttons[1]!.click(); await flush();
   expect(invoked).toHaveLength(2);
   expect(document.querySelector('.jb-memory-promo')).toBeNull();

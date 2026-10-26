@@ -1,12 +1,9 @@
 import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
 
 export type ComposerActions = {
-  onEnhanceDraft?: () => void | Promise<void>;
-  onWriteForMe?: () => void | Promise<void>;
-  onSummarize?: () => void | Promise<void>;
+  onDiscover?: () => void;
 };
 type Persona = { id: string; name: string; title: string; imageId: string | null };
-type ComposerSnapshot = { mounted: boolean; chatId: string | null; text: string };
 let composerSequence = 0;
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
   const result = document.createElement(tag); result.className = className; result.textContent = text; return result;
@@ -30,12 +27,9 @@ function sparkle() {
 /** Familiar composer controls around Lumiverse's existing IME-aware input and Send button. */
 export function createComposer(ctx: SpindleFrontendContext, actions: ComposerActions = {}, options: { enabled?: boolean } = {}) {
   let enabled = options.enabled ?? false;
-  let disposed = false, busy = false, popover: 'assist' | 'persona' | null = null;
-  let personas: Persona[] = [], personaRequest = 0, listRequest = 0, actionRequest = 0;
+  let disposed = false, busy = false, popover: 'persona' | null = null;
+  let personas: Persona[] = [], personaRequest = 0, listRequest = 0;
   let currentChatId = ctx.getActiveChat()?.chatId ?? null;
-  const generations = new Map<string, Set<string>>();
-  const generationVersions = new Map<string, number>();
-  let statusRequest = 0;
   const cleanups: Array<() => void> = [];
   const abort = new AbortController();
   const toolsRoot = ctx.ui.mount('chat_input_tools_left');
@@ -46,7 +40,7 @@ export function createComposer(ctx: SpindleFrontendContext, actions: ComposerAct
   toolsRoot.classList.add('jb-composer-tools-root'); popoverRoot.classList.add('jb-composer-popover-root');
   const tools = node('div', 'jb-composer-tools');
   const assist = node('button', 'jb-assist-toggle'); assist.type = 'button'; assist.append(sparkle());
-  assist.setAttribute('aria-label', 'Writing tools'); assist.setAttribute('aria-haspopup', 'menu'); assist.setAttribute('aria-expanded', 'false'); assist.title = 'Writing tools';
+  assist.setAttribute('aria-label', 'Find helpful extensions'); assist.setAttribute('aria-haspopup', 'dialog'); assist.title = 'What are you looking for?';
   const picker = node('button', 'jb-composer-persona'); picker.type = 'button';
   const chipAvatar = node('span', 'jb-composer-avatar');
   const chipName = node('span', 'jb-composer-persona-name', 'My persona');
@@ -55,18 +49,7 @@ export function createComposer(ctx: SpindleFrontendContext, actions: ComposerAct
   tools.append(assist, picker); toolsRoot.append(tools);
   const popup = node('div', 'jb-composer-popover'); popup.hidden = true;
   const status = node('p', 'jb-composer-notice'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
-  const assistMenu = node('div', 'jb-assist-menu'); assistMenu.setAttribute('role', 'menu'); assistMenu.setAttribute('aria-label', 'Writing tools');
-  const prefix = `jb-composer-${++composerSequence}`; assistMenu.id = `${prefix}-assist`; assist.setAttribute('aria-controls', assistMenu.id);
-  const actionButtons: Array<{ button: HTMLButtonElement; callback?: () => void | Promise<void>; needsDraft: boolean }> = [];
-  for (const [label, callback, needsDraft] of [
-    ['Enhance my draft', actions.onEnhanceDraft, false],
-    ['Write something for me', actions.onWriteForMe, false],
-    ['Summarize this chat', actions.onSummarize, false],
-  ] as const) {
-    const button = node('button', 'jb-assist-action', label); button.type = 'button'; button.setAttribute('role', 'menuitem');
-    button.addEventListener('click', () => { void runAction(callback, needsDraft); }); assistMenu.append(button);
-    actionButtons.push({ button, callback, needsDraft });
-  }
+  const prefix = `jb-composer-${++composerSequence}`;
   const personaMenu = node('div', 'jb-composer-persona-menu'); personaMenu.hidden = true;
   personaMenu.id = `${prefix}-personas`; picker.setAttribute('aria-controls', personaMenu.id);
   const search = node('input', 'jb-composer-persona-search'); search.type = 'search'; search.placeholder = 'Search personas'; search.setAttribute('aria-label', 'Search personas');
@@ -74,27 +57,8 @@ export function createComposer(ctx: SpindleFrontendContext, actions: ComposerAct
   const personaFooter = node('div', 'jb-composer-persona-footer');
   const allow = node('button', '', 'Allow persona switching'); allow.type = 'button'; allow.hidden = true;
   const manage = node('button', '', 'Manage personas'); manage.type = 'button';
-  personaFooter.append(allow, manage); personaMenu.append(search, personaList, personaFooter); popup.append(status, assistMenu, personaMenu); popoverRoot.append(popup);
+  personaFooter.append(allow, manage); personaMenu.append(search, personaList, personaFooter); popup.append(status, personaMenu); popoverRoot.append(popup);
 
-  function snapshot(): ComposerSnapshot {
-    try { const value = ctx.composer?.getState(); if (value) return value; } catch { /* Older hosts can leave the composer unmounted between chats. */ }
-    return { mounted: false, chatId: null, text: '' };
-  }
-  function streaming() { return !!generations.get(ctx.getActiveChat()?.chatId ?? '')?.size; }
-  async function readGeneration() {
-    const chatId = ctx.getActiveChat()?.chatId, ticket = ++statusRequest;
-    if (!chatId) return;
-    const version = generationVersions.get(chatId) ?? 0;
-    try {
-      const response = await fetch(`/api/v1/generate/status/${encodeURIComponent(chatId)}`, { credentials: 'same-origin', signal: abort.signal });
-      if (!response.ok) return;
-      const value = record(await response.json());
-      if (disposed || ticket !== statusRequest || version !== (generationVersions.get(chatId) ?? 0) || ctx.getActiveChat()?.chatId !== chatId) return;
-      if (value.active === true) generations.set(chatId, new Set([typeof value.generationId === 'string' ? value.generationId : chatId]));
-      else generations.delete(chatId);
-      sync();
-    } catch { /* Live events continue to guard actions if recovery is unavailable. */ }
-  }
   function activePersonaId(): string | null { try { const id = ctx.state?.get('persona.activeId'); return typeof id === 'string' ? id : null; } catch { return null; } }
   function avatar(target: HTMLElement, value: Persona | null) {
     target.replaceChildren();
@@ -110,29 +74,22 @@ export function createComposer(ctx: SpindleFrontendContext, actions: ComposerAct
     picker.setAttribute('aria-label', value ? `Choose your persona, currently ${value.name}` : 'Choose your persona');
   }
   function close(focus = false) {
-    const previous = popover; popover = null; popup.hidden = true; status.textContent = '';
-    assist.setAttribute('aria-expanded', 'false'); picker.setAttribute('aria-expanded', 'false');
-    if (focus) (previous === 'persona' ? picker : assist).focus();
+    popover = null; popup.hidden = true; status.textContent = '';
+    picker.setAttribute('aria-expanded', 'false');
+    if (focus) picker.focus();
   }
   function sync() {
     if (disposed) return;
-    const value = snapshot(); const chatId = ctx.getActiveChat()?.chatId ?? null;
-    if (chatId !== currentChatId) { currentChatId = chatId; ++actionRequest; busy = false; close(); if (enabled) { void refreshPersona(); void readGeneration(); } }
-    const ready = enabled && value.mounted && value.chatId === chatId && !!chatId;
-    assist.disabled = !ready || busy; picker.disabled = !enabled || !chatId || busy;
-    for (const action of actionButtons) {
-      action.button.disabled = !ready || busy || streaming() || !action.callback || (action.needsDraft && !value.text.trim());
-      action.button.title = !action.callback ? 'This writing action is unavailable in this installation.'
-        : action.needsDraft && !value.text.trim() ? 'Write a draft first.' : streaming() ? 'Wait for the current response to finish.' : '';
-    }
-    if (!ready && popover === 'assist') close();
+    const chatId = ctx.getActiveChat()?.chatId ?? null;
+    if (chatId !== currentChatId) { currentChatId = chatId; busy = false; close(); if (enabled) void refreshPersona(); }
+    assist.disabled = !enabled || !actions.onDiscover; picker.disabled = !enabled || !chatId || busy;
   }
-  function open(which: 'assist' | 'persona') {
+  function open(which: 'persona') {
     if (disposed || !enabled || busy) return;
     if (popover === which) { close(); return; }
     popover = which; popup.hidden = false; status.textContent = '';
-    assistMenu.hidden = which !== 'assist'; personaMenu.hidden = which !== 'persona';
-    assist.setAttribute('aria-expanded', String(which === 'assist')); picker.setAttribute('aria-expanded', String(which === 'persona'));
+    personaMenu.hidden = false;
+    picker.setAttribute('aria-expanded', 'true');
     sync();
     if (which === 'persona') {
       search.value = ''; void loadPersonas();
@@ -141,15 +98,6 @@ export function createComposer(ctx: SpindleFrontendContext, actions: ComposerAct
       const coarsePointer = document.defaultView?.matchMedia?.('(pointer: coarse)').matches === true;
       if (coarsePointer) picker.focus(); else search.focus();
     }
-    else actionButtons.find(action => !action.button.disabled)?.button.focus();
-  }
-  async function runAction(callback: (() => void | Promise<void>) | undefined, needsDraft: boolean) {
-    const value = snapshot(); const chatId = ctx.getActiveChat()?.chatId;
-    if (disposed || !enabled || busy || !callback || streaming() || !value.mounted || !chatId || value.chatId !== chatId || (needsDraft && !value.text.trim())) return;
-    const request = ++actionRequest; busy = true; close(); sync();
-    try { await callback(); }
-    catch { if (!disposed && request === actionRequest && ctx.getActiveChat()?.chatId === chatId) { popup.hidden = false; assistMenu.hidden = personaMenu.hidden = true; status.textContent = 'Could not complete this writing action. Your draft is still in the message box.'; } }
-    finally { if (!disposed && request === actionRequest) { busy = false; sync(); } }
   }
   async function readJson(path: string): Promise<unknown> {
     const response = await fetch(`/api/v1${path}`, { credentials: 'same-origin', signal: abort.signal });
@@ -227,14 +175,14 @@ export function createComposer(ctx: SpindleFrontendContext, actions: ComposerAct
     if (!surfaces || !action) { status.textContent = 'Persona management is unavailable.'; return; }
     close(); await surfaces.invoke({ kind: 'drawer_tab', id: 'personas' });
   })().catch(() => { if (!disposed) { popup.hidden = false; status.textContent = 'Could not open persona management.'; } }); });
-  assist.addEventListener('click', () => open('assist')); picker.addEventListener('click', () => open('persona'));
+  assist.addEventListener('click', () => { if (disposed || !enabled) return; close(); actions.onDiscover?.(); }); picker.addEventListener('click', () => open('persona'));
   search.addEventListener('input', renderPersonas);
   const outside = (event: Event) => { const target = event.target as Node | null; if (target && !tools.contains(target) && !popup.contains(target)) close(); };
   const keys = (event: KeyboardEvent) => {
     if (popup.hidden) return;
     if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); close(true); return; }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || event.target === search) return;
-    const choices = Array.from((popover === 'persona' ? personaList : assistMenu).querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+    const choices = Array.from(personaList.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
     if (!choices.length) return;
     const index = choices.indexOf(document.activeElement as HTMLButtonElement);
     const next = event.key === 'Home' ? 0 : event.key === 'End' ? choices.length - 1 : (index + (event.key === 'ArrowUp' ? -1 : 1) + choices.length) % choices.length;
@@ -243,20 +191,6 @@ export function createComposer(ctx: SpindleFrontendContext, actions: ComposerAct
   document.addEventListener('pointerdown', outside, true); document.addEventListener('keydown', keys, true);
   cleanups.push(() => document.removeEventListener('pointerdown', outside, true), () => document.removeEventListener('keydown', keys, true));
   if (ctx.events?.on) {
-    for (const event of ['GENERATION_STARTED', 'GENERATION_IN_PROGRESS', 'GENERATION_ENDED', 'GENERATION_STOPPED']) {
-      cleanups.push(ctx.events.on(event, payload => {
-        const value = record(payload), chatId = value.chatId;
-        if (typeof chatId !== 'string') return;
-        generationVersions.set(chatId, (generationVersions.get(chatId) ?? 0) + 1);
-        const id = typeof value.generationId === 'string' ? value.generationId : chatId;
-        const running = generations.get(chatId) ?? new Set<string>();
-        if (event === 'GENERATION_STARTED' || event === 'GENERATION_IN_PROGRESS') running.add(id);
-        else if (typeof value.generationId !== 'string') running.clear();
-        else { running.delete(id); running.delete(chatId); }
-        if (running.size) generations.set(chatId, running); else generations.delete(chatId);
-        sync();
-      }));
-    }
     cleanups.push(ctx.events.on('PERSONA_CHANGED', () => { personas = []; if (enabled) void refreshPersona(); if (popover === 'persona') void loadPersonas(); }));
   }
   if (ctx.composer?.onChange) cleanups.push(ctx.composer.onChange(sync));
@@ -267,16 +201,16 @@ export function createComposer(ctx: SpindleFrontendContext, actions: ComposerAct
       try { cleanups.push(ctx.state.subscribe(selector, handler)); } catch { /* Optional selectors differ by Lumiverse version. */ }
     }
   }
-  renderChip(null); sync(); if (enabled) { void refreshPersona(); void readGeneration(); }
+  renderChip(null); sync(); if (enabled) void refreshPersona();
   return { setEnabled(value: boolean) {
     if (disposed || value === enabled) return;
     const ownedFocus = toolsRoot.contains(document.activeElement) || popoverRoot.contains(document.activeElement);
     enabled = value; close(); toolsRoot.toggleAttribute('hidden', !enabled); popoverRoot.toggleAttribute('hidden', !enabled);
     document.documentElement.setAttribute('data-jb-composer', String(enabled)); sync();
-    if (enabled) { void refreshPersona(); void readGeneration(); }
+    if (enabled) void refreshPersona();
     else if (ownedFocus) ctx.composer?.focus();
   }, destroy() {
-    if (disposed) return; disposed = true; ++actionRequest; ++personaRequest; ++listRequest; abort.abort();
+    if (disposed) return; disposed = true; ++personaRequest; ++listRequest; abort.abort();
     cleanups.splice(0).forEach(cleanup => cleanup()); tools.remove(); popup.remove(); toolsRoot.remove(); popoverRoot.remove();
     if (oldMarker === null) document.documentElement.removeAttribute('data-jb-composer'); else document.documentElement.setAttribute('data-jb-composer', oldMarker);
   } };

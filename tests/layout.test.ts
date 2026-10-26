@@ -74,7 +74,7 @@ beforeEach(() => {
   const catalog = [
     { kind: 'route', id: '/' }, { kind: 'route', id: '/chat/:chatId' }, { kind: 'route', id: '/characters/:id' },
     ...['characters', 'connections', 'personas', 'loom', 'lorebook', 'spindle', 'profile', 'summary', 'cortex'].map(id => ({ kind: 'drawer_tab', id })),
-    { kind: 'settings_tab', id: 'display' },
+    { kind: 'settings_tab', id: 'memoryCortex' }, { kind: 'settings_tab', id: 'display' },
     { kind: 'settings_tab', id: 'illarin' },
     { kind: 'entity_action', id: 'character_chat' },
     { kind: 'modal', id: 'character_editor' },
@@ -229,7 +229,7 @@ test('chat header opens owned settings, preserves native chat actions, and refle
   expect(document.querySelector('.jb-customize')).not.toBeNull();
   expect(calls.some(call => call.ref.kind === 'settings_tab' && call.ref.id === 'display')).toBe(false);
   findButton('×', document.querySelector('.jb-customize')!).click();
-  findButton('Help', header).click(); findButton('Manage personas', document.querySelector('.jb-chat-help')!).click(); await flush(); expect(calls.at(-1)!.ref).toEqual({ kind: 'drawer_tab', id: 'personas' });
+  header.querySelector<HTMLButtonElement>('.jb-chat-help-button')!.click(); findButton('Manage personas', document.querySelector('.jb-chat-help')!).click(); await flush(); expect(calls.at(-1)!.ref).toEqual({ kind: 'drawer_tab', id: 'personas' });
   connectionProjection = { activeProfileId: null, provider: null, model: null };
   subscriptions.get('connections.active')!.forEach(handler => handler());
   expect(api.textContent).toBe('API not ready · Set up'); expect(api.classList.contains('jb-api-missing')).toBe(true);
@@ -293,7 +293,7 @@ test('unavailable memory setup keeps the Memory editor and its unsaved text avai
   dom.window.history.replaceState({}, '', '/chat/active_chat');
   activeChat = { chatId: 'active_chat', characterId: 'char_current' };
   const nativeList = ctx.host.surfaces.list;
-  ctx.host.surfaces.list = (kinds?: string[]) => nativeList(kinds).filter((surface: Ref) => surface.id !== 'cortex');
+  ctx.host.surfaces.list = (kinds?: string[]) => nativeList(kinds).filter((surface: Ref) => surface.id !== 'memoryCortex');
   start(); await flush();
   findButton('Chat Memory', roots.get('chat_header_left')!).click(); await flush();
   const editor = document.querySelector('.jb-memory')!;
@@ -421,7 +421,8 @@ test('native chat tools are the default and the home menu or chat Help can open 
   expect(document.documentElement.getAttribute('data-jb-tools')).toBe('false');
   expect(document.documentElement.getAttribute('data-jb-composer')).toBe('true');
   findButton('Close', document.querySelector('.jb-chat-help')!).click();
-  findButton('Help', header).click();
+  expect(header.querySelector('.jb-chat-help-button')!.getAttribute('aria-label')).toBe('Chat tools & help');
+  header.querySelector<HTMLButtonElement>('.jb-chat-help-button')!.click();
   document.querySelector<HTMLInputElement>('input[value="lumiverse"]')!.click();
   expect(document.documentElement.getAttribute('data-jb-tools')).toBe('true');
   expect(document.documentElement.getAttribute('data-jb-composer')).toBe('false');
@@ -429,16 +430,30 @@ test('native chat tools are the default and the home menu or chat Help can open 
   stop!(); stop = undefined; expect(document.documentElement.getAttribute('data-jb-tools')).toBe('saved');
 });
 
-test('optional familiar Enhance uses native writing assistance without opening or checking Hone', async () => {
+test('familiar composer opens extension discovery without requesting generation or changing a draft', async () => {
   activeChat = { chatId: 'chat-1', characterId: 'char-1' }; const sent: any[] = [];
   ctx.composer = { getState: () => ({ mounted: true, chatId: 'chat-1', text: 'An unsent draft' }), onChange: () => () => {}, focus() {} };
-  ctx.frontendSessionId = 'session-1'; ctx.permissions.getGranted = async () => ['chats', 'generation']; ctx.sendToBackend = (payload: unknown) => sent.push(payload);
-  const read = ctx.state.get; ctx.state.get = (key: string) => ['persona.activeId', 'loom.activePresetId'].includes(key) ? null : read(key);
-  start(); await flush(); findButton('Help', roots.get('chat_header_left')!).click();
+  ctx.sendToBackend = (payload: unknown) => sent.push(payload);
+  start(); await flush(); roots.get('chat_header_left')!.querySelector<HTMLButtonElement>('.jb-chat-help-button')!.click();
   document.querySelector<HTMLInputElement>('input[value="janitorai"]')!.click(); findButton('Close', document.querySelector('.jb-chat-help')!).click();
-  document.querySelector<HTMLButtonElement>('.jb-assist-toggle')!.click(); findButton('Enhance my draft', document.querySelector('.jb-assist-menu')!).click(); await flush();
-  expect(sent).toHaveLength(1); expect(sent[0].action).toBe('enhance'); expect(sent[0].draft).toBe('An unsent draft');
-  expect(document.querySelector('.jb-hone')).toBeNull(); expect(requests.some(request => request.url.pathname === '/api/v1/spindle')).toBe(false);
+  document.querySelector<HTMLButtonElement>('.jb-assist-toggle')!.click(); await flush();
+  const guide = document.querySelector('.jb-chat-help')!;
+  expect(guide.querySelector<HTMLElement>('.jb-extension-guide')!.hidden).toBe(false);
+  findButton('Polish my writing', guide).click();
+  expect(guide.querySelector('.jb-extension-result h3')!.textContent).toBe('Hone');
+  expect(document.querySelector('.jb-assist-menu')).toBeNull();
+  expect(sent).toHaveLength(0); expect(calls).toHaveLength(0);
+  expect(ctx.composer.getState().text).toBe('An unsent draft');
+  const header = roots.get('chat_header_left')!;
+  expect(header.querySelector('.jb-chat-title')!.parentElement).toBe(header.querySelector('.jb-chat-bar'));
+});
+
+test('Cortex setup leaves the Memory editor for native configuration', async () => {
+  activeChat = { chatId: 'chat-1', characterId: 'char-1' }; dom.window.history.replaceState({}, '', '/chat/chat-1');
+  start(); await flush(); findButton('Chat Memory', roots.get('chat_header_left')!).click(); await flush();
+  findButton('Explore Memory Cortex', document.querySelector('.jb-memory')!).click(); await flush();
+  expect(calls).toEqual([{ ref: { kind: 'settings_tab', id: 'memoryCortex' }, params: undefined }]);
+  expect(document.querySelector('.jb-settings-window-root')).toBeNull();
 });
 
 test('grouped gallery pages reuse the native summary index while search, sort and favorites reset it', async () => {

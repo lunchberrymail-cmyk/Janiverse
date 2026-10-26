@@ -34,7 +34,7 @@ html[data-janitor-bridge-view="browse"] .jb-my-chats { display: none !important;
 [data-component="ChatView"] [data-lumiverse-surface="chat-column-inner"] { max-width: min(100%, 672px); border: 0; background: transparent; }
 [data-component="ChatView"] [data-spindle-ext-id="janitor_bridge"][data-spindle-mount-point="chat_header_left"] { flex: 0 0 auto; min-width: 0; width: 100%; }
 [data-component="ChatView"] .jb-chat-header { box-sizing: border-box; width: auto; margin-inline: 12px; padding-inline: 0; }
-[data-component="ChatView"] [data-spindle-mount="chat_top_dock"] { min-height: 32px; padding: 2px 16px; border: 0; background: transparent; }
+[data-component="ChatView"] [data-spindle-mount="chat_top_dock"] { min-height: 0; padding: 0 16px; border: 0; background: transparent; }
 /* Only hide tools when the extension's accessible More menu owns their reveal.
    Without this attribute every native control stays visible. */
 html[data-jb-tools="false"] [data-component="ChatView"] [data-spindle-mount="chat_top_dock"],

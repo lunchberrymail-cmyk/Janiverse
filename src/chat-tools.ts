@@ -1,22 +1,30 @@
-import type { SpindleFrontendContext, SpindleModalHandle } from 'lumiverse-spindle-types';
+import type { SpindleFrontendContext, SpindleHostSurfaceRef, SpindleModalHandle } from 'lumiverse-spindle-types';
+import { lunchPicks, type LunchPick } from './lunch-picks';
 
 export type ComposerLayout = 'lumiverse' | 'janitorai';
+type GuideView = 'lumiverse' | 'extensions';
 export const COMPOSER_LAYOUT_KEY = 'chat:composer_layout_v1';
 type Options = {
   onLayoutChange(layout: ComposerLayout): void;
   openApi(): void;
   openMemory(): void;
-  openPersonas(): void;
-  openHone(): void | Promise<void>;
+  openPersonas(): void | Promise<boolean>;
+  invoke(ref: SpindleHostSurfaceRef): Promise<boolean>;
 };
+const recommendations: Array<{ goal: string; pick: LunchPick }> = [
+  { goal: 'Polish my writing', pick: { name: 'Hone', url: 'https://github.com/AMousePad/Hone', note: 'Refine AI replies or enhance your own drafts with a separate editing pass.' } },
+  ...[
+    ['Remember long stories', 'LumiBooks'], ['Hear character voices', 'Choir'], ['Color character dialogue', 'Prism'],
+  ].map(([goal, name]) => ({ goal, pick: lunchPicks.find(pick => pick.name === name)! })),
+];
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') {
   const result = document.createElement(tag); result.className = cls; result.textContent = text; return result;
 }
-
-/** Layout preferences and help never run generation or change a message draft. */
+/** Discover existing tools without generating, installing, or changing a draft. */
 export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
   let disposed = false, layout: ComposerLayout = 'lumiverse', revision = 0;
   let modal: SpindleModalHandle | undefined, render: (() => void) | undefined;
+  let selectView: ((view: GuideView) => void) | undefined;
   let notice = '', writes = Promise.resolve();
   const oldTools = document.documentElement.getAttribute('data-jb-tools');
   function apply(value: ComposerLayout) {
@@ -26,13 +34,10 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
   }
   async function setLayout(value: ComposerLayout) {
     if (disposed) return;
-    const ticket = ++revision;
-    notice = ''; apply(value);
+    const ticket = ++revision; notice = ''; apply(value);
     const settings = ctx.settings;
     if (!settings?.set) { notice = 'This Lumiverse version cannot save this preference. Your choice lasts until reload.'; render?.(); return; }
-    writes = writes.catch(() => {}).then(async () => {
-      if (!disposed) await settings.set(COMPOSER_LAYOUT_KEY, value);
-    });
+    writes = writes.catch(() => {}).then(async () => { if (!disposed) await settings.set(COMPOSER_LAYOUT_KEY, value); });
     try { await writes; }
     catch { if (!disposed && revision === ticket) { notice = 'Your layout changed, but could not be saved. Choose it again to retry.'; render?.(); } }
   }
@@ -42,52 +47,117 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
     try {
       const value = await ctx.settings?.get<unknown>(COMPOSER_LAYOUT_KEY);
       if (!disposed && ticket === revision && (value === 'lumiverse' || value === 'janitorai')) apply(value);
-    } catch { /* A failed preference read leaves the complete native toolbar available. */ }
+    } catch { /* A failed preference read leaves the native toolbar available. */ }
   })();
 
-  function openHelp() {
+  function openHelp(view: GuideView = 'lumiverse') {
     if (disposed) return;
-    if (modal) { modal.root.querySelector<HTMLButtonElement>('.jb-chat-help-close')?.focus(); return; }
+    if (modal) { selectView?.(view); return; }
     const previousFocus = document.activeElement as HTMLElement | null;
-    const current = ctx.ui.showModal({ title: 'Chat tools & help', width: 650, maxHeight: 850 }); modal = current;
+    const current = ctx.ui.showModal({ title: 'Chat tools & help', width: 620, maxHeight: 800 }); modal = current;
     const root = current.root; root.classList.add('jb-settings', 'jb-chat-help');
     root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Chat tools & help');
-    const close = node('button', 'jb-button jb-chat-help-close', 'Close'); close.type = 'button'; close.addEventListener('click', () => current.dismiss());
-    const heading = node('h2', '', 'Your chat, your way');
-    const intro = node('p', 'jb-settings-help', 'Use all of Lumiverse’s chat tools, or choose a simpler composer inspired by JanitorAI. You can switch back at any time.');
+    const active = () => !disposed && modal === current;
+    const heading = node('h2', '', 'What are you looking for?');
+    const tabs = node('nav', 'jb-chat-guide-tabs'); tabs.setAttribute('aria-label', 'Chat help topics');
+    const native = node('section', 'jb-native-guide'), extensions = node('section', 'jb-extension-guide');
+    const viewButtons = new Map<GuideView, HTMLButtonElement>();
+    selectView = value => {
+      native.hidden = value !== 'lumiverse'; extensions.hidden = value !== 'extensions';
+      for (const [key, button] of viewButtons) button.setAttribute('aria-pressed', String(value === key));
+      viewButtons.get(value)?.focus({ preventScroll: true });
+    };
+    for (const [value, title] of [['lumiverse', 'Lumiverse tools'], ['extensions', 'Find extensions']] as const) {
+      const button = node('button', 'jb-button', title); button.type = 'button'; button.addEventListener('click', () => selectView?.(value));
+      viewButtons.set(value, button); tabs.append(button);
+    }
+    const actionStatus = node('p', 'jb-chat-guide-status'); actionStatus.setAttribute('role', 'status'); actionStatus.setAttribute('aria-live', 'polite');
+    function actionButton(title: string, action: () => void | boolean | Promise<void | boolean>, needsChat = false) {
+      const button = node('button', 'jb-button', title); button.type = 'button'; button.disabled = needsChat && !ctx.getActiveChat()?.chatId;
+      if (button.disabled) button.title = 'Open a chat first.';
+      button.addEventListener('click', () => {
+        if (!active() || button.disabled) return;
+        button.disabled = true; actionStatus.textContent = '';
+        void Promise.resolve().then(() => active() ? action() : false).then(opened => {
+          if (!active()) return;
+          if (opened !== false) current.dismiss();
+          else actionStatus.textContent = 'This tool is unavailable. Open it from Lumiverse’s sidebar or settings.';
+        }).catch(() => { if (active()) actionStatus.textContent = 'Could not open this tool. Please try again.'; })
+          .finally(() => { if (active()) button.disabled = false; });
+      });
+      return button;
+    }
+    native.append(node('p', 'jb-settings-help', 'Start with these useful built-in tools. Each toolbar icon also has a name in its tooltip.'));
+    const tips = node('dl', 'jb-toolbar-tips');
+    for (const [title, detail] of [
+      ['Regenerate', 'Try a different reply to the same message.'],
+      ['Continue', 'Ask the character to keep going from the last reply.'],
+      ['Impersonate', 'Ask the model to write as your persona. Check the selected mode before using it.'],
+      ['Extras', 'Find additional actions from your installed extensions.'],
+    ]) tips.append(node('dt', '', title), node('dd', '', detail));
+    native.append(tips);
+    function row(title: string, detail: string, label: string, action: () => void | boolean | Promise<void | boolean>, needsChat = false) {
+      const row = node('div', 'jb-chat-help-row'), text = node('div'); text.append(node('h4', '', title), node('p', '', detail));
+      row.append(text, actionButton(label, action, needsChat)); native.append(row);
+    }
+    row('API, prompt & generation', 'Choose your model, instructions, and reply settings.', 'Open settings', options.openApi);
+    row('Summary', 'Keep a running recap. Configure and edit it in the native Summary window.', 'Open Summary', () => options.invoke({ kind: 'drawer_tab', id: 'summary' }), true);
+    row('Memory Cortex', 'Set up automatic recall of people, relationships, and events.', 'Set up Memory Cortex', () => options.invoke({ kind: 'settings_tab', id: 'memoryCortex' }));
+    row('Chat Memory', 'Write important facts to include in this chat’s prompt.', 'Open memory', options.openMemory, true);
+    row('Your persona', 'Choose who you play in the conversation.', 'Manage personas', options.openPersonas);
+    row('Lorebooks', 'Bring world details into context with matching keywords.', 'Open Lorebooks', () => options.invoke({ kind: 'drawer_tab', id: 'lorebook' }));
+
+    extensions.append(node('p', 'jb-settings-help', 'Choose what you want to add. These optional extensions each have their own setup.'));
+    const goals = node('div', 'jb-extension-goals'); goals.setAttribute('aria-label', 'What would you like to add?');
+    const result = node('article', 'jb-extension-result'); result.setAttribute('aria-live', 'polite'); result.hidden = true;
+    for (const { goal, pick } of recommendations) {
+      const button = node('button', 'jb-button', goal); button.type = 'button'; button.setAttribute('aria-pressed', 'false');
+      button.addEventListener('click', () => {
+        if (!active()) return;
+        for (const option of goals.querySelectorAll('button')) option.setAttribute('aria-pressed', String(option === button));
+        const link = node('a', '', 'Read about ' + pick.name); link.href = pick.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.referrerPolicy = 'no-referrer';
+        const url = node('input', 'jb-extension-url'); url.type = 'text'; url.readOnly = true; url.value = pick.url; url.setAttribute('aria-label', pick.name + ' repository URL');
+        const copy = node('button', 'jb-button', 'Copy link'); copy.type = 'button';
+        const copied = node('p', 'jb-settings-help'); copied.setAttribute('role', 'status');
+        copy.addEventListener('click', () => {
+          url.focus(); url.select();
+          const clipboard = document.defaultView?.navigator.clipboard;
+          if (!clipboard?.writeText) { copied.textContent = 'Link selected. Use your device’s Copy command.'; return; }
+          void clipboard.writeText(pick.url).then(() => { if (active()) copied.textContent = 'Link copied.'; })
+            .catch(() => { if (active()) copied.textContent = 'Link selected. Use your device’s Copy command.'; });
+        });
+        const actions = node('div', 'jb-extension-actions'); actions.append(copy, actionButton('Open Extensions', () => options.invoke({ kind: 'drawer_tab', id: 'spindle' })));
+        result.replaceChildren(node('h3', '', pick.name), node('p', '', pick.note), link,
+          node('p', 'jb-settings-help', 'Copy the repository link, open Extensions, and install from that URL. Review its permissions, enable it, then follow its setup guide. Already installed? Open Extensions to manage it.'), url, actions, copied);
+        result.hidden = false; actionStatus.textContent = '';
+      });
+      goals.append(button);
+    }
+    extensions.append(goals, result);
+    const preferences = node('details', 'jb-chat-layout-preferences'); preferences.append(node('summary', '', 'Choose your chat layout'));
     const choices = node('fieldset', 'jb-chat-layouts'); choices.append(node('legend', '', 'Chat composer'));
     const inputs = new Map<ComposerLayout, HTMLInputElement>();
     for (const [value, title, detail] of [
-      ['lumiverse', 'Lumiverse tools', 'Default · Keep the native chat toolbar and your extension controls visible.'],
-      ['janitorai', 'JanitorAI-style', 'A simpler message box with Writing tools and a persona picker. The native toolbar is tucked away.'],
+      ['lumiverse', 'Lumiverse tools', 'Default · Native chat toolbar and extension controls.'],
+      ['janitorai', 'JanitorAI-style', 'A simpler message box with extension discovery and a persona picker.'],
     ] as const) {
-      const label = node('label', 'jb-chat-layout'); const input = node('input'); input.type = 'radio'; input.name = 'jb-composer-layout'; input.value = value;
-      const text = node('span'); text.append(node('strong', '', title), node('span', 'jb-chat-layout-detail', detail));
-      label.append(input, text); choices.append(label); inputs.set(value, input);
+      const label = node('label', 'jb-chat-layout'), input = node('input'); input.type = 'radio'; input.name = 'jb-composer-layout'; input.value = value;
+      const text = node('span'); text.append(node('strong', '', title), node('span', 'jb-chat-layout-detail', detail)); label.append(input, text); choices.append(label); inputs.set(value, input);
       input.addEventListener('change', () => { if (input.checked) void setLayout(value); });
     }
     const status = node('p', 'jb-settings-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
     render = () => { for (const [value, input] of inputs) { input.checked = value === layout; input.closest('label')?.classList.toggle('jb-selected', input.checked); } status.textContent = notice; };
-    render();
-    const help = node('section', 'jb-chat-help-links'); help.append(node('h3', '', 'Looking for something familiar?'));
-    function link(title: string, detail: string, label: string, action: () => void | Promise<void>, needsChat = false) {
-      const row = node('div', 'jb-chat-help-row'); const text = node('div'); text.append(node('h4', '', title), node('p', '', detail));
-      const button = node('button', 'jb-button', label); button.type = 'button'; button.disabled = needsChat && !ctx.getActiveChat()?.chatId;
-      if (button.disabled) button.title = 'Open a chat first.';
-      button.addEventListener('click', () => { current.dismiss(); void Promise.resolve().then(() => { if (!disposed) return action(); }).catch(() => {}); });
-      row.append(text, button); help.append(row);
-    }
-    link('API, prompt & generation', 'Choose the model, edit instructions, or adjust the reply settings.', 'Open settings', options.openApi);
-    link('Chat memory', 'Keep important story facts in the Memory tab. It is also in the chat menu.', 'Open memory', options.openMemory, true);
-    link('Your persona', 'Choose who you play. The JanitorAI-style layout also puts a picker beside your message.', 'Manage personas', options.openPersonas);
-    link('Hone · optional', 'Already use Hone? Find its own draft button or follow its setup guide. Writing tools also work without Hone.', 'Find Hone', options.openHone, true);
-    const writing = node('p', 'jb-settings-help', 'In JanitorAI-style mode, Writing tools can enhance a draft, suggest your next message, or prepare a summary. Review the result before applying it; sending stays your choice.');
+    render(); preferences.append(choices, status);
+    const close = node('button', 'jb-button jb-chat-help-close', 'Close'); close.type = 'button'; close.addEventListener('click', () => current.dismiss());
     const actions = node('div', 'jb-settings-actions'); actions.append(close);
-    root.append(heading, intro, choices, status, help, writing, actions);
+    root.append(heading, tabs, native, extensions, actionStatus, preferences, actions); selectView(view);
     const keys = (event: KeyboardEvent) => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); current.dismiss(); return; }
       if (event.key !== 'Tab') return;
-      const items = [...root.querySelectorAll<HTMLElement>('button:not(:disabled), input:checked')];
+      const items = [...root.querySelectorAll<HTMLElement>('button:not(:disabled), input, a[href], summary')].filter(item => {
+        if (item.closest('[hidden]')) return false;
+        const collapsed = item.closest('details:not([open])'); return !collapsed || item === collapsed.firstElementChild;
+      });
       const first = items[0], last = items.at(-1);
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
@@ -95,13 +165,12 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
     root.addEventListener('keydown', keys);
     current.onDismiss(() => {
       root.removeEventListener('keydown', keys);
-      if (modal === current) { modal = undefined; render = undefined; }
+      if (modal === current) { modal = undefined; render = undefined; selectView = undefined; }
       if (!disposed && previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     });
-    inputs.get(layout)?.focus({ preventScroll: true });
   }
   return { openHelp, setLayout, ready, getLayout: () => layout, destroy() {
-    if (disposed) return; disposed = true; modal?.dismiss(); modal = undefined; render = undefined;
+    if (disposed) return; disposed = true; modal?.dismiss(); modal = undefined; render = undefined; selectView = undefined;
     if (oldTools === null) document.documentElement.removeAttribute('data-jb-tools'); else document.documentElement.setAttribute('data-jb-tools', oldTools);
   } };
 }

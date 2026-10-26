@@ -11,7 +11,7 @@ type Options = {
 type MemoryOptions = Pick<Options, 'invoke'>;
 const memoryTools = {
   summary: { kind: 'drawer_tab', id: 'summary' },
-  cortex: { kind: 'drawer_tab', id: 'cortex' },
+  cortex: { kind: 'settings_tab', id: 'memoryCortex' },
 } as const satisfies Record<string, SpindleHostSurfaceRef>;
 
 function make<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') {

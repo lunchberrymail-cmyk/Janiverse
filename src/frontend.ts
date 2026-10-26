@@ -11,7 +11,6 @@ import myChatsCSS from './my-chats.css' with { type: 'text' };
 import soundCloudCSS from './soundcloud.css' with { type: 'text' };
 import customizeCSS from './customize.css' with { type: 'text' };
 import characterCreateCSS from './character-create.css' with { type: 'text' };
-import honeCSS from './hone.css' with { type: 'text' };
 import tutorialCSS from './feature-tutorials.css' with { type: 'text' };
 import welcomeCSS from './welcome.css' with { type: 'text' };
 import { createChatMemory } from './memory';
@@ -19,7 +18,6 @@ import { createApiSettings } from './api-settings';
 import { createPromptSettings } from './prompt-settings';
 import { icon } from './icons';
 import { createComposer } from './composer';
-import { createComposerActions } from './composer-actions';
 import { createChatTools } from './chat-tools';
 import { createHomeBanner, createMemoryPromo, createPresetPromo } from './home-banner';
 import { createCardImport } from './card-import';
@@ -30,8 +28,6 @@ import { createCustomize } from './customize';
 import { createSettingsWindow } from './settings-window';
 import { creatorAttribution, type CreatorAttribution } from './creator-attribution';
 import { createCharacterCreate } from './character-create';
-import { createHone } from './hone';
-import { honeScreenshots } from './hone-screenshots';
 import { openFeatureTutorial, type TutorialFeature } from './feature-tutorials';
 import { tutorialScreenshots } from './tutorial-screenshots';
 import { readOptionalState, subscribeOptionalState } from './optional-state';
@@ -85,19 +81,15 @@ export function setup(ctx: SpindleFrontendContext) {
       return promo;
     },
   });
-  const composerActions = createComposerActions(ctx, { openMemoryDraft: (chatId, text) => openMemory(chatId, text) });
-  const hone = createHone(ctx, { screenshots: honeScreenshots, revealTools: () => { void chatTools.setLayout('lumiverse'); } });
   const composer = createComposer(ctx, {
-    onEnhanceDraft: () => composerActions.enhanceDraft(),
-    onWriteForMe: () => composerActions.writeForMe(),
-    onSummarize: () => composerActions.summarizeChat(),
+    onDiscover: () => chatTools.openHelp('extensions'),
   });
   const chatTools = createChatTools(ctx, {
     onLayoutChange: layout => composer.setEnabled(layout === 'janitorai'),
     openApi,
     openMemory: () => { const chatId = ctx.getActiveChat()?.chatId; if (chatId) openMemory(chatId); },
-    openPersonas: () => { void invoke({ kind: 'drawer_tab', id: 'personas' }); },
-    openHone: () => hone.enhanceDraft(),
+    openPersonas: () => invoke({ kind: 'drawer_tab', id: 'personas' }),
+    invoke,
   });
   const promptSettings = createPromptSettings(settingsWindow.context('settings'), {
     openConnection: openApi,
@@ -166,7 +158,7 @@ export function setup(ctx: SpindleFrontendContext) {
       }).catch(() => { if (!disposed) status.textContent = 'Your character is saved. Open it from the character library.'; });
     },
   });
-  cleanups.push(ctx.dom.addStyle(characterCreateCSS), ctx.dom.addStyle(honeCSS), ctx.dom.addStyle(tutorialCSS), ctx.dom.addStyle(welcomeCSS), ctx.dom.addStyle(chatToolsCSS));
+  cleanups.push(ctx.dom.addStyle(characterCreateCSS), ctx.dom.addStyle(tutorialCSS), ctx.dom.addStyle(welcomeCSS), ctx.dom.addStyle(chatToolsCSS));
   cleanups.push(ctx.dom.addStyle(themeCSS), ctx.dom.addStyle(layoutCSS), ctx.dom.addStyle(uiCSS), ctx.dom.addStyle(settingsCSS), ctx.dom.addStyle(composerCSS), ctx.dom.addStyle(homeBannerCSS), ctx.dom.addStyle(cardImportCSS), ctx.dom.addStyle(myChatsCSS), ctx.dom.addStyle(soundCloudCSS), ctx.dom.addStyle(customizeCSS));
   const status = el('p', 'jb-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   const navButtons: Array<{ node: HTMLButtonElement; view: View }> = [];
@@ -226,7 +218,7 @@ export function setup(ctx: SpindleFrontendContext) {
   const chatBar = el('div', 'jb-chat-bar'); const chatRight = el('div', 'jb-chat-right');
   const back = button('‹ Back', () => setView('chats'), 'jb-back');
   const api = button('API Settings', openApi, 'jb-api-status'); api.setAttribute('aria-label', 'API Settings');
-  const helpButton = button('Help', () => { chatMenu.open = false; chatTools.openHelp(); }, 'jb-chat-help-button'); helpButton.setAttribute('aria-label', 'Chat tools & help');
+  const helpButton = button('?', () => { chatMenu.open = false; chatTools.openHelp(); }, 'jb-chat-help-button'); helpButton.setAttribute('aria-label', 'Chat tools & help'); helpButton.title = 'Chat tools & help';
   const chatMenu = el('details', 'jb-more jb-chat-menu'); const chatMenuLabel = el('summary', '', '☰'); chatMenuLabel.setAttribute('aria-label', 'Chat menu');
   chatMenuLabel.replaceChildren(icon('menu'));
   const chatMenuItems = el('div', 'jb-more-menu'); chatMenuItems.setAttribute('role', 'menu'); chatMenuItems.setAttribute('aria-label', 'Chat actions');
@@ -251,7 +243,8 @@ export function setup(ctx: SpindleFrontendContext) {
   });
   const chatTitle = button('Conversation', () => { void invoke({ kind: 'drawer_tab', id: 'profile' }); }, 'jb-chat-title');
   const soundCloud = createSoundCloud(ctx);
-  chatHeader.append(chatBar, chatTitle, soundCloud.root); mounts[1].append(chatHeader);
+  chatBar.insertBefore(chatTitle, chatRight);
+  chatHeader.append(chatBar, soundCloud.root); mounts[1].append(chatHeader);
   let titleRequest = 0;
   async function refreshChatHeader() {
     const active = ctx.getActiveChat(); const generation = ++titleRequest;
@@ -597,7 +590,7 @@ export function setup(ctx: SpindleFrontendContext) {
   void refreshChatHeader(); refreshConnection();
   void welcome.maybeOpen();
   return () => {
-    disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); tutorialWindow?.destroy(); characterCreate.destroy(); hone.destroy(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); composerActions.destroy(); memory.destroy(); apiSettings.destroy(); promptSettings.destroy(); settingsWindow.destroy();
+    disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); tutorialWindow?.destroy(); characterCreate.destroy(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); apiSettings.destroy(); promptSettings.destroy(); settingsWindow.destroy();
     cleanups.reverse().forEach(cleanup => cleanup()); mounts.forEach(root => root.replaceChildren());
     if (oldView === null) document.documentElement.removeAttribute('data-janitor-bridge-view'); else document.documentElement.setAttribute('data-janitor-bridge-view', oldView);
     chatTools.destroy();

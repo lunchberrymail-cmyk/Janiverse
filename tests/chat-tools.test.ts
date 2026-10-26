@@ -11,10 +11,10 @@ const settle = async () => { for (let n = 0; n < 20; n++) await Promise.resolve(
 function setup() {
   tools = createChatTools(ctx, { onLayoutChange: layout => layouts.push(layout),
     openApi: () => { actions.push('api'); }, openMemory: () => { actions.push('memory'); },
-    openPersonas: () => { actions.push('personas'); }, openHone: () => { actions.push('hone'); },
+    openPersonas: () => { actions.push('personas'); }, invoke: async ref => { actions.push(ref.kind + ':' + ref.id); return true; },
   }); return tools;
 }
-function choose(value: ComposerLayout) { document.querySelector<HTMLInputElement>(`input[value="${value}"]`)!.click(); }
+function choose(value: ComposerLayout) { document.querySelector<HTMLDetailsElement>('.jb-chat-layout-preferences')!.open = true; document.querySelector<HTMLInputElement>(`input[value="${value}"]`)!.click(); }
 function button(text: string) { return [...document.querySelectorAll('button')].find(button => button.textContent === text)!; }
 beforeEach(() => {
   dom = new JSDOM('<!doctype html><html data-jb-tools="previous"><body><button id="help">Help</button><textarea id="draft">Unsent story draft</textarea></body></html>');
@@ -68,19 +68,49 @@ test('rapid changes serialize preference writes so the latest layout remains sav
 test('a save failure is visible and retry preserves the chosen layout and draft', async () => {
   ctx.settings.set = async () => { throw new Error('Unavailable'); };
   setup(); await tools!.ready; tools!.openHelp(); choose('janitorai'); await settle();
-  expect(document.querySelector('[role="status"]')!.textContent).toContain('could not be saved');
+  expect(document.querySelector('.jb-settings-status')!.textContent).toContain('could not be saved');
   expect(tools!.getLayout()).toBe('janitorai'); expect(document.querySelector<HTMLTextAreaElement>('#draft')!.value).toBe('Unsent story draft');
   ctx.settings.set = async (...args: unknown[]) => { saves.push(args); };
-  await tools!.setLayout('janitorai'); expect(document.querySelector('[role="status"]')!.textContent).toBe('');
+  await tools!.setLayout('janitorai'); expect(document.querySelector('.jb-settings-status')!.textContent).toBe('');
   expect(saves).toEqual([[COMPOSER_LAYOUT_KEY, 'janitorai']]);
 });
 
-test('help actions require an explicit choice and chat-only actions are disabled without a chat', async () => {
-  setup(); await tools!.ready; tools!.openHelp(); button('Find Hone').click(); await settle();
-  expect(actions).toEqual(['hone']); expect(document.querySelector('.jb-chat-help')).toBeNull();
+test('native helper opens real Summary and Cortex setup surfaces only on request', async () => {
+  setup(); await tools!.ready; tools!.openHelp();
+  expect(document.querySelector('.jb-toolbar-tips')!.textContent).toContain('Regenerate');
+  button('Open Summary').click(); await settle();
+  expect(actions).toEqual(['drawer_tab:summary']); expect(document.querySelector('.jb-chat-help')).toBeNull();
+  tools!.openHelp(); button('Set up Memory Cortex').click(); await settle();
+  expect(actions).toEqual(['drawer_tab:summary', 'settings_tab:memoryCortex']);
   ctx.getActiveChat = () => ({ chatId: null }); tools!.openHelp();
-  expect(button('Find Hone').disabled).toBe(true); expect(button('Open memory').disabled).toBe(true);
-  button('Open settings').click(); await settle(); expect(actions).toEqual(['hone', 'api']);
+  expect(button('Open Summary').disabled).toBe(true); expect(button('Open memory').disabled).toBe(true);
+  expect(button('Set up Memory Cortex').disabled).toBe(false);
+});
+
+test.each([
+  ['Polish my writing', 'Hone', 'https://github.com/AMousePad/Hone'],
+  ['Remember long stories', 'LumiBooks', 'https://github.com/AMousePad/LumiBooks'],
+  ['Hear character voices', 'Choir', 'https://github.com/patatasbravasch-arch/Choir'],
+  ['Color character dialogue', 'Prism', 'https://github.com/kittyafterdark/Prism'],
+])('discovery recommends %s without installing or running it', async (goal, name, url) => {
+  setup(); await tools!.ready; tools!.openHelp('extensions'); button(goal).click();
+  const result = document.querySelector('.jb-extension-result')!;
+  expect(result.querySelector('h3')!.textContent).toBe(name);
+  expect(result.querySelector('a')!.href).toBe(url);
+  button('Copy link').click();
+  expect(result.querySelector('[role="status"]')!.textContent).toContain('Link selected');
+  expect(actions).toEqual([]); expect(saves).toEqual([]);
+  expect(document.querySelector<HTMLTextAreaElement>('#draft')!.value).toBe('Unsent story draft');
+  button('Open Extensions').click(); await settle();
+  expect(actions).toEqual(['drawer_tab:spindle']); expect(document.querySelector('.jb-chat-help')).toBeNull();
+});
+
+test('unavailable extension manager keeps the recommendation and allows retry', async () => {
+  tools = createChatTools(ctx, { onLayoutChange() {}, openApi() {}, openMemory() {}, openPersonas() {}, invoke: async () => false });
+  tools.openHelp('extensions'); button('Polish my writing').click(); button('Open Extensions').click(); await settle();
+  expect(document.querySelector('.jb-extension-result h3')!.textContent).toBe('Hone');
+  expect(document.querySelector('.jb-chat-guide-status')!.textContent).toContain('unavailable');
+  expect(button('Open Extensions').disabled).toBe(false);
 });
 
 test('Escape closes help before the host generation shortcut and returns focus to Help', async () => {

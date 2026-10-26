@@ -63,60 +63,33 @@ beforeEach(() => {
 afterEach(() => { composer?.destroy(); composer = undefined; globalThis.fetch = originalFetch; dom.window.close(); });
 
 describe('familiar composer controls preserve native draft and Send', () => {
-  test('switching layouts preserves the native textarea and closes hidden writing actions', async () => {
-    let writes = 0; setup({ onWriteForMe() { writes++; } }, false); await settle();
+  test('switching layouts preserves the textarea and closes the persona picker', async () => {
+    let opened = 0; setup({ onDiscover() { opened++; } }, false); await settle();
     const textarea = selector<HTMLTextAreaElement>('#native textarea'); textarea.value = 'An unsent IME draft';
     const send = selector<HTMLButtonElement>('#native button'); let sends = 0; send.addEventListener('click', () => sends++);
-    expect(document.documentElement.dataset.jbComposer).toBe('false');
-    selector<HTMLButtonElement>('.jb-assist-toggle').click(); expect(selector('.jb-composer-popover').hidden).toBe(true);
-    composer!.setEnabled(true); await settle(); selector<HTMLButtonElement>('.jb-assist-toggle').click();
-    expect(selector('.jb-composer-popover').hidden).toBe(false);
-    composer!.setEnabled(false); expect(selector('.jb-composer-popover').hidden).toBe(true);
+    selector<HTMLButtonElement>('.jb-assist-toggle').click(); expect(opened).toBe(0);
+    composer!.setEnabled(true); await settle(); selector<HTMLButtonElement>('.jb-composer-persona').click();
+    expect(selector<HTMLElement>('.jb-composer-popover').hidden).toBe(false);
+    composer!.setEnabled(false); expect(selector<HTMLElement>('.jb-composer-popover').hidden).toBe(true);
     expect(document.querySelector('#native textarea')).toBe(textarea); expect(textarea.value).toBe('An unsent IME draft');
-    send.click(); expect(sends).toBe(1); expect(writes).toBe(0);
+    send.click(); expect(sends).toBe(1); expect(opened).toBe(0);
   });
-  test('matches the three writing actions and disables unavailable callbacks', async () => {
-    setup(); await settle(); selector<HTMLButtonElement>('.jb-assist-toggle').click();
-    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.jb-assist-action'));
-    expect(buttons.map(button => button.textContent)).toEqual(['Enhance my draft', 'Write something for me', 'Summarize this chat']);
-    expect(buttons.every(button => button.disabled)).toBe(true);
-    expect(selector('#native').outerHTML).toBe(nativeBefore);
-    expect(fetches.every(call => call.url.startsWith('/api/v1/personas/') || call.url.startsWith('/api/v1/generate/status/'))).toBe(true);
+  test('discovery opens directly without generation, permissions, or an intermediate writing menu', async () => {
+    let opened = 0; setup({ onDiscover() { opened++; } }); await settle();
+    selector<HTMLButtonElement>('[aria-label="Find helpful extensions"]').click();
+    expect(opened).toBe(1); expect(document.querySelector('.jb-assist-menu')).toBeNull();
+    expect(selector('#native').outerHTML).toBe(nativeBefore); expect(invoked).toHaveLength(0); expect(requested).toEqual([]);
+    expect(fetches.every(call => call.url.startsWith('/api/v1/personas'))).toBe(true);
   });
-
-  test('Enhance can open Hone setup without a draft and callbacks never send or replace the textarea', async () => {
-    let enhanced = 0; setup({ onEnhanceDraft: () => { enhanced++; }, onWriteForMe: () => {} }); await settle();
-    expect(assistButton('Enhance my draft').disabled).toBe(false);
-    selector<HTMLButtonElement>('.jb-assist-toggle').click(); assistButton('Enhance my draft').click(); await settle();
-    expect(enhanced).toBe(1); expect(text).toBe('');
-    text = 'Please improve this'; emit();
-    expect(assistButton('Enhance my draft').disabled).toBe(false);
-    selector<HTMLButtonElement>('.jb-assist-toggle').click(); assistButton('Enhance my draft').click(); await settle();
-    expect(enhanced).toBe(2); expect(text).toBe('Please improve this');
-    expect(selector('#native').outerHTML).toBe(nativeBefore);
-    expect(invoked).toHaveLength(0); expect(selector<HTMLElement>('.jb-composer-popover').hidden).toBe(true);
-  });
-
-  test('mismatched current chat or streaming state cannot run writing callbacks', async () => {
-    let writes = 0; setup({ onWriteForMe: () => { writes++; } }); await settle();
-    composerChatId = 'old-chat'; emit(); expect(assistButton('Write something for me').disabled).toBe(true);
-    assistButton('Write something for me').click(); expect(writes).toBe(0);
-    composerChatId = chatId; emitGeneration('GENERATION_STARTED');
-    expect(assistButton('Write something for me').disabled).toBe(true);
-    emitGeneration('GENERATION_ENDED');
-    expect(assistButton('Write something for me').disabled).toBe(false);
-  });
-
-  test('Escape and outside clicks close the menu and restore its accessible toggle', async () => {
-    setup({ onWriteForMe() {} }); await settle();
-    const button = selector<HTMLButtonElement>('.jb-assist-toggle'); button.click();
+  test('Escape and outside clicks close the persona menu and restore its toggle', async () => {
+    setup(); await settle();
+    const button = selector<HTMLButtonElement>('.jb-composer-persona'); button.click();
     expect(button.getAttribute('aria-expanded')).toBe('true');
     document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(button.getAttribute('aria-expanded')).toBe('false'); expect(document.activeElement).toBe(button);
     button.click(); selector('#native').dispatchEvent(new dom.window.Event('pointerdown', { bubbles: true }));
     expect(selector<HTMLElement>('.jb-composer-popover').hidden).toBe(true);
   });
-
   test('persona chip uses the native image and picker searches persona names and titles', async () => {
     setup(); await settle();
     expect(selector('.jb-composer-persona-name').textContent).toBe('Avery');
@@ -177,34 +150,6 @@ describe('familiar composer controls preserve native draft and Send', () => {
     expect(selector('#native').outerHTML).toBe(nativeBefore);
   });
 
-  test('an unavailable optional streaming selector cannot break composer setup', async () => {
-    unavailableSelectors.add('setting:isStreaming');
-    expect(() => setup({ onWriteForMe() {} })).not.toThrow(); await settle();
-    expect(assistButton('Write something for me').disabled).toBe(false);
-    expect(callbacks.size).toBe(1); expect(subscriptions.has('chat.active')).toBe(true);
-  });
-});
-
-test('initial status recovers a running reply even when another chat emits generation events', async () => {
-  const transport = globalThis.fetch; let finish!: (response: Response) => void;
-  globalThis.fetch = ((url: any, options: any) => String(url).includes('/generate/status/')
-    ? new Promise<Response>(resolve => { finish = resolve; }) : transport(url, options)) as typeof fetch;
-  setup({ onSummarize() {} });
-  emitGeneration('GENERATION_STARTED', 'other-chat');
-  finish(json({ active: true, generationId: 'existing' })); await settle();
-  expect(assistButton('Summarize this chat').disabled).toBe(true);
-  emitGeneration('GENERATION_STOPPED', chatId, 'existing');
-  expect(assistButton('Summarize this chat').disabled).toBe(false);
-});
-
-test('late initial status cannot revive a reply that already ended', async () => {
-  const transport = globalThis.fetch; let finish!: (response: Response) => void;
-  globalThis.fetch = ((url: any, options: any) => String(url).includes('/generate/status/')
-    ? new Promise<Response>(resolve => { finish = resolve; }) : transport(url, options)) as typeof fetch;
-  setup({ onSummarize() {} });
-  emitGeneration('GENERATION_ENDED', chatId, 'existing');
-  finish(json({ active: true, generationId: 'existing' })); await settle();
-  expect(assistButton('Summarize this chat').disabled).toBe(false);
 });
 
 test('persona edits invalidate the loaded picker and active persona chip', async () => {
@@ -220,23 +165,14 @@ test('persona edits invalidate the loaded picker and active persona chip', async
   expect(personaOption('Renamed')).toBeDefined();
 });
 
-test('real generation events block summary without an unsupported state selector', async () => {
-  unavailableSelectors.add('setting:isStreaming');
-  let summarized=0; setup({onSummarize:()=>{summarized++;}}); await settle();
-  emitGeneration('GENERATION_STARTED');
-  selector<HTMLButtonElement>('.jb-assist-toggle').click();
-  expect(assistButton('Summarize this chat').disabled).toBe(true);
-  assistButton('Summarize this chat').click(); await settle(); expect(summarized).toBe(0);
-  emitGeneration('GENERATION_ENDED'); expect(assistButton('Summarize this chat').disabled).toBe(false);
-});
 test.each(['before','after'])('composer Escape shields host document listeners registered %s', async (order) => {
   let stopped=0;
   const host=(e:KeyboardEvent)=>{if(e.key==='Escape') stopped++;};
   if(order==='before') document.addEventListener('keydown',host);
   setup(); await settle();
   if(order==='after') document.addEventListener('keydown',host);
-  selector<HTMLButtonElement>('.jb-assist-toggle').click();
-  assistButton('Enhance my draft').dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+  selector<HTMLButtonElement>('.jb-composer-persona').click(); await settle();
+  personaOption('Alex').dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
   expect(selector<HTMLElement>('.jb-composer-popover').hidden).toBe(true); expect(stopped).toBe(0);
   document.removeEventListener('keydown',host);
 });

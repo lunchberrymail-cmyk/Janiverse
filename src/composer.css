@@ -32,11 +32,7 @@ html[data-jb-composer="true"][data-jb-tools="false"] [data-component="InputArea"
 html[data-jb-composer="true"] [data-component="InputArea"] .jb-composer-popover-root { position: absolute; left: -1px; right: -1px; bottom: calc(100% + 10px); z-index: 60; }
 .jb-composer-popover { width: 100%; min-width: 0; color: #e6e4e9; font-family: Arial, Helvetica, sans-serif; }
 .jb-composer-popover [hidden], .jb-composer-popover[hidden] { display: none !important; }
-.jb-assist-menu { display: flex; flex-direction: column; overflow: hidden; border: 1px solid #45464d; border-radius: 12px; background: #202224; box-shadow: 0 8px 24px #0003; }
-.jb-assist-action { width: 100%; min-height: 51px; padding: 14px 18px; border: 0; background: transparent; color: #e5e3e8; font: inherit; font-size: 15px; line-height: 1.5; letter-spacing: .3px; text-align: left; cursor: pointer; }
-.jb-assist-action + .jb-assist-action { border-top: 1px solid #ffffff13; }
-.jb-assist-action:hover:not(:disabled), .jb-assist-action:focus-visible { background: #3b3344; }
-.jb-composer-tools button:disabled, .jb-assist-action:disabled { opacity: .43; cursor: default; }
+.jb-composer-tools button:disabled { opacity: .43; cursor: default; }
 .jb-composer-notice { margin: 0 0 7px; padding: 11px 14px; border: 1px solid #8d729e; border-radius: 8px; background: #35303d; color: #ded0e8; font-size: 12px; line-height: 1.6; }
 .jb-composer-notice:empty { display: none; }
 .jb-composer-persona-menu { overflow: hidden; border: 1px solid #56505f; border-radius: 10px; background: #292b30; box-shadow: 0 8px 24px #0005; }
@@ -59,7 +55,6 @@ html[data-jb-composer="true"] [data-component="InputArea"] .jb-composer-popover-
   html[data-jb-composer="true"] [data-component="InputArea"] { min-height: 116px; }
   .jb-composer-tools { gap: 7px; }
   .jb-composer-persona { max-width: 185px; }
-  .jb-assist-action { min-height: 48px; padding: 13px 15px; font-size: 14px; }
 }
 @media (max-width: 600px), (pointer: coarse), (max-height: 500px) {
   /* The popup can scroll as a whole in a short/keyboard-reduced viewport. */
