@@ -3,14 +3,18 @@
 [data-component="LandingPage"] [data-landing-background-glow], [data-component="LandingPage"] [data-landing-background-grid] { opacity: 0; }
 [data-component="LandingPageCharacters"] { max-width: 1480px !important; padding: 12px 32px 28px !important; }
 [data-component="LandingPageHeader"] { min-height: 62px; gap: 18px; margin: 0 0 24px !important; padding: 0 0 12px !important; border-bottom: 1px solid #ffffff12; }
-[data-component="LandingPageHeader"] [class*="_logo_"] { order: 0; flex: 0 0 auto; min-width: 0; gap: 8px; }
-[data-component="LandingPageHeader"] [class*="_logoIcon_"] { width: 32px; height: 32px; border-radius: 8px; background: transparent; box-shadow: none; }
-[data-component="LandingPageHeader"] [class*="_logoIcon_"] svg { width: 25px; height: 25px; }
+/* Only conceal the native identity while our replacement is mounted. */
+[data-component="LandingPageHeader"]:has(> [data-spindle-ext-id="janitor_bridge"][data-spindle-mount-point="landing_header"] > .jb-brand) > [class*="_logo_"] { display: none; }
+.jb-brand { order: 0; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 10px; min-height: 44px; border-radius: 8px; color: #d9c6f4; text-decoration: none; }
+.jb-brand:hover { text-decoration: none; color: #eee1fc; }
+.jb-brand:focus-visible { outline: 2px solid #c7a0df; outline-offset: 4px; }
+.jb-brand-icon { display: block; flex: 0 0 34px; width: 34px; height: 34px; }
 [data-component="LandingPageHeader"] h1 { margin: 0; color: #d9c6f4; font-size: calc(23px * var(--lumiverse-font-scale, 1)); font-weight: 700; line-height: 1.2; letter-spacing: -.7px; }
 html[data-janitor-bridge-view] [data-component="LandingPageHeader"] [class*="_taglineBtn_"] { display: none; }
 [data-component="LandingPageHeader"] [class*="_headerActions_"] { order: 2; flex: 0 0 auto; gap: 6px; margin-left: auto; }
-/* The stamped extension root sits between the native logo and account. */
-[data-component="LandingPageHeader"] > [data-spindle-ext-id="janitor_bridge"][data-spindle-mount-point="landing_header"] { order: 1; display: flex; flex: 1 1 auto; min-width: 0; justify-content: center; }
+/* Expose our brand and navigation as separate flex items beside the native account. */
+[data-component="LandingPageHeader"] > [data-spindle-ext-id="janitor_bridge"][data-spindle-mount-point="landing_header"] { display: contents; }
+[data-component="LandingPageHeader"] .jb-home-masthead { order: 1; flex: 1 1 auto; width: auto; }
 [data-component="LandingPageHeader"] [class*="_accountBtn_"] { min-height: 32px; border-color: #ffffff20; border-radius: 7px; background: #ffffff08; }
 html[data-jb-tools="false"] [data-component="LandingPageHeader"] [class*="_tempChatWrap_"],
 html[data-jb-tools="false"] [data-component="LandingPageHeader"] button[aria-label="Open Lumiverse guides"] { display: none !important; }
@@ -103,7 +107,7 @@ html[data-jb-tools="false"] [data-component="InputArea"] > [class*="_actionBar_"
   [data-component="LandingPageCharacters"] { padding-inline: 20px !important; }
   [data-component="LandingPageHeader"] { flex-wrap: wrap; gap: 10px; }
   [data-component="LandingPageHeader"] [class*="_headerActions_"] { order: 1; }
-  [data-component="LandingPageHeader"] > [data-spindle-ext-id="janitor_bridge"][data-spindle-mount-point="landing_header"] { order: 2; flex: 1 0 100%; justify-content: flex-start; }
+  [data-component="LandingPageHeader"] .jb-home-masthead { order: 2; flex: 1 0 100%; width: 100%; }
 }
 @media (max-width: 600px) {
   [data-component="LandingPageCharacters"] { padding: 10px 12px 20px !important; }

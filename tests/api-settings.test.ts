@@ -294,7 +294,7 @@ describe('API settings preserve native connection and chat scope', () => {
     expect(details.contains(control('api-model'))).toBe(false);
     expect(details.contains(control('api-connection'))).toBe(false);
     expect(details.contains(control('api-scope'))).toBe(false);
-    expect(details.contains(control('api-key'))).toBe(true);
+    expect(details.contains(control('api-key'))).toBe(false);
     expect(control('api-provider').disabled).toBe(false);
     expect(root().querySelector('.jb-settings-connection-summary')!.textContent).toBe('OpenRouter · Saved credentials');
     expect(help.contains(button('Test connection'))).toBe(true);
@@ -307,7 +307,7 @@ describe('API settings preserve native connection and chat scope', () => {
   test('new connections expose provider setup and invalid hidden connection fields reopen before saving', async () => {
     api.open(); await settle(); choose('api-connection', '');
     const details = root().querySelector<HTMLDetailsElement>('.jb-settings-connection-details')!;
-    expect(details.open).toBe(true);
+    expect(details.open).toBe(false);
     expect(control('api-provider').disabled).toBe(false);
     choose('api-provider', 'custom');
     control('api-base-url').value = 'not a URL';
@@ -399,7 +399,7 @@ describe('API settings preserve native connection and chat scope', () => {
     expect(control('api-base-url').value).toBe('https://nano-gpt.com/api/v1');
     expect(control('api-key').value).toBe(''); expect(control('api-model').value).toBe('');
     expect(control('api-key').placeholder).toBe('Enter your API key');
-    expect(root().querySelector<HTMLDetailsElement>('.jb-settings-connection-details')!.open).toBe(true);
+    expect(root().querySelector<HTMLDetailsElement>('.jb-settings-connection-details')!.open).toBe(false);
     expect(button('Test connection').disabled).toBe(true);
     expect(profiles).toEqual(original); expect(updates).toHaveLength(0); expect(calls).toHaveLength(2);
     control('api-model').value = 'new-nano-model'; button('Save & Use').click(); await settle();

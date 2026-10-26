@@ -17,6 +17,7 @@ import { createChatMemory } from './memory';
 import { createApiSettings } from './api-settings';
 import { createPromptSettings } from './prompt-settings';
 import { icon } from './icons';
+import { createBrand } from './brand';
 import { createComposer } from './composer';
 import { createChatTools } from './chat-tools';
 import { createHomeBanner, createMemoryPromo, createPresetPromo } from './home-banner';
@@ -126,7 +127,7 @@ export function setup(ctx: SpindleFrontendContext) {
         }
       }
       const promo = createPresetPromo(ctx);
-      target.parentElement?.prepend(promo.root);
+      target.prepend(promo.root);
       return { refresh() { preferences.refresh(); }, destroy() { footerObserver?.disconnect(); preferences.destroy(); promo.destroy(); footer?.remove(); } };
     },
     onApplied: () => { void refreshConnection(); },
@@ -212,7 +213,8 @@ export function setup(ctx: SpindleFrontendContext) {
   menu.append(button('Chat tools & help', () => { more.open = false; chatTools.openHelp(); }, 'jb-menu-link'));
   more.append(moreLabel, menu);
   const create = button('Create a Character', () => characterCreate.open(), 'jb-create-link');
-  masthead.append(nav); mounts[0].append(masthead);
+  masthead.append(nav);
+  mounts[0].append(createBrand(() => { if (!disposed) setView('browse'); }), masthead);
 
   const chatHeader = el('header', 'jb-chat-header');
   const chatBar = el('div', 'jb-chat-bar'); const chatRight = el('div', 'jb-chat-right');

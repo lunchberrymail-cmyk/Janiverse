@@ -246,7 +246,7 @@ test('Settings composes native API, prompt and generation editors with a persist
   const api = window.querySelector('.jb-api-settings')!;
   const promo = api.querySelector('.jb-preset-promo')!;
   const provider = api.querySelector('.jb-api-provider-card')!;
-  expect(promo.compareDocumentPosition(provider) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+  expect(provider.compareDocumentPosition(promo) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
   expect([...promo.querySelectorAll('a')].map(anchor => [anchor.textContent, anchor.href])).toEqual([
     ['Browse presets', 'https://illarin.com/browse?type=preset'],
     ['Presets on Discord', 'https://discord.com/channels/1484149939167821915/1484156801447497792'],

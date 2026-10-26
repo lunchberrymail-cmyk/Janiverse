@@ -277,9 +277,9 @@
 .jb-settings-card-heading h2 { margin-bottom: 0 !important; }
 .jb-settings .jb-settings-card-heading > button { min-height: 30px; padding: 4px 10px; font-size: 12px; }
 .jb-api-provider-card .jb-settings-grid { display: block; }
-.jb-api-provider-card .jb-settings-label { display: none; }
+.jb-api-provider-card { margin-bottom: 14px; }
 .jb-api-provider-card .jb-settings-provider-note { margin-top: 8px; font-size: 11px; }
-.jb-api-provider-card > button { margin-top: 8px; }
+.jb-api-provider-card > button { margin-top: 4px; }
 .jb-settings-combined .jb-api-config-card .jb-settings-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .jb-settings-combined .jb-settings-label { font-weight: 500; }
 .jb-settings-combined .jb-settings-connection-summary { margin: 9px 0 12px; }
@@ -288,7 +288,13 @@
 .jb-settings-combined .jb-api-config-card .jb-settings-actions { position: static; margin: 12px 0 0; padding: 12px 0 0; }
 .jb-settings-combined .jb-api-config-card .jb-settings-actions > .jb-settings-help { display: none; }
 .jb-settings-combined .jb-api-config-card .jb-settings-actions > button:not(.jb-primary) { min-height: 36px; }
-.jb-settings-combined .jb-api-config-card .jb-settings-actions > .jb-primary { min-height: 36px; background: #47434f; border-color: #67616f; }
+.jb-settings-combined .jb-api-config-card .jb-settings-actions > .jb-primary { min-height: 40px; }
+.jb-api-saved-grid, .jb-api-destination-grid { margin-bottom: 14px; }
+.jb-api-settings .jb-api-model-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; min-width: 0; }
+.jb-api-settings .jb-api-model-row .jb-settings-toolbar { margin: 0; }
+.jb-api-settings .jb-api-model-row .jb-button { min-height: 42px; padding-inline: 12px; }
+.jb-api-settings .jb-api-config-card > .jb-settings-grid > .jb-settings-help { margin: -5px 0 0; }
+@media(max-width:380px) { .jb-api-settings .jb-api-model-row { grid-template-columns: minmax(0, 1fr); } }
 .jb-prompt-settings-inline.jb-settings { --jb-settings-gutter: 0px; max-width: none; padding: 0; }
 .jb-settings-global-prompt > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 32px; cursor: pointer; list-style: none; }
 .jb-settings-global-prompt > summary::-webkit-details-marker { display: none; }
