@@ -1,6 +1,7 @@
 import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
 import { profileMarkup } from './my-chats';
 import { creatorAttribution } from './creator-attribution';
+import { mountProfileLorebooks } from './profile-lorebooks';
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') {
   const node = document.createElement(tag); node.className = cls; node.textContent = text; return node;
@@ -11,9 +12,11 @@ function text(value: unknown): string { return typeof value === 'string' ? value
 export function mountCharacterProfile(ctx: SpindleFrontendContext, root: HTMLElement, characterId: string, options: { notesPreview?: boolean; controls?: HTMLElement } = {}) {
   let disposed = false, request = 0, injection: Element | undefined;
   let stopNotes: (() => void) | undefined;
+  let stopLorebooks: (() => void) | undefined;
   root.classList.add('jb-character-profile');
   function clear() {
     stopNotes?.(); stopNotes = undefined;
+    stopLorebooks?.(); stopLorebooks = undefined;
     if (injection) {
       try { ctx.dom.uninject(injection); } catch { injection.remove(); }
       injection = undefined;
@@ -81,6 +84,8 @@ export function mountCharacterProfile(ctx: SpindleFrontendContext, root: HTMLEle
       if (tags.childElementCount) meta.append(tags);
       if (meta.childElementCount) card.append(meta);
       if (options.controls) sidebar.append(options.controls);
+      const lorebooks = el('section', 'jb-profile-lorebooks'); sidebar.append(lorebooks);
+      stopLorebooks = mountProfileLorebooks(lorebooks, character.extensions);
       const details = el('section', 'jb-profile-details'); details.setAttribute('aria-label', 'Character definition');
       details.append(el('h2', 'jb-profile-definition-title', 'Character definition'), el('p', 'jb-profile-definition-help', 'The saved details and opening messages for this character.'));
       function field(label: string, values: Array<{ label: string; value: string }>, count?: number) {
@@ -94,7 +99,7 @@ export function mountCharacterProfile(ctx: SpindleFrontendContext, root: HTMLEle
           if (present.length > 1) body.append(el('h3', '', item.label));
           body.append(el('p', '', item.value));
         }
-        section.append(body); details.append(section);
+        section.append(body); details.append(section); return body;
       }
       field('Scenario', [{ label: 'Scenario', value: text(character.scenario) }]);
       field('Personality', [{ label: 'Description', value: text(character.description) }, { label: 'Personality', value: text(character.personality) }]);
@@ -102,7 +107,22 @@ export function mountCharacterProfile(ctx: SpindleFrontendContext, root: HTMLEle
       if (Array.isArray(character.alternate_greetings)) character.alternate_greetings.forEach((value, index) => {
         if (typeof value === 'string' && value.trim()) messages.push({ label: `Alternate greeting ${index + 1}`, value });
       });
-      field('Initial messages', messages, messages.filter(item => item.value.trim()).length);
+      const available = messages.filter(item => item.value.trim());
+      const greetingBody = field('Initial messages', [], available.length);
+      if (available.length) {
+        let index = 0;
+        const navigation = el('div', 'jb-profile-greeting-nav'); navigation.setAttribute('role', 'group'); navigation.setAttribute('aria-label', 'Browse greetings');
+        const previous = el('button', 'jb-button', '‹'); previous.type = 'button'; previous.setAttribute('aria-label', 'Previous greeting');
+        const next = el('button', 'jb-button', '›'); next.type = 'button'; next.setAttribute('aria-label', 'Next greeting');
+        const position = el('span', 'jb-profile-greeting-position'); position.setAttribute('aria-live', 'polite');
+        navigation.append(previous, position, next);
+        const label = el('h3', 'jb-profile-greeting-label'); const greeting = el('p', 'jb-profile-greeting-text');
+        function showGreeting() { position.textContent = `Greeting ${index + 1} of ${available.length}`; label.textContent = available[index].label; greeting.textContent = available[index].value; greeting.scrollTop = 0; }
+        previous.disabled = next.disabled = available.length < 2;
+        previous.addEventListener('click', () => { if (!disposed && generation === request) { index = (index + available.length - 1) % available.length; showGreeting(); } });
+        next.addEventListener('click', () => { if (!disposed && generation === request) { index = (index + 1) % available.length; showGreeting(); } });
+        greetingBody.replaceChildren(navigation, label, greeting); showGreeting();
+      }
       field('Example dialogs', [{ label: 'Example dialogue', value: text(character.mes_example) }]);
       for (const [key, label] of [['system_prompt', 'System prompt'], ['post_history_instructions', 'Post-history instructions']]) {
         if (text(character[key]).trim()) field(label, [{ label, value: text(character[key]) }]);

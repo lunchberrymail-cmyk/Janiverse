@@ -691,6 +691,17 @@ test('the separate explicit chat action starts a new chat rather than resuming t
   expect(calls).toHaveLength(1); findButton('Close', document.querySelector('.jb-preview')!).click();
 });
 
+test('Continue old chat opens a picker and resumes the chosen conversation without creating another', async () => {
+  const reads: string[] = [];
+  characterChatsResult = async id => { reads.push(id); return [{ id: 'old-story', name: 'A saved story', message_count: 3, updated_at: 100, created_at: 90, last_message_preview: 'Last scene' }]; };
+  start(); await flush(); (document.querySelector('.jb-card') as HTMLElement).click(); await flush();
+  expect(reads).toHaveLength(0); findButton('Continue old chat').click(); await flush();
+  expect(reads).toEqual(['char_0']); expect(calls).toHaveLength(0);
+  document.querySelector<HTMLButtonElement>('.jb-profile-chat-row')!.click(); await flush();
+  expect(calls).toEqual([{ ref: { kind: 'route', id: '/chat/:chatId' }, params: { chatId: 'old-story' } }]);
+  expect(document.querySelector('.jb-profile-window')).toBeNull();
+});
+
 test('an unavailable chat action leaves card details and Creator’s Notes usable', async () => {
   chatActionAvailable = false; start(); await flush(); (document.querySelector('.jb-card') as HTMLButtonElement).click();
   expect(findButton('Start new chat').disabled).toBe(true);
@@ -794,7 +805,7 @@ test('a failed native Favorite write leaves the card readable and does not prete
   start(); await flush(); (document.querySelectorAll('.jb-card')[1] as HTMLElement).click(); await flush();
   const favorite = findButton('Favorite'); favorite.click(); await flush();
   expect(favorite.disabled).toBe(false); expect(favorite.getAttribute('aria-pressed')).toBe('false');
-  expect(document.querySelector('.jb-preview .jb-status')!.textContent).toContain('Could not save');
+  expect(document.querySelector('.jb-profile-controls > .jb-status')!.textContent).toContain('Could not save');
   expect(document.querySelector('.jb-preview-body')).not.toBeNull(); expect(calls).toHaveLength(0);
 });
 

@@ -16,6 +16,7 @@ import tutorialCSS from './feature-tutorials.css' with { type: 'text' };
 import welcomeCSS from './welcome.css' with { type: 'text' };
 import visualCSS from './visual-style.css' with { type: 'text' };
 import characterProfileCSS from './character-profile.css' with { type: 'text' };
+import { mountProfileChats } from './profile-chats';
 import frauncesFont from '../assets/fonts/fraunces-latin.woff2';
 import juraFont from '../assets/fonts/jura-latin.woff2';
 import { createChatMemory } from './memory';
@@ -553,10 +554,17 @@ export function setup(ctx: SpindleFrontendContext) {
     }
     const body = el('div', 'jb-preview-body'); const chatActions = el('div', 'jb-profile-chat-actions');
     chatActions.append(el('p', 'jb-profile-chat-caption', 'Start a conversation'), chat);
+    const history = el('div', 'jb-profile-history'); chatActions.append(history);
+    const stopHistory = mountProfileChats(ctx, history, characterId, { openChat: async chatId => {
+      if (disposed || modal !== current) return false;
+      const ok = await invoke({ kind: 'route', id: '/chat/:chatId' }, { chatId });
+      if (ok && !disposed && modal === current) current.dismiss();
+      return ok;
+    } });
     const controls = el('div', 'jb-profile-controls'); controls.append(chatActions, actions, localStatus);
     current.root.append(body);
     const cleanup = mountCharacterProfile(ctx, body, characterId, { controls });
-    current.onDismiss(() => { cleanup(); if (modal === current) modal = undefined; });
+    current.onDismiss(() => { stopHistory(); cleanup(); if (modal === current) modal = undefined; });
   }
   function preview(character: Character, copies?: Character[]) {
     openProfile(character.id, character.name, copies);

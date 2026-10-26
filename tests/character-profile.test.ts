@@ -120,11 +120,27 @@ test('all saved initial messages remain readable without changing the card or se
   const fields = [...root.querySelectorAll<HTMLDetailsElement>('.jb-profile-field')];
   expect(fields.map(field => field.querySelector('summary span')!.textContent)).toEqual(['Scenario', 'Personality', 'Initial messages', 'Example dialogs', 'System prompt', 'Post-history instructions']);
   const messages = fields[2]; expect(messages.querySelector('.jb-profile-field-count')!.textContent).toBe('3');
-  expect(messages.textContent).toContain('Original opening'); expect(messages.textContent).toContain('Second opening');
-  expect(messages.textContent).toContain('Alternate greeting 4'); expect(messages.querySelector('script')).toBeNull();
+  expect(messages.textContent).toContain('Original opening'); expect(messages.textContent).not.toContain('Second opening');
+  const next = messages.querySelector<HTMLButtonElement>('[aria-label="Next greeting"]')!;
+  const previous = messages.querySelector<HTMLButtonElement>('[aria-label="Previous greeting"]')!;
+  next.click(); expect(messages.textContent).toContain('Second opening'); expect(messages.textContent).not.toContain('Original opening');
+  next.click(); expect(messages.textContent).toContain('Alternate greeting 4'); expect(messages.querySelector('script')).toBeNull();
+  expect(messages.querySelector('.jb-profile-greeting-position')!.textContent).toBe('Greeting 3 of 3');
+  next.click(); expect(messages.textContent).toContain('Original opening'); previous.click(); expect(messages.textContent).toContain('Inert third opening');
   expect(fields[1].textContent).toContain('Saved description'); expect(fields[1].textContent).toContain('Saved personality');
   messages.open = true; messages.dispatchEvent(new dom.window.Event('toggle')); await flush();
   expect(fields[0].open).toBe(false); expect(reads).toEqual(['openings']);
+});
+
+test('single greetings have inactive arrows and browsing never changes saved card instructions', async () => {
+  const card = { id: 'one', name: 'Single greeting', first_mes: 'Only opening', alternate_greetings: [] };
+  result = async () => card;
+  cleanup = mountCharacterProfile(ctx, root, 'one'); await flush();
+  const next = root.querySelector<HTMLButtonElement>('[aria-label="Next greeting"]')!;
+  expect(next.disabled).toBe(true); expect(root.querySelector<HTMLButtonElement>('[aria-label="Previous greeting"]')!.disabled).toBe(true);
+  next.click(); expect(card).toEqual({ id: 'one', name: 'Single greeting', first_mes: 'Only opening', alternate_greetings: [] });
+  expect(root.querySelector('.jb-profile-greeting-position')!.textContent).toBe('Greeting 1 of 1');
+  cleanup(); next.dispatchEvent(new dom.window.Event('click')); expect(root.childNodes).toHaveLength(0);
 });
 
 test('a failed portrait retains its fallback and missing fields do not borrow creator notes', async () => {
