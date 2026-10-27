@@ -125,7 +125,7 @@ test('overview fallbacks never reuse a different scene’s pointer or instructio
 });
 
 test('every feature has a short navigable path; memory retains prompt placement and optional help', () => {
-  for (const feature of ['import', 'history', 'memory', 'lorebooks', 'group', 'voice', 'extensions'] satisfies TutorialFeature[]) {
+  for (const feature of ['connections', 'import', 'history', 'memory', 'lorebooks', 'group', 'voice', 'extensions'] satisfies TutorialFeature[]) {
     const tutorial = openFeatureTutorial(ctx, feature, options()); const instructions: string[] = [];
     expect(tutorial.root.querySelectorAll('details[open]')).toHaveLength(0);
     while (true) { instructions.push(tutorial.root.querySelector('.jb-tutorial-instruction')!.textContent!); if (find('Next').disabled) break; find('Next').click(); }
@@ -134,6 +134,20 @@ test('every feature has a short navigable path; memory retains prompt placement 
     find('Back to banner').click(); expect(tutorial.root.isConnected).toBe(false);
   }
   expect(invoked).toEqual([]); expect(imports).toBe(0);
+});
+
+test('API guidance separates saving, selection and credential testing, and opens only the native drawer on request', async () => {
+  const tutorial = openFeatureTutorial(ctx, 'connections', options());
+  expect(tutorial.root.querySelector<HTMLButtonElement>('.jb-tutorial-play')!.hidden).toBe(true);
+  expect(invoked).toEqual([]);
+  find('Next').click(); expect(tutorial.root.textContent).toContain('OpenRouter uses its provider URL automatically');
+  find('Next').click(); expect(tutorial.root.textContent).toContain('Refresh models');
+  find('Next').click(); expect(tutorial.root.textContent).toContain('click the connection’s name to make it active');
+  find('Next').click(); expect(tutorial.root.textContent).toContain('More actions (⋮)');
+  expect(tutorial.root.querySelector('.jb-tutorial-help')!.textContent).toContain('does not guarantee that every model');
+  while (!find('Back').disabled) find('Back').click();
+  find('Open Connections').click(); await flush();
+  expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'connections' }]); expect(tutorial.root.isConnected).toBe(false);
 });
 
 test('recorded guide chapters update the written step and closing releases playback without opening an app tool', () => {

@@ -1,0 +1,29 @@
+WEBVTT
+
+1
+00:00:00.000 --> 00:00:06.630
+On Home, choose 1. Add API connection, then New Connection.
+
+2
+00:00:06.630 --> 00:00:10.630
+Give it a name and choose OpenRouter as the provider.
+
+3
+00:00:10.630 --> 00:00:16.570
+Paste your own API key. It stays masked; OpenRouter uses its provider URL automatically.
+
+4
+00:00:16.570 --> 00:00:23.320
+Refresh models, type to filter, then select a model. Here we use Free Models Router.
+
+5
+00:00:23.320 --> 00:00:29.320
+Choose Create, then click the saved connection’s name to make it active.
+
+6
+00:00:29.320 --> 00:00:33.320
+Open its More actions menu (⋮) and choose Test connection.
+
+7
+00:00:33.320 --> 00:00:38.420
+Connection successful confirms that OpenRouter accepted the saved key.

@@ -28,10 +28,20 @@ import importComplete from '../assets/tutorials/import-complete.png';
 import cardImportOpen from '../assets/tutorials/card-import-open.png';
 import cardImportQueue from '../assets/tutorials/card-import-queue.png';
 import cardImportSaved from '../assets/tutorials/card-import-saved.png';
+import apiOpen from '../assets/tutorials/api-connection-open.png';
+import apiKey from '../assets/tutorials/api-connection-key.png';
+import apiModel from '../assets/tutorials/api-connection-model.png';
+import apiSaved from '../assets/tutorials/api-connection-saved.png';
+import apiTested from '../assets/tutorials/api-connection-tested.png';
 import type { TutorialScreenshots } from './feature-tutorials';
 
-/** Real native controls, captured with fictional demo cards; bundled without remote requests. */
+/** Real native controls; credentials and unrelated content stay masked. Bundled without remote requests. */
 export const tutorialScreenshots: TutorialScreenshots = {
+  'api-connection-open': { src: apiOpen, alt: 'Lumiverse’s native Connections drawer with a new chat connection form open.', caption: 'Home → 1. Add API connection → New Connection. Use the top section for chat models.' },
+  'api-connection-key': { src: apiKey, alt: 'OpenRouter selected as provider with the example API key masked.', caption: 'Use your own provider key. OpenRouter supplies its URL automatically.' },
+  'api-connection-model': { src: apiModel, alt: 'The native connection form with openrouter/free selected in Model.', caption: 'Refresh models uses the current form values. Type to filter, then select a model.' },
+  'api-connection-saved': { src: apiSaved, alt: 'The saved OpenRouter tutorial connection with its active check mark. Usage details are hidden.', caption: 'Create saves the profile. Clicking its name selects it as the active connection.' },
+  'api-connection-tested': { src: apiTested, alt: 'The saved OpenRouter connection shows Connection successful. Usage details are hidden.', caption: 'More actions (⋮) → Test connection checks the saved credentials.' },
   'card-import-open': { src: cardImportOpen, alt: 'The regular Import character window on the File tab with Choose card files.', caption: 'Home → 2. Add a card opens this importer. JAR and JAR Bridge are not needed.' },
   'card-import-queue': { src: cardImportQueue, alt: 'Mira’s fictional JSON card in the regular import queue, Ready to import.', caption: 'Check the queued file, then choose Import. A selected file has not been saved yet.' },
   'card-import-saved': { src: cardImportSaved, alt: 'Mira’s imported card with Imported to your library and Open character.', caption: 'The success message confirms the save. Open character takes you to its profile.' },

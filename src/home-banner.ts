@@ -83,7 +83,8 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
   const progress = make('span', 'jb-discover-progress'); progress.setAttribute('aria-live', 'polite');
   const next = make('button', 'jb-discover-next', 'Next idea'); next.type = 'button'; next.append(icon('arrow'));
   const tutorial = make('button', 'jb-discover-tutorial', 'Full tutorial'); tutorial.type = 'button';
-  footer.append(progress, tutorial, next);
+  const apiTutorial = make('button', 'jb-discover-tutorial', 'API connection guide'); apiTutorial.type = 'button';
+  footer.append(progress, apiTutorial, tutorial, next);
   const status = make('p', 'jb-discover-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   content.append(eyebrow, title, description, actions, footer, status);
   const art = make('div', 'jb-discover-art'); art.setAttribute('aria-hidden', 'true');
@@ -170,6 +171,7 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
     const isBasics = idea.name === 'Basics';
     eyebrow.textContent = isLunch ? 'LUNCH’S PICKS' : idea.name === 'Memory' ? 'HELP YOUR CHARACTERS REMEMBER MORE' : isBasics ? 'START HERE' : 'A LITTLE MORE LUMIVERSE';
     tutorial.hidden = isLunch;
+    apiTutorial.hidden = !isBasics;
     tutorial.textContent = isBasics ? 'Card import guide' : 'Full tutorial';
     root.classList.toggle('jb-discover-lunch', isLunch);
     root.classList.toggle('jb-discover-basics', isBasics);
@@ -187,6 +189,7 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
     const feature = ideas[index].tutorial;
     if (feature) options.openTutorial?.(feature);
   });
+  apiTutorial.addEventListener('click', () => { if (!disposed && index === 0) options.openTutorial?.('connections'); });
   next.addEventListener('click', () => { index = (index + 1) % ideas.length; render(); });
   tryButton.addEventListener('click', () => {
     if (disposed) return;

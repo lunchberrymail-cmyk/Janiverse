@@ -10,7 +10,7 @@ export function createTutorialVideo(recording: TutorialRecording, onChapter: (sc
   const root = document.createElement('section'); root.className = 'jb-tutorial-recording'; root.setAttribute('aria-label', 'Recorded walkthrough');
   const heading = document.createElement('h3'); heading.textContent = 'Watch the walkthrough';
   const hint = document.createElement('p'); hint.textContent = 'Recorded in Lumiverse · English captions · Pause, seek, change speed, or use full screen. Written steps are below.';
-  const video = document.createElement('video'); video.controls = true; video.playsInline = true; video.preload = 'none'; video.hidden = true; video.setAttribute('aria-label', 'Recorded import walkthrough');
+  const video = document.createElement('video'); video.controls = true; video.playsInline = true; video.preload = 'none'; video.hidden = true; video.setAttribute('aria-label', 'Recorded walkthrough video');
   const launch = document.createElement('button'); launch.type = 'button'; launch.textContent = 'Watch video';
   const status = document.createElement('p'); status.className = 'jb-tutorial-status'; status.setAttribute('role', 'status');
   const chapters = document.createElement('nav'); chapters.className = 'jb-tutorial-chapters'; chapters.setAttribute('aria-label', 'Video chapters');

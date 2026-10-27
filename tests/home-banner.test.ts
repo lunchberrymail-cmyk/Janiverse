@@ -99,7 +99,7 @@ test('full tutorials open only on request with the right feature and preserve th
   expect(tutorials).toEqual([]);
   for (const feature of ['import', 'memory', 'lorebooks', 'group', 'voice', 'extensions']) {
     const idea = banner.root.dataset.idea;
-    (banner.root.querySelector('.jb-discover-tutorial') as HTMLButtonElement).click(); expect(tutorials.at(-1)).toBe(feature);
+    find(feature === 'import' ? 'Card import guide' : 'Full tutorial').click(); expect(tutorials.at(-1)).toBe(feature);
     expect(banner.root.dataset.idea).toBe(idea);
     find('Next idea').click();
   }
@@ -107,6 +107,15 @@ test('full tutorials open only on request with the right feature and preserve th
   find('Full tutorial').click(); expect(tutorials).toHaveLength(6);
   expect(invoked).toEqual([]); expect(imports).toBe(0);
   const oldTutorial = find('Full tutorial'); banner.destroy(); oldTutorial.click(); expect(tutorials).toHaveLength(6);
+});
+
+test('the API guide is separate from connection setup and becomes inert away from Basics or after cleanup', () => {
+  const guide = find('API connection guide');
+  expect(guide.hidden).toBe(false); guide.click();
+  expect(tutorials).toEqual(['connections']); expect(apiOpens).toBe(0); expect(invoked).toEqual([]);
+  find('Next idea').click(); expect(guide.hidden).toBe(true); guide.click();
+  expect(tutorials).toEqual(['connections']);
+  banner.destroy(); guide.click(); expect(tutorials).toEqual(['connections']);
 });
 
 test('reopening Lunch picks replaces its window and disabling the banner closes it and stops old actions', async () => {

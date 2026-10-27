@@ -6,6 +6,8 @@ The `card-import-*` screenshots and the `card-import.webm` / `history-import.web
 
 Keep screenshots free of API keys, private conversations, browser account details, and imported character definitions. When native controls change, update the relevant image and its matching steps, alt text, and caption in `src/feature-tutorials.ts` and `src/tutorial-screenshots.ts`.
 
+`api-connection.webm` and `api-connection-*` screenshots show the real native OpenRouter setup: a masked temporary key, live model refresh, selection of Free Models Router, creation and activation, and the successful native credential test. No chat generation was requested. Idle waits are trimmed and some actions slowed for readability. Recent-chat previews and the provider usage panel are masked; the key remains in a password field throughout. Captions and chapters accompany the recording. Neither the key nor account exports are included in these assets.
+
 The Hone guide uses the public repository install field, the built-in Default model profile, the built-in Input Single Pass selector, and a fictional unsent draft. It does not show provider credentials or custom prompt text. No enhancement was run, and the sample draft was cleared after capture. Its captions and highlights live in `src/hone-screenshots.ts`.
 
 `bun run build` embeds PNGs and short WebM recordings in the frontend bundle. The video player loads media only after an explicit Watch video or chapter click. No image/video hosting or external media requests are required.

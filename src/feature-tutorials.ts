@@ -1,7 +1,7 @@
 import type { SpindleFrontendContext, SpindleHostSurfaceRef } from 'lumiverse-spindle-types';
 import { createTutorialVideo, type TutorialRecording } from './tutorial-video';
 
-export type TutorialFeature = 'import' | 'history' | 'memory' | 'lorebooks' | 'group' | 'voice' | 'extensions';
+export type TutorialFeature = 'connections' | 'import' | 'history' | 'memory' | 'lorebooks' | 'group' | 'voice' | 'extensions';
 export type TutorialHighlight = { x: number; y: number; width: number; height: number };
 export type TutorialScreenshot = {
   src: string; alt: string; caption?: string;
@@ -30,6 +30,18 @@ const loom: Action = { label: 'Open preset editor', destination: drawer('loom'),
 
 /** Playback changes the displayed demonstration only; it never operates Lumiverse. */
 export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
+  connections: {
+    title: 'Add an API connection', intro: 'Connect a model provider in Lumiverse’s native Connections drawer. This recording uses OpenRouter.',
+    prerequisites: ['An API key from your model provider. Use your own key; the video keeps its example key masked.', 'Use New Connection at the top of the drawer for chat models. Decision, embedding, image and speech connections have separate sections.'],
+    scenes: [
+      { title: 'Open Connections', instruction: 'On Home, choose 1. Add API connection. At the top of the Connections drawer, choose New Connection.', result: 'A new chat connection form opens.', screenshot: 'api-connection-open', action: connections },
+      { title: 'Name it and enter your provider key', instruction: 'Give the connection a name, select OpenRouter under Provider, then paste your own key into API Key. OpenRouter uses its provider URL automatically.', result: 'The key stays masked. Selecting a provider does not save the form.', screenshot: 'api-connection-key' },
+      { title: 'Choose a model', instruction: 'Choose Refresh models beside Model. Click the Model field, type to filter the list, and select the model you want.', result: 'The chosen model ID is included with the connection. Refresh uses your current form values before saving.', screenshot: 'api-connection-model' },
+      { title: 'Save and select the connection', instruction: 'Choose Create. In the saved list, click the connection’s name to make it active. Set as default connection is optional.', result: 'The connection row has an active check mark. Its saved model is ready for chats that follow the active connection.', screenshot: 'api-connection-saved' },
+      { title: 'Test the saved key', instruction: 'Open the connection’s More actions (⋮) menu and choose Test connection.', result: 'Connection successful confirms the provider accepted the saved credentials.', screenshot: 'api-connection-tested' },
+    ],
+    help: ['Test connection checks the provider credentials. A successful test does not guarantee that every model or provider route is available to your account.', 'No model list? Check the provider, API key and API URL, then Refresh models again. A supported model ID can also be entered directly.', 'If a key expires or is rejected, Edit the saved connection and replace the key, then save and test again.', 'A chat pinned to a different connection can keep using that profile. Check the chat’s API connection picker if it does not follow your active connection.'],
+  },
   group: {
     title: 'Your first group chat', intro: '2 cards · API configured. Follow the controls one screen at a time.',
     prerequisites: ['At least two character cards, including a card with an opening greeting.', 'A saved, working chat API connection. Replies use that model.'], setup: connections,
@@ -151,7 +163,7 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
   const controls = make('nav', 'jb-tutorial-controls'); controls.setAttribute('aria-label', 'Walkthrough scenes');
   const previous = make('button', 'jb-tutorial-previous', 'Back'), next = make('button', 'jb-tutorial-next', 'Next'); previous.type = next.type = 'button';
   const progress = make('span', 'jb-tutorial-progress'), play = make('button', 'jb-tutorial-play', 'Play demo'); play.type = 'button'; play.setAttribute('aria-pressed', 'false'); controls.append(previous, progress, next, play);
-  play.hidden = feature === 'import' || feature === 'history';
+  play.hidden = feature === 'connections' || feature === 'import' || feature === 'history';
   const before = make('details', 'jb-tutorial-before'), checklist = make('ul'); before.append(make('summary', '', 'Before you start')); tutorial.prerequisites.forEach(text => checklist.append(make('li', '', text))); before.append(checklist);
   const setup = tutorial.setup && make('button', 'jb-tutorial-setup', tutorial.setup.label); if (setup) { setup.type = 'button'; before.append(setup); }
   const help = make('details', 'jb-tutorial-help'), tips = make('ul'); help.append(make('summary', '', 'Help & troubleshooting')); tutorial.help.forEach(text => tips.append(make('li', '', text))); help.append(tips);
