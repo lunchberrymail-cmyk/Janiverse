@@ -49,7 +49,7 @@ function start() { stop = setup(ctx); }
 
 beforeEach(() => {
   originalDocument = globalThis.document; originalLocation = globalThis.location; originalFetch = globalThis.fetch; originalDOMParser = globalThis.DOMParser;
-  dom = new JSDOM('<!doctype html><html data-janitor-bridge-view="previous" data-jb-tools="saved"><head></head><body><main id="native"><h1>Native Lumiverse</h1><button id="native-send">Native send</button><section id="native-chat">The native chat and its controls remain mounted.</section></main><div id="slot-landing_header"></div><div id="slot-chat_header_left"></div><div id="slot-landing_hero"></div><div id="slot-chat_input_tools_left"></div><div id="slot-chat_composer_above"></div></body></html>', { url: 'http://localhost:7860/' });
+  dom = new JSDOM('<!doctype html><html data-janitor-bridge-view="previous" data-jb-tools="saved"><head></head><body><main id="native"><h1>Native Lumiverse</h1><button id="native-send">Native send</button><section id="native-chat">The native chat and its controls remain mounted.</section></main><div id="slot-landing_header"></div><div id="slot-chat_header_left"></div><div id="slot-landing_hero"></div><div id="slot-landing_chats"></div><div id="slot-chat_input_tools_left"></div><div id="slot-chat_composer_above"></div></body></html>', { url: 'http://localhost:7860/' });
   globalThis.document = dom.window.document; globalThis.location = dom.window.location; globalThis.DOMParser = dom.window.DOMParser;
   native = document.querySelector('#native')!; nativeMarkup = native.outerHTML; nativeClicks = 0;
   document.querySelector('#native-send')!.addEventListener('click', () => { nativeClicks++; });
@@ -138,10 +138,32 @@ afterEach(() => {
 
 test('mounts only the declared visual slots and preserves native chat DOM and listeners', async () => {
   start(); await flush();
-  expect([...roots.keys()]).toEqual(['landing_header', 'chat_header_left', 'landing_hero', 'chat_input_tools_left', 'chat_composer_above']);
+  expect([...roots.keys()]).toEqual(['landing_header', 'chat_header_left', 'landing_hero', 'chat_input_tools_left', 'chat_composer_above', 'landing_chats']);
   expect(document.querySelector('#native')).toBe(native); expect(native.outerHTML).toBe(nativeMarkup);
   (document.querySelector('#native-send') as HTMLButtonElement).click(); expect(nativeClicks).toBe(1);
   expect(document.querySelectorAll('.jb-card')).toHaveLength(24);
+});
+
+test('Home hands off the native chats controller until the extension is disposed', async () => {
+  start(); await flush();
+  const handoff = roots.get('landing_chats')!;
+  expect(handoff.getAttribute('data-recent-chats-ready')).toBe('true');
+  // Both custom views use the shared hero surface; neither may reactivate a
+  // hidden native virtualizer that could reset their scroll position.
+  findButton('My Chats', roots.get('landing_header')!).click(); await flush();
+  expect(handoff.getAttribute('data-recent-chats-ready')).toBe('true');
+  findButton('Home', roots.get('landing_header')!).click(); await flush();
+  expect(handoff.getAttribute('data-recent-chats-ready')).toBe('true');
+  stop!(); stop = undefined;
+  expect(handoff.hasAttribute('data-recent-chats-ready')).toBe(false);
+  expect(native.outerHTML).toBe(nativeMarkup);
+});
+
+test('older hosts without the chats handoff still mount the Home browser', async () => {
+  document.querySelector('#slot-landing_chats')!.remove();
+  expect(() => start()).not.toThrow(); await flush();
+  expect(document.querySelectorAll('.jb-card')).toHaveLength(24);
+  expect(roots.has('landing_chats')).toBe(false);
 });
 
 test('optional state selector failures leave the home layout usable without requesting permissions', async () => {

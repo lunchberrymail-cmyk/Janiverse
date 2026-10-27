@@ -321,6 +321,16 @@ export function setup(ctx: SpindleFrontendContext) {
     startChat: characterId => invoke({ kind: 'entity_action', id: 'character_chat' }, { characterId, mode: 'new' }),
   });
   mounts[2].append(myChats.root);
+  // Our Home/My Chats browser lives in the hero slot, but also owns the native
+  // Chats surface. CSS alone hides its rows without stopping its virtualizer:
+  // that controller can still write to Home's shared scroll container. The
+  // host readiness seam unmounts it and restores it when we release ownership.
+  try {
+    const nativeChats = ctx.ui.mount('landing_chats');
+    nativeChats.setAttribute('data-recent-chats-ready', 'true');
+    mounts.push(nativeChats);
+    cleanups.push(() => nativeChats.removeAttribute('data-recent-chats-ready'));
+  } catch { /* Older hosts keep the existing visual-slot fallback. */ }
   function chooseFilter(nextFilter: string) {
     filter = nextFilter; offset = 0;
     browseTitle.textContent = filter === 'favorites' ? 'Favorites' : 'All Characters';
