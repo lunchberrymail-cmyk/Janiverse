@@ -111,7 +111,7 @@ test('screenshots, scene overrides and normalized highlights render safely; fail
   } });
   expect(tutorial.root.querySelector('figcaption')!.textContent).toBe('<b>literal caption</b>'); expect(tutorial.root.querySelector('figcaption b,script,iframe,i')).toBeNull();
   expect(tutorial.root.querySelector('.jb-tutorial-instruction')!.textContent).toBe('Click the named control.');
-  expect((tutorial.root.querySelector('.jb-tutorial-highlight') as HTMLElement).style.left).toBe('10%'); expect(tutorial.root.querySelector('.jb-tutorial-pointer')).not.toBeNull();
+  expect((tutorial.root.querySelector('.jb-tutorial-highlight') as HTMLElement).style.left).toBe('10%'); expect(tutorial.root.querySelector('.jb-tutorial-arrows line')).not.toBeNull();
   find('Enlarge screenshot').click(); expect(tutorial.root.querySelector('.jb-tutorial-image-expanded')).not.toBeNull(); expect(find('Fit screenshot').getAttribute('aria-pressed')).toBe('true');
   tutorial.root.querySelector('img')!.dispatchEvent(new dom.window.Event('error')); expect((tutorial.root.querySelector('.jb-tutorial-image-error') as HTMLElement).hidden).toBe(false); expect(tutorial.root.textContent).toContain('Click the named control.');
   for (let scene = 0; scene < 3; scene++) { find('Next').click(); expect(tutorial.root.querySelector('img')).toBeNull(); }
@@ -138,10 +138,11 @@ test('every feature has a short navigable path; memory retains prompt placement 
 
 test('API guidance separates saving, selection and credential testing, and opens only the native drawer on request', async () => {
   const tutorial = openFeatureTutorial(ctx, 'connections', options());
-  expect(tutorial.root.querySelector<HTMLButtonElement>('.jb-tutorial-play')!.hidden).toBe(true);
+  expect(tutorial.root.querySelector('.jb-tutorial-play')).toBeNull();
   expect(invoked).toEqual([]);
   find('Next').click(); expect(tutorial.root.textContent).toContain('OpenRouter uses its provider URL automatically');
   find('Next').click(); expect(tutorial.root.textContent).toContain('Refresh models');
+  find('Next').click(); expect(tutorial.root.textContent).toContain('Scroll to the bottom');
   find('Next').click(); expect(tutorial.root.textContent).toContain('click the connection’s name to make it active');
   find('Next').click(); expect(tutorial.root.textContent).toContain('More actions (⋮)');
   expect(tutorial.root.querySelector('.jb-tutorial-help')!.textContent).toContain('does not guarantee that every model');
@@ -150,26 +151,35 @@ test('API guidance separates saving, selection and credential testing, and opens
   expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'connections' }]); expect(tutorial.root.isConnected).toBe(false);
 });
 
-test('recorded guide chapters update the written step and closing releases playback without opening an app tool', () => {
-  let paused = 0; dom.window.HTMLMediaElement.prototype.load = () => {}; dom.window.HTMLMediaElement.prototype.pause = () => { paused++; };
-  const tutorial = openFeatureTutorial(ctx, 'import', { ...options(), recordings: { import: { src: 'data:video/webm;base64,AAAA', captions: 'WEBVTT\n', chapters: [{ time: 14, title: 'Save', scene: 2 }] } } });
-  const video = tutorial.root.querySelector('video')!; expect(video.hasAttribute('src')).toBe(false);
-  find('0:14 · Save').click(); expect(tutorial.root.dataset.scene).toBe('3'); expect(tutorial.root.textContent).toContain('Open character'); expect(imports).toBe(0); expect(invoked).toEqual([]);
-  find('Close tutorial').click(); expect(paused).toBe(1); expect(video.hasAttribute('src')).toBe(false); expect(video.children).toHaveLength(0);
+test('guides stay on the chosen screenshot until Back or Next is selected', () => {
+  const clock = demoClock(), tutorial = openFeatureTutorial(ctx, 'group', options());
+  expect(tutorial.root.querySelector('video, audio, .jb-tutorial-play')).toBeNull(); expect(clock.pending.size).toBe(0);
+  document.dispatchEvent(new dom.window.Event('visibilitychange')); expect(tutorial.root.dataset.scene).toBe('1');
+  find('Next').click(); expect(tutorial.root.dataset.scene).toBe('2'); expect(clock.pending.size).toBe(0);
+  const oldNext=find('Next'); tutorial.destroy(); oldNext.click(); expect(tutorial.root.dataset.scene).toBe('2'); expect(invoked).toEqual([]);
 });
 
-test('Play is opt-in, advances screenshots only, stops at the last scene, and can pause or replay', () => {
-  const clock = demoClock(), tutorial = openFeatureTutorial(ctx, 'group', options());
-  expect(clock.pending.size).toBe(0); find('Play demo').click(); expect(clock.pending.size).toBe(1); expect(find('Pause demo').getAttribute('aria-pressed')).toBe('true');
-  clock.tick(); expect(tutorial.root.dataset.scene).toBe('2'); find('Pause demo').click(); expect(clock.pending.size).toBe(0);
-  find('Play demo').click(); find('Next').click(); expect(clock.pending.size).toBe(0); expect(tutorial.root.dataset.scene).toBe('3');
-  find('Play demo').click(); while (clock.pending.size) clock.tick(); expect(tutorial.root.dataset.scene).toBe('7'); expect(find('Replay demo').getAttribute('aria-pressed')).toBe('false');
-  find('Replay demo').click(); expect(tutorial.root.dataset.scene).toBe('1'); expect(clock.pending.size).toBe(1); tutorial.destroy(); expect(clock.pending.size).toBe(0);
-  expect(invoked).toEqual([]); expect(imports).toBe(0);
+test('numbered arrows match readable instructions, reject invalid coordinates, and never run native actions', () => {
+  const tutorial=openFeatureTutorial(ctx, 'group', { ...options(), screenshots: { 'group-start': { src:pixel, width: 800, height: 600, alt:'Native controls', callouts:[
+    {label:'Choose New Group Chat',x:10,y:15,targetX:80,targetY:60},
+    {label:'<b>Literal instruction</b>',x:20,y:25,targetX:40,targetY:50},
+    {label:'Outside screenshot',x:120,y:20,targetX:10,targetY:10},
+    {label:'Invalid',x:NaN,y:20,targetX:10,targetY:10},
+  ] } } });
+  expect([...tutorial.root.querySelectorAll('.jb-tutorial-number')].map(node=>node.textContent)).toEqual(['1','2']);
+  expect(tutorial.root.querySelectorAll('.jb-tutorial-arrows line')).toHaveLength(2);
+  expect(tutorial.root.querySelector('img')!.width).toBe(800);
+  expect(tutorial.root.querySelector('img')!.height).toBe(600);
+  expect(tutorial.root.querySelector('.jb-tutorial-arrows line')!.getAttribute('x2')).toBe('80%');
+  const legend=tutorial.root.querySelector('.jb-tutorial-callouts')!;
+  expect(legend.textContent).toContain('Choose New Group Chat'); expect(legend.textContent).toContain('<b>Literal instruction</b>'); expect(legend.querySelector('b')).toBeNull();
+  expect(tutorial.root.querySelector('.jb-tutorial-scene-title')!.textContent).toStartWith('Step 1.');
+  find('Enlarge screenshot').click(); expect(tutorial.root.querySelectorAll('.jb-tutorial-number')).toHaveLength(2);
+  find('Next').click(); expect(tutorial.root.querySelector('.jb-tutorial-arrows, .jb-tutorial-callouts')).toBeNull(); expect(invoked).toEqual([]);
 });
 
 test('changed scenes reveal their start without stealing focus or resetting same-scene work', async () => {
-  const clock = demoClock(), scrolls: Array<{ scene: string | undefined; options: unknown }> = [];
+  const scrolls: Array<{ scene: string | undefined; options: unknown }> = [];
   dom.window.HTMLElement.prototype.scrollIntoView = function(settings: unknown) {
     scrolls.push({ scene: this.closest('.jb-feature-tutorial')?.getAttribute('data-scene') ?? undefined, options: settings });
   };
@@ -184,21 +194,7 @@ test('changed scenes reveal their start without stealing focus or resetting same
   tutorial.root.querySelector('img')!.dispatchEvent(new dom.window.Event('load'));
   tutorial.root.querySelector('img')!.dispatchEvent(new dom.window.Event('error'));
   expect(scrolls).toHaveLength(beforeSameScene);
-  find('Play demo').click(); clock.tick(); expect(scrolls.at(-1)?.scene).toBe('2');
-  while (clock.pending.size) clock.tick(); expect(scrolls.at(-1)?.scene).toBe('7');
-  find('Replay demo').click(); expect(scrolls.at(-1)?.scene).toBe('1');
-  tutorial.destroy(); expect(clock.pending.size).toBe(0);
-});
-
-test('hidden pages and reduced motion pause playback without restarting; close removes listeners', () => {
-  const clock = demoClock(), listeners = new Set<() => void>(); let reduced = false;
-  dom.window.matchMedia = () => ({ get matches() { return reduced; }, addEventListener(_type: string, listener: () => void) { listeners.add(listener); }, removeEventListener(_type: string, listener: () => void) { listeners.delete(listener); } });
-  const tutorial = openFeatureTutorial(ctx, 'voice', options()); find('Play demo').click(); expect(clock.pending.size).toBe(1);
-  Object.defineProperty(document, 'hidden', { configurable: true, value: true }); document.dispatchEvent(new dom.window.Event('visibilitychange')); expect(clock.pending.size).toBe(0);
-  Object.defineProperty(document, 'hidden', { configurable: true, value: false }); document.dispatchEvent(new dom.window.Event('visibilitychange')); expect(clock.pending.size).toBe(0);
-  find('Play demo').click(); reduced = true; [...listeners].forEach(listener => listener()); expect(clock.pending.size).toBe(0); expect(find('Play demo').disabled).toBe(true); find('Play demo').click(); expect(clock.pending.size).toBe(0);
-  find('Next').click(); expect(tutorial.root.dataset.scene).toBe('2'); reduced = false; [...listeners].forEach(listener => listener()); expect(find('Play demo').disabled).toBe(false); expect(clock.pending.size).toBe(0);
-  tutorial.destroy(); expect(listeners.size).toBe(0);
+  tutorial.destroy();
 });
 
 test('the importer opens only on request and a missing callback gives recovery', async () => {
@@ -210,7 +206,7 @@ test('card guidance does not require JAR and its history guide is a separate exp
   let histories = 0;
   const tutorial = openFeatureTutorial(ctx, 'import', { ...options(), openHistoryTutorial: () => histories++ });
   expect(tutorial.root.textContent).toContain('You do not need JAR or JAR Bridge');
-  expect(tutorial.root.querySelector<HTMLButtonElement>('.jb-tutorial-play')!.hidden).toBe(true);
+  expect(tutorial.root.querySelector('.jb-tutorial-play')).toBeNull();
   find('Next').click(); expect(tutorial.root.textContent).toContain('Choose card files');
   find('Next').click(); expect(tutorial.root.textContent).toContain('Imported to your library');
   expect(imports).toBe(0); expect(histories).toBe(0); expect(invoked).toEqual([]);

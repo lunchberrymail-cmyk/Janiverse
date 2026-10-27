@@ -1,12 +1,14 @@
 import type { SpindleFrontendContext, SpindleHostSurfaceRef } from 'lumiverse-spindle-types';
-import { createTutorialVideo, type TutorialRecording } from './tutorial-video';
+import { screenshotAnnotations, type TutorialCallout } from './tutorial-annotations';
 
 export type TutorialFeature = 'connections' | 'import' | 'history' | 'memory' | 'lorebooks' | 'group' | 'voice' | 'extensions';
 export type TutorialHighlight = { x: number; y: number; width: number; height: number };
 export type TutorialScreenshot = {
   src: string; alt: string; caption?: string;
+  width?: number; height?: number;
   /** Percentages of the screenshot, not its surrounding panel. */
   highlight?: TutorialHighlight;
+  callouts?: readonly TutorialCallout[];
   instruction?: string;
   result?: string;
 };
@@ -17,7 +19,6 @@ export type FeatureTutorialOptions = {
   openHistory?: () => boolean | Promise<boolean>;
   openHistoryTutorial?: () => void;
   screenshots?: TutorialScreenshots;
-  recordings?: Partial<Record<TutorialFeature, TutorialRecording>>;
   onClose?: () => void;
 };
 type Action = { label: string; destination: SpindleHostSurfaceRef | 'import' | 'history'; fallback: string };
@@ -28,17 +29,19 @@ const settings = (id: string): SpindleHostSurfaceRef => ({ kind: 'settings_tab',
 const connections: Action = { label: 'Open Connections', destination: drawer('connections'), fallback: 'Open Connections from Lumiverse’s sidebar.' };
 const loom: Action = { label: 'Open preset editor', destination: drawer('loom'), fallback: 'Open Preset from Lumiverse’s sidebar, or use Settings → Manage / import presets.' };
 
-/** Playback changes the displayed demonstration only; it never operates Lumiverse. */
+/** Guides show native controls; actions run only through explicitly chosen shortcuts. */
 export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
   connections: {
-    title: 'Add an API connection', intro: 'Connect a model provider in Lumiverse’s native Connections drawer. This recording uses OpenRouter.',
-    prerequisites: ['An API key from your model provider. Use your own key; the video keeps its example key masked.', 'Use New Connection at the top of the drawer for chat models. Decision, embedding, image and speech connections have separate sections.'],
+    title: 'Add an API connection', intro: 'Connect a model provider in Lumiverse’s native Connections drawer. These steps use OpenRouter.',
+    prerequisites: ['An API key from your model provider. Use your own key; the example key stays masked.', 'Use New Connection at the top of the drawer for chat models. Decision, embedding, image and speech connections have separate sections.'],
     scenes: [
       { title: 'Open Connections', instruction: 'On Home, choose 1. Add API connection. At the top of the Connections drawer, choose New Connection.', result: 'A new chat connection form opens.', screenshot: 'api-connection-open', action: connections },
       { title: 'Name it and enter your provider key', instruction: 'Give the connection a name, select OpenRouter under Provider, then paste your own key into API Key. OpenRouter uses its provider URL automatically.', result: 'The key stays masked. Selecting a provider does not save the form.', screenshot: 'api-connection-key' },
       { title: 'Choose a model', instruction: 'Choose Refresh models beside Model. Click the Model field, type to filter the list, and select the model you want.', result: 'The chosen model ID is included with the connection. Refresh uses your current form values before saving.', screenshot: 'api-connection-model' },
-      { title: 'Save and select the connection', instruction: 'Choose Create. In the saved list, click the connection’s name to make it active. Set as default connection is optional.', result: 'The connection row has an active check mark. Its saved model is ready for chats that follow the active connection.', screenshot: 'api-connection-saved' },
-      { title: 'Test the saved key', instruction: 'Open the connection’s More actions (⋮) menu and choose Test connection.', result: 'Connection successful confirms the provider accepted the saved credentials.', screenshot: 'api-connection-tested' },
+      { title: 'Save the connection', instruction: 'Scroll to the bottom of the form and choose Create. Set as default connection is optional.', result: 'The profile is saved in Connections. Saving it does not select it for every chat.', screenshot: 'api-connection-create' },
+      { title: 'Select the saved connection', instruction: 'In the saved list, click the connection’s name to make it active.', result: 'Its row has an active check mark. Chats that follow the active connection can now use it.', screenshot: 'api-connection-saved' },
+      { title: 'Test the saved key', instruction: 'Open the connection’s More actions (⋮) menu and choose Test connection.', result: 'Connection successful confirms the provider accepted the saved credentials.', screenshot: 'api-connection-menu' },
+      { title: 'Check the result', instruction: 'Look for Connection successful below the saved connection’s name. If it fails, use Edit to check the provider and replace an expired or incorrect key.', result: 'The saved credentials were accepted. Model access still depends on the provider and your account.', screenshot: 'api-connection-tested' },
     ],
     help: ['Test connection checks the provider credentials. A successful test does not guarantee that every model or provider route is available to your account.', 'No model list? Check the provider, API key and API URL, then Refresh models again. A supported model ID can also be entered directly.', 'If a key expires or is rejected, Edit the saved connection and replace the key, then save and test again.', 'A chat pinned to a different connection can keep using that profile. Check the chat’s API connection picker if it does not follow your active connection.'],
   },
@@ -117,7 +120,7 @@ export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
     prerequisites: ['The matching character is already in your Lumiverse library. Use the regular card importer first if needed.', 'JAR Bridge installed and enabled for history import. A JAR JSON or compatible JSONL history file works without the separate JAR app.', 'Only live JanitorAI links need the JAR app running and signed in on the Lumiverse server computer.'],
     scenes: [
       { title: 'Open history import', instruction: 'Open More → Import old chats (JAR Bridge), then choose Chat history.', result: 'JAR Bridge offers History file for an export, or From JAR for a live conversation link.', screenshot: 'import-history', action: { label: 'Open history importer', destination: 'history', fallback: 'Install and enable JAR Bridge in Extensions, then use More → Import old chats (JAR Bridge). Card-only imports do not need it.' } },
-      { title: 'Load the conversation', instruction: 'Choose History file and select your JAR JSON or compatible JSONL export. Use From JAR only when the separate JAR app is running and signed in.', result: 'A preview shows the old messages. Loading the file has not saved another chat yet.', screenshot: 'import-history' },
+      { title: 'Load the conversation', instruction: 'Choose History file and select your JAR JSON or compatible JSONL export. Use From JAR only when the separate JAR app is running and signed in.', result: 'A preview shows the old messages. Loading the file has not saved another chat yet.', screenshot: 'history-file' },
       { title: 'Choose the saved character', instruction: 'Select the matching character from your Lumiverse library. Review the message count, speakers and text.', result: 'The destination is explicit. An existing character does not need to be imported again.', screenshot: 'import-complete' },
       { title: 'Save and continue', instruction: 'Review the destination and messages, choose Import chat, then Continue chat after it succeeds.', result: 'The imported history becomes a normal saved Lumiverse conversation.', screenshot: 'import-complete', fallbackScreenshot: 'import-history' },
     ],
@@ -138,68 +141,45 @@ function validHighlight(value: TutorialHighlight | undefined): value is Tutorial
   return !!value && [value.x, value.y, value.width, value.height].every(Number.isFinite) && value.x >= 0 && value.y >= 0 && value.width > 0 && value.height > 0 && value.x + value.width <= 100 && value.y + value.height <= 100;
 }
 
-/** Reading or playing this host-owned demo never invokes a native action. */
+/** Reading these steps never invokes a native action. */
 export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: TutorialFeature, options: FeatureTutorialOptions) {
   const tutorial = featureTutorials[feature], previousFocus = document.activeElement as HTMLElement | null;
   const modal = ctx.ui.showModal({ title: tutorial.title, width: 1000, maxHeight: 900 });
   const root = modal.root; root.classList.add('jb-feature-tutorial'); root.dataset.feature = feature;
   root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', tutorial.title); root.setAttribute('aria-modal', 'true');
-  let disposed = false, opening = false, restoreFocus = true, index = 0, renderedIndex = 0, playing = false;
-  let timer: ReturnType<typeof setTimeout> | undefined, motion: MediaQueryList | undefined;
-  try { motion = document.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)'); } catch {}
+  let disposed = false, opening = false, restoreFocus = true, index = 0, renderedIndex = 0;
   const header = make('header', 'jb-tutorial-header'), title = make('h2', '', tutorial.title);
   const close = make('button', 'jb-tutorial-close', 'Close tutorial'); close.type = 'button'; close.addEventListener('click', () => { if (!disposed) modal.dismiss(); }); header.append(title, close);
   const intro = make('p', 'jb-tutorial-intro', tutorial.intro);
   const historyGuide = feature === 'import' && options.openHistoryTutorial ? make('button', 'jb-tutorial-history-guide', 'Need your old messages too?') : undefined;
   historyGuide?.addEventListener('click', () => { if (!disposed && !opening) options.openHistoryTutorial?.(); });
-  const recording = options.recordings?.[feature];
-  const player = recording && createTutorialVideo(recording, target => { if (!disposed && !opening) { stop(); index = Math.min(tutorial.scenes.length - 1, target); renderScene(); renderedIndex = index; } });
-  const poster = screenshotSource(options.screenshots?.[tutorial.scenes[0].screenshot]?.src ?? ''); if (player && poster) player.video.poster = poster;
   const scene = make('section', 'jb-tutorial-scene'); scene.setAttribute('aria-live', 'polite'); scene.setAttribute('aria-atomic', 'true');
   const sceneHeading = make('h3', 'jb-tutorial-scene-title'), instruction = make('p', 'jb-tutorial-instruction'), outcome = make('p', 'jb-tutorial-result');
   const figure = make('figure', 'jb-tutorial-figure'), actions = make('div', 'jb-tutorial-actions');
   const status = make('p', 'jb-tutorial-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
-  const sceneAction = make('button', 'jb-tutorial-action'); sceneAction.type = 'button'; actions.append(sceneAction, status); scene.append(sceneHeading, figure, instruction, outcome, actions);
-  const controls = make('nav', 'jb-tutorial-controls'); controls.setAttribute('aria-label', 'Walkthrough scenes');
+  const sceneAction = make('button', 'jb-tutorial-action'); sceneAction.type = 'button'; actions.append(sceneAction, status); scene.append(sceneHeading, instruction, figure, outcome, actions);
+  const controls = make('nav', 'jb-tutorial-controls'); controls.setAttribute('aria-label', 'Walkthrough steps');
   const previous = make('button', 'jb-tutorial-previous', 'Back'), next = make('button', 'jb-tutorial-next', 'Next'); previous.type = next.type = 'button';
-  const progress = make('span', 'jb-tutorial-progress'), play = make('button', 'jb-tutorial-play', 'Play demo'); play.type = 'button'; play.setAttribute('aria-pressed', 'false'); controls.append(previous, progress, next, play);
-  play.hidden = feature === 'connections' || feature === 'import' || feature === 'history';
+  const progress = make('span', 'jb-tutorial-progress'); controls.append(previous, progress, next);
   const before = make('details', 'jb-tutorial-before'), checklist = make('ul'); before.append(make('summary', '', 'Before you start')); tutorial.prerequisites.forEach(text => checklist.append(make('li', '', text))); before.append(checklist);
   const setup = tutorial.setup && make('button', 'jb-tutorial-setup', tutorial.setup.label); if (setup) { setup.type = 'button'; before.append(setup); }
   const help = make('details', 'jb-tutorial-help'), tips = make('ul'); help.append(make('summary', '', 'Help & troubleshooting')); tutorial.help.forEach(text => tips.append(make('li', '', text))); help.append(tips);
   const back = make('button', 'jb-tutorial-back', 'Back to banner'); back.type = 'button'; back.addEventListener('click', () => { if (!disposed) modal.dismiss(); }); root.append(header, intro, scene, controls, before, help, back);
   if (historyGuide) { historyGuide.type = 'button'; intro.after(historyGuide); }
-  if (player) scene.before(player.root);
 
-  function stop() {
-    playing = false; if (timer !== undefined) { clearTimeout(timer); timer = undefined; }
-    play.textContent = index === tutorial.scenes.length - 1 ? 'Replay demo' : 'Play demo'; play.setAttribute('aria-pressed', 'false'); root.classList.remove('jb-tutorial-playing');
-  }
-  function schedule() {
-    if (!playing || disposed || document.hidden || motion?.matches) { stop(); return; }
-    timer = setTimeout(() => {
-      timer = undefined; if (!playing || disposed || document.hidden || motion?.matches) { stop(); return; }
-      if (index < tutorial.scenes.length - 1) { index++; render(); }
-      if (index === tutorial.scenes.length - 1) stop(); else schedule();
-    }, 6500);
-  }
   function render() {
     const changed = renderedIndex !== index;
     renderScene(); renderedIndex = index;
     if (changed) {
-      // The host modal may still be scrolled to the previous scene's footer.
-      // Keep keyboard focus where it is while revealing the new heading/image.
       try { scene.scrollIntoView?.({ block: 'start', inline: 'nearest', behavior: 'instant' }); }
       catch { try { scene.scrollIntoView?.({ block: 'start', inline: 'nearest', behavior: 'auto' }); } catch {} }
     }
   }
   function renderScene() {
     const current = tutorial.scenes[index]; root.dataset.scene = String(index + 1); root.dataset.screenshot = current.screenshot;
-    sceneHeading.textContent = current.title; instruction.textContent = current.instruction; outcome.textContent = `Then: ${current.result}`;
+    sceneHeading.textContent = `Step ${index + 1}. ${current.title}`; instruction.textContent = current.instruction; outcome.textContent = `Then: ${current.result}`;
     progress.textContent = `${index + 1} / ${tutorial.scenes.length}`; progress.setAttribute('aria-label', `Scene ${index + 1} of ${tutorial.scenes.length}`);
     previous.disabled = index === 0 || opening; next.disabled = index === tutorial.scenes.length - 1 || opening;
-    play.disabled = !!motion?.matches || opening; play.title = motion?.matches ? 'Reduced motion is enabled. Use Back and Next to view each scene.' : 'Preview the screens only; this does not operate Lumiverse.';
-    if (!playing) play.textContent = index === tutorial.scenes.length - 1 ? 'Replay demo' : 'Play demo';
     sceneAction.hidden = !current.action; sceneAction.textContent = current.action?.label ?? ''; sceneAction.disabled = opening; if (setup) setup.disabled = opening;
     status.textContent = ''; figure.replaceChildren();
     const exact = options.screenshots?.[current.screenshot], fallback = current.fallbackScreenshot && options.screenshots?.[current.fallbackScreenshot];
@@ -208,47 +188,45 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
     if (exact?.instruction) instruction.textContent = exact.instruction; if (exact?.result) outcome.textContent = `Then: ${exact.result}`;
     const viewport = make('div', 'jb-tutorial-image-box'); viewport.tabIndex = 0; viewport.setAttribute('aria-label', 'Screenshot; enlarge to read small controls');
     const shot = make('div', 'jb-tutorial-shot'), image = make('img'); image.src = source; image.alt = screenshot.alt; image.decoding = 'async'; image.referrerPolicy = 'no-referrer'; shot.append(image);
-    if (exact && validHighlight(exact.highlight)) {
-      const highlight = make('span', 'jb-tutorial-highlight'), pointer = make('span', 'jb-tutorial-pointer'); highlight.setAttribute('aria-hidden', 'true'); pointer.setAttribute('aria-hidden', 'true');
-      Object.assign(highlight.style, { left: `${exact.highlight.x}%`, top: `${exact.highlight.y}%`, width: `${exact.highlight.width}%`, height: `${exact.highlight.height}%` });
-      Object.assign(pointer.style, { left: `${exact.highlight.x + exact.highlight.width / 2}%`, top: `${exact.highlight.y + exact.highlight.height / 2}%` }); shot.append(highlight, pointer);
+    if (Number.isFinite(screenshot.width) && Number.isFinite(screenshot.height) && screenshot.width! > 0 && screenshot.height! > 0) {
+      image.width = screenshot.width!; image.height = screenshot.height!;
     }
+    let callouts = exact?.callouts;
+    if (exact && validHighlight(exact.highlight)) {
+      const region = exact.highlight, highlight = make('span', 'jb-tutorial-highlight'); highlight.setAttribute('aria-hidden', 'true');
+      Object.assign(highlight.style, { left: `${region.x}%`, top: `${region.y}%`, width: `${region.width}%`, height: `${region.height}%` }); shot.append(highlight);
+      callouts ??= [{ label: screenshot.caption ?? current.instruction, x: region.x > 50 ? Math.min(94, region.x + region.width + 8) : Math.max(6, region.x - 8), y: Math.max(8, Math.min(92, region.y - 8)), targetX: region.x + region.width / 2, targetY: region.y + region.height / 2 }];
+    }
+    const legend = callouts && screenshotAnnotations(shot, callouts);
     viewport.append(shot); const caption = make('figcaption', '', screenshot.caption ?? screenshot.alt);
     const enlarge = make('button', 'jb-tutorial-image-toggle', 'Enlarge screenshot'); enlarge.type = 'button'; enlarge.setAttribute('aria-pressed', 'false');
-    enlarge.addEventListener('click', () => { if (disposed) return; stop(); const expanded = viewport.classList.toggle('jb-tutorial-image-expanded'); enlarge.textContent = expanded ? 'Fit screenshot' : 'Enlarge screenshot'; enlarge.setAttribute('aria-pressed', String(expanded)); });
+    enlarge.addEventListener('click', () => { if (disposed) return; const expanded = viewport.classList.toggle('jb-tutorial-image-expanded'); enlarge.textContent = expanded ? 'Fit screenshot' : 'Enlarge screenshot'; enlarge.setAttribute('aria-pressed', String(expanded)); });
     const failed = make('p', 'jb-tutorial-image-error', 'This screenshot could not load. Follow the instruction above in Lumiverse.'); failed.hidden = true;
-    image.addEventListener('error', () => { if (!disposed && figure.contains(image)) { viewport.hidden = true; enlarge.hidden = true; failed.hidden = false; stop(); } }); figure.append(viewport, caption, enlarge, failed);
+    image.addEventListener('error', () => { if (!disposed && figure.contains(image)) { viewport.hidden = true; enlarge.hidden = true; if (legend) legend.hidden = true; failed.hidden = false; } });
+    figure.append(viewport); if (legend) figure.append(legend); figure.append(caption, enlarge, failed);
   }
-  function chooseScene(target: number) { if (disposed || opening) return; stop(); index = Math.max(0, Math.min(tutorial.scenes.length - 1, target)); render(); }
+  function chooseScene(target: number) { if (disposed || opening) return; index = Math.max(0, Math.min(tutorial.scenes.length - 1, target)); render(); }
   previous.addEventListener('click', () => chooseScene(index - 1)); next.addEventListener('click', () => chooseScene(index + 1));
-  play.addEventListener('click', () => {
-    if (disposed || opening || motion?.matches || document.hidden) return;
-    if (playing) { stop(); return; } if (index === tutorial.scenes.length - 1) { index = 0; render(); }
-    playing = true; play.textContent = 'Pause demo'; play.setAttribute('aria-pressed', 'true'); root.classList.add('jb-tutorial-playing'); schedule();
-  });
   function openAction(action: Action | undefined) {
-    if (!action || disposed || opening) return; stop(); player?.pause(); opening = true; render();
+    if (!action || disposed || opening) return; opening = true; render();
     void Promise.resolve().then(async () => { if (disposed) return false; return action.destination === 'import' ? options.openImport ? (await options.openImport(), true) : false : action.destination === 'history' ? options.openHistory ? await options.openHistory() : false : options.invoke(action.destination); }).then(ok => {
       if (disposed) return; if (ok) { restoreFocus = false; modal.dismiss(); } else status.textContent = `This shortcut is unavailable. ${action.fallback}`;
     }).catch(() => { if (!disposed) status.textContent = `Could not open that tool. ${action.fallback}`; }).finally(() => {
-      opening = false; if (!disposed) { previous.disabled = index === 0; next.disabled = index === tutorial.scenes.length - 1; sceneAction.disabled = false; play.disabled = !!motion?.matches; if (setup) setup.disabled = false; }
+      opening = false; if (!disposed) { previous.disabled = index === 0; next.disabled = index === tutorial.scenes.length - 1; sceneAction.disabled = false; if (setup) setup.disabled = false; }
     });
   }
   sceneAction.addEventListener('click', () => openAction(tutorial.scenes[index].action)); setup?.addEventListener('click', () => openAction(tutorial.setup));
-  const visibility = () => { if (document.hidden) { stop(); player?.pause(); } };
-  const reducedMotion = () => { if (motion?.matches) stop(); if (!disposed) { play.disabled = !!motion?.matches || opening; play.title = motion?.matches ? 'Reduced motion is enabled. Use Back and Next to view each scene.' : 'Preview the screens only; this does not operate Lumiverse.'; } };
-  document.addEventListener('visibilitychange', visibility); motion?.addEventListener?.('change', reducedMotion);
   const keydown = (event: KeyboardEvent) => {
     if (disposed) return; if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); modal.dismiss(); return; } if (event.key !== 'Tab') return;
     const focusable = [...root.querySelectorAll<HTMLElement>('*')].filter(node => {
       const closed = node.closest('details:not([open])');
-      return node.matches('button:not(:disabled),a[href],video[controls],summary,[tabindex="0"]') && !node.hidden && !node.closest('[hidden]') && (!closed || (node.tagName === 'SUMMARY' && node.parentElement === closed));
+      return node.matches('button:not(:disabled),a[href],summary,[tabindex="0"]') && !node.hidden && !node.closest('[hidden]') && (!closed || (node.tagName === 'SUMMARY' && node.parentElement === closed));
     });
     const first = focusable[0], last = focusable.at(-1); if (!first || !last) return;
     if (event.shiftKey && (document.activeElement === first || !root.contains(document.activeElement))) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && (document.activeElement === last || !root.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
   };
   root.addEventListener('keydown', keydown);
-  modal.onDismiss(() => { if (disposed) return; disposed = true; stop(); player?.destroy(); root.removeEventListener('keydown', keydown); document.removeEventListener('visibilitychange', visibility); motion?.removeEventListener?.('change', reducedMotion); if (restoreFocus && previousFocus?.isConnected) previousFocus.focus(); options.onClose?.(); });
+  modal.onDismiss(() => { if (disposed) return; disposed = true; root.removeEventListener('keydown', keydown); if (restoreFocus && previousFocus?.isConnected) previousFocus.focus(); options.onClose?.(); });
   render(); close.focus();
   return { root, destroy() { if (!disposed) modal.dismiss(); } };
 }

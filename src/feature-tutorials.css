@@ -1,34 +1,20 @@
-.jb-feature-tutorial{box-sizing:border-box;min-width:0;color:#e8e4ed;font:14px/1.5 Arial,Helvetica,sans-serif;overflow-wrap:anywhere}
+.jb-feature-tutorial{box-sizing:border-box;min-width:0;color:#e8e4ed;font:14px/1.5 Arial,Helvetica,sans-serif;overflow-wrap:anywhere;overflow-anchor:none}
 .jb-feature-tutorial *{box-sizing:border-box}
 .jb-tutorial-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 9px}
 .jb-tutorial-header h2{margin:0;font:500 clamp(23px,3vw,30px)/1.2 Georgia,'Times New Roman',serif;color:#f5ecfa}
 .jb-tutorial-intro{margin:0 0 16px;color:#bfb6cd;font-size:13px}
 .jb-tutorial-history-guide{margin:0 0 16px}
-.jb-tutorial-recording{margin:0 0 20px;padding:16px;border:1px solid #a78abd75;border-radius:10px;background:#211d29}
-.jb-tutorial-recording h3{margin:0 0 6px;font-size:19px;color:#f1e5f9}
-.jb-tutorial-recording>p{margin:0 0 12px;font-size:12px;color:#c7bdcf}
-.jb-tutorial-recording video{display:block;width:100%;max-height:56vh;margin:10px 0;background:#14111a;border-radius:6px}
-.jb-tutorial-recording video::cue{font:18px/1.4 Arial,sans-serif;color:#fff;background:#17121ff0}
-.jb-tutorial-chapters{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0}
-.jb-feature-tutorial .jb-tutorial-chapters button{min-height:36px;font-size:12px;background:transparent;text-align:left}
-.jb-tutorial-transcript{font-size:13px;color:#c7bdcf;line-height:1.65}
-.jb-tutorial-transcript summary{cursor:pointer;color:#dfc9ed}
 .jb-tutorial-scene{min-width:0;padding:16px;border:1px solid #a698b13b;border-radius:10px;background:#ffffff04}
 .jb-tutorial-scene-title{margin:0 0 12px;font-size:19px;line-height:1.3;color:#f1e5f9}
 .jb-tutorial-instruction{margin:14px 0 7px;font-size:16px;font-weight:600;line-height:1.5;color:#f7eaff}
 .jb-tutorial-result{margin:0;color:#c7bdcf;font-size:13px}
 .jb-tutorial-figure{min-width:0;margin:0;padding:8px;border:1px solid #a698b12e;border-radius:8px;background:#1e1b25;text-align:center}
-.jb-tutorial-image-box{max-width:100%;max-height:46vh;overflow:auto;overscroll-behavior:contain;border-radius:4px}
+.jb-tutorial-image-box{max-width:100%;max-height:55vh;overflow:auto;overscroll-behavior:contain;border-radius:4px}
 .jb-tutorial-shot{position:relative;display:table;width:fit-content;max-width:100%;margin:auto;line-height:0}
-.jb-tutorial-shot img{display:block;max-width:100%;max-height:42vh;width:auto;height:auto;margin:auto}
+.jb-tutorial-shot img{display:block;max-width:100%;max-height:50vh;width:auto;height:auto;margin:auto}
 .jb-tutorial-image-expanded .jb-tutorial-shot{max-width:none;margin:0}
 .jb-tutorial-image-expanded img{max-width:none;max-height:none;margin:0}
 .jb-tutorial-highlight{position:absolute;z-index:1;border:3px solid #f0b6ff;border-radius:5px;box-shadow:0 0 0 2px #201428cc,0 0 18px #cf7df699;pointer-events:none}
-.jb-tutorial-pointer{position:absolute;z-index:2;width:19px;height:25px;pointer-events:none;filter:drop-shadow(1px 2px 2px #000);transform:translate(-2px,-2px) rotate(-24deg);transform-origin:0 0}
-.jb-tutorial-pointer:before{content:'';display:block;border-top:22px solid #fff;border-right:15px solid transparent}
-.jb-tutorial-pointer:after{content:'';position:absolute;left:6px;top:12px;width:5px;height:14px;background:#fff;transform:rotate(-25deg)}
-.jb-tutorial-playing .jb-tutorial-highlight{animation:jb-tutorial-emphasis 1.3s ease-in-out infinite alternate}
-@keyframes jb-tutorial-emphasis{to{box-shadow:0 0 0 3px #201428cc,0 0 24px #e0a2ffc9}}
 .jb-tutorial-figure figcaption{margin:7px 0 3px;color:#aaa0b8;font-size:11px;line-height:1.4}
 .jb-tutorial-image-error{margin:12px;color:#cfbddc;font-size:13px;line-height:1.5}
 .jb-feature-tutorial button{display:inline-flex;align-items:center;justify-content:center;min-height:42px;max-width:100%;padding:9px 13px;border:1px solid #a78abd75;border-radius:7px;background:#3c3448;color:#e6d5f0;font:600 13px/1.3 Arial,Helvetica,sans-serif;cursor:pointer;white-space:normal;text-align:center}
@@ -43,7 +29,6 @@
 .jb-tutorial-controls{display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0}
 .jb-tutorial-progress{min-width:50px;color:#c9bad5;text-align:center;font-size:13px;font-variant-numeric:tabular-nums}
 .jb-feature-tutorial .jb-tutorial-next{background:#86629f;color:#fff}
-.jb-tutorial-play{margin-left:auto;background:transparent!important}
 .jb-tutorial-before,.jb-tutorial-help{margin:9px 0;border:1px solid #a698b130;border-radius:7px;padding:10px 13px;font-size:12px;color:#c4bacf}
 .jb-tutorial-before summary,.jb-tutorial-help summary{cursor:pointer;font-weight:600;color:#d8c7e5}
 .jb-tutorial-before ul,.jb-tutorial-help ul{margin:10px 0 0;padding-left:18px;max-width:850px}
@@ -52,4 +37,16 @@
 .jb-feature-tutorial .jb-tutorial-back{border:0;background:transparent;margin-top:3px;padding-left:0;color:#bba5cd;font-weight:400}
 .jb-feature-tutorial [hidden]{display:none!important}
 @media(prefers-reduced-motion:reduce){.jb-feature-tutorial *{animation:none!important;transition:none!important}}
-@media(max-width:600px){.jb-tutorial-header{align-items:flex-start;gap:9px}.jb-tutorial-header h2{font-size:23px}.jb-tutorial-close{font-size:11px!important;padding:8px!important;min-height:40px!important}.jb-tutorial-scene{padding:11px}.jb-tutorial-scene-title{font-size:17px}.jb-tutorial-figure{padding:5px}.jb-tutorial-instruction{font-size:14px}.jb-tutorial-image-box{max-height:40vh}.jb-tutorial-shot img{max-height:36vh}.jb-tutorial-controls{gap:8px;flex-wrap:wrap}.jb-feature-tutorial button{min-height:44px}.jb-tutorial-play{margin-left:0}.jb-tutorial-highlight{border-width:2px}.jb-tutorial-pointer{transform:scale(.8) translate(-2px,-2px) rotate(-24deg)}}
+@media(max-width:600px){.jb-tutorial-header{align-items:flex-start;gap:9px}.jb-tutorial-header h2{font-size:23px}.jb-tutorial-close{font-size:11px!important;padding:8px!important;min-height:40px!important}.jb-tutorial-scene{padding:11px}.jb-tutorial-scene-title{font-size:17px}.jb-tutorial-figure{padding:5px}.jb-tutorial-instruction{font-size:14px}.jb-tutorial-image-box{max-height:40vh}.jb-tutorial-shot img{max-height:36vh}.jb-tutorial-controls{gap:8px;flex-wrap:wrap}.jb-feature-tutorial button{min-height:44px}.jb-tutorial-highlight{border-width:2px}}
+
+.jb-tutorial-arrows{position:absolute;inset:0;width:100%;height:100%;z-index:2;overflow:visible;pointer-events:none;filter:drop-shadow(0 1px 2px #000)}
+.jb-tutorial-arrows line{stroke:#ffe69b;stroke-width:2.5;stroke-linecap:round}
+.jb-tutorial-arrows path{fill:#ffe69b}
+.jb-tutorial-number,.jb-tutorial-callout-number{display:inline-flex;align-items:center;justify-content:center;width:27px;height:27px;flex:0 0 27px;border:2px solid #fff5d7;border-radius:50%;background:#f9df8d;color:#24182d;font:800 14px/1 Arial,Helvetica,sans-serif}
+.jb-tutorial-number{position:absolute;z-index:3;transform:translate(-50%,-50%);box-shadow:0 2px 5px #0009;pointer-events:none}
+.jb-tutorial-callouts{display:grid;gap:9px;margin:14px 0 9px;padding:0;list-style:none;text-align:left;color:#e6ddec;font:13px/1.5 Arial,Helvetica,sans-serif}
+.jb-tutorial-callouts li{display:flex;align-items:flex-start;gap:10px}
+.jb-tutorial-callout-number{width:23px;height:23px;flex-basis:23px;font-size:12px}
+.jb-tutorial-instruction{margin:0 0 15px}
+.jb-tutorial-result{margin-top:12px}
+@media(max-width:600px){.jb-tutorial-number{width:23px;height:23px;font-size:12px}.jb-tutorial-callouts{font-size:12px}.jb-tutorial-shot img{max-height:46vh}.jb-tutorial-image-box{max-height:50vh}}

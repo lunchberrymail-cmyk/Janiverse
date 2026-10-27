@@ -37,7 +37,6 @@ import { createCharacterCreate } from './character-create';
 import { createPersonaCreate, consumePersonaSetupHandoff, reloadForPersonaSetup } from './persona-create';
 import { openFeatureTutorial, type TutorialFeature } from './feature-tutorials';
 import { tutorialScreenshots } from './tutorial-screenshots';
-import { tutorialRecordings } from './tutorial-recordings';
 import { readOptionalState, subscribeOptionalState } from './optional-state';
 import { createWelcome } from './welcome';
 import { groupCharacters, type CharacterGroup, type CharacterSignatureCache, type CharacterSummary } from './character-library';
@@ -187,7 +186,7 @@ export function setup(ctx: SpindleFrontendContext) {
   function openTutorial(feature: TutorialFeature) {
     tutorialWindow?.destroy();
     const request = ++tutorialRequest;
-    tutorialWindow = openFeatureTutorial(ctx, feature, { invoke, openImport, openHistory, openHistoryTutorial: () => openTutorial('history'), screenshots: tutorialScreenshots, recordings: tutorialRecordings,
+    tutorialWindow = openFeatureTutorial(ctx, feature, { invoke, openImport, openHistory, openHistoryTutorial: () => openTutorial('history'), screenshots: tutorialScreenshots,
       onClose: () => { if (request === tutorialRequest) tutorialWindow = undefined; },
     });
   }
