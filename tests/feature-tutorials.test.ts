@@ -125,15 +125,23 @@ test('overview fallbacks never reuse a different scene’s pointer or instructio
 });
 
 test('every feature has a short navigable path; memory retains prompt placement and optional help', () => {
-  for (const feature of ['import', 'memory', 'lorebooks', 'group', 'voice', 'extensions'] satisfies TutorialFeature[]) {
+  for (const feature of ['import', 'history', 'memory', 'lorebooks', 'group', 'voice', 'extensions'] satisfies TutorialFeature[]) {
     const tutorial = openFeatureTutorial(ctx, feature, options()); const instructions: string[] = [];
     expect(tutorial.root.querySelectorAll('details[open]')).toHaveLength(0);
     while (true) { instructions.push(tutorial.root.querySelector('.jb-tutorial-instruction')!.textContent!); if (find('Next').disabled) break; find('Next').click(); }
-    expect(instructions.length).toBeGreaterThanOrEqual(4);
+    expect(instructions.length).toBeGreaterThanOrEqual(3);
     if (feature === 'memory') { expect(instructions.join(' ')).toContain('{{loomSummary}}'); expect(instructions.join(' ')).toContain('Vectorize chat messages'); expect(instructions.join(' ')).toContain('Recompile Memories'); expect(tutorial.root.querySelector('.jb-tutorial-help')!.textContent).toContain('{{memories}}'); }
     find('Back to banner').click(); expect(tutorial.root.isConnected).toBe(false);
   }
   expect(invoked).toEqual([]); expect(imports).toBe(0);
+});
+
+test('recorded guide chapters update the written step and closing releases playback without opening an app tool', () => {
+  let paused = 0; dom.window.HTMLMediaElement.prototype.load = () => {}; dom.window.HTMLMediaElement.prototype.pause = () => { paused++; };
+  const tutorial = openFeatureTutorial(ctx, 'import', { ...options(), recordings: { import: { src: 'data:video/webm;base64,AAAA', captions: 'WEBVTT\n', chapters: [{ time: 14, title: 'Save', scene: 2 }] } } });
+  const video = tutorial.root.querySelector('video')!; expect(video.hasAttribute('src')).toBe(false);
+  find('0:14 · Save').click(); expect(tutorial.root.dataset.scene).toBe('3'); expect(tutorial.root.textContent).toContain('Open character'); expect(imports).toBe(0); expect(invoked).toEqual([]);
+  find('Close tutorial').click(); expect(paused).toBe(1); expect(video.hasAttribute('src')).toBe(false); expect(video.children).toHaveLength(0);
 });
 
 test('Play is opt-in, advances screenshots only, stops at the last scene, and can pause or replay', () => {
@@ -180,6 +188,26 @@ test('hidden pages and reduced motion pause playback without restarting; close r
 });
 
 test('the importer opens only on request and a missing callback gives recovery', async () => {
-  openFeatureTutorial(ctx, 'import', options()); expect(imports).toBe(0); find('Open import assistant').click(); await flush(); expect(imports).toBe(1); expect(document.querySelector('.jb-feature-tutorial')).toBeNull();
-  const tutorial = openFeatureTutorial(ctx, 'import', { invoke: options().invoke }); find('Open import assistant').click(); await flush(); expect(tutorial.root.isConnected).toBe(true); expect(tutorial.root.textContent).toContain('Add a card');
+  openFeatureTutorial(ctx, 'import', options()); expect(imports).toBe(0); find('Open card importer').click(); await flush(); expect(imports).toBe(1); expect(document.querySelector('.jb-feature-tutorial')).toBeNull();
+  const tutorial = openFeatureTutorial(ctx, 'import', { invoke: options().invoke }); find('Open card importer').click(); await flush(); expect(tutorial.root.isConnected).toBe(true); expect(tutorial.root.textContent).toContain('Add a card');
+});
+
+test('card guidance does not require JAR and its history guide is a separate explicit action', async () => {
+  let histories = 0;
+  const tutorial = openFeatureTutorial(ctx, 'import', { ...options(), openHistoryTutorial: () => histories++ });
+  expect(tutorial.root.textContent).toContain('You do not need JAR or JAR Bridge');
+  expect(tutorial.root.querySelector<HTMLButtonElement>('.jb-tutorial-play')!.hidden).toBe(true);
+  find('Next').click(); expect(tutorial.root.textContent).toContain('Choose card files');
+  find('Next').click(); expect(tutorial.root.textContent).toContain('Imported to your library');
+  expect(imports).toBe(0); expect(histories).toBe(0); expect(invoked).toEqual([]);
+  find('Need your old messages too?').click(); expect(histories).toBe(1);
+});
+
+test('history uses only its explicit callback and explains missing JAR separately', async () => {
+  let histories = 0;
+  const tutorial = openFeatureTutorial(ctx, 'history', { ...options(), openHistory: async () => { histories++; return false; } });
+  expect(histories).toBe(0); expect(imports).toBe(0);
+  find('Open history importer').click(); await flush();
+  expect(histories).toBe(1); expect(imports).toBe(0); expect(tutorial.root.isConnected).toBe(true);
+  expect(tutorial.root.textContent).toContain('Install and enable JAR Bridge');
 });

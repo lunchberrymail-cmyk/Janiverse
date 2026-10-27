@@ -1,9 +1,9 @@
-// Inline local screenshots and licensed fonts into the two standalone bundles.
+// Bundle local screenshots, short walkthrough recordings and licensed fonts for offline use.
 const result = await Bun.build({
   entrypoints: ['src/frontend.ts', 'src/backend.ts'], target: 'browser', outdir: 'dist', minify: true,
   plugins: [{ name: 'bundled-assets', setup(build) {
-    build.onLoad({ filter: /\.(png|woff2)$/ }, async ({ path }) => ({
-      contents: `export default ${JSON.stringify(`data:${path.endsWith('.woff2') ? 'font/woff2' : 'image/png'};base64,${Buffer.from(await Bun.file(path).arrayBuffer()).toString('base64')}`)};`,
+    build.onLoad({ filter: /\.(png|woff2|webm)$/ }, async ({ path }) => ({
+      contents: `export default ${JSON.stringify(`data:${path.endsWith('.woff2') ? 'font/woff2' : path.endsWith('.webm') ? 'video/webm' : 'image/png'};base64,${Buffer.from(await Bun.file(path).arrayBuffer()).toString('base64')}`)};`,
       loader: 'js',
     }));
   } }],

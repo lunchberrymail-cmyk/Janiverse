@@ -1,0 +1,4 @@
+{"user_name":"Alex","character_name":"Mira · Tutorial","create_date":"2026-10-01T12:00:00.000Z","chat_metadata":{}}
+{"name":"Mira · Tutorial","is_user":false,"mes":"Mira looks up from the café counter. \"You found something at the library?\"","send_date":"2026-10-01T12:00:00.000Z"}
+{"name":"Alex","is_user":true,"mes":"An old postcard. The picture shows this café, but the date is from fifty years ago.","send_date":"2026-10-01T12:01:00.000Z"}
+{"name":"Mira · Tutorial","is_user":false,"mes":"\"Then let's compare it with the photographs upstairs.\" Mira turns the sign to Back in five minutes and hands Alex a warm cup. \"We might have a small mystery to solve.\"","send_date":"2026-10-01T12:02:00.000Z"}

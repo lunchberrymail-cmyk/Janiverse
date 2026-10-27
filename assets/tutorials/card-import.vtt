@@ -1,0 +1,21 @@
+WEBVTT
+
+1
+00:00:00.000 --> 00:00:04.000
+Adding a character card does not need JAR or JAR Bridge.
+
+2
+00:00:04.000 --> 00:00:09.000
+On Home, choose 2. Add a card. The regular importer opens.
+
+3
+00:00:09.000 --> 00:00:14.000
+Choose card files, then select a downloaded PNG, JSON or CHARX card.
+
+4
+00:00:14.000 --> 00:00:19.000
+Check the import queue. Choose Import to save the character.
+
+5
+00:00:19.000 --> 00:00:25.600
+After the import succeeds, Open character shows its profile.

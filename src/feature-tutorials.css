@@ -3,6 +3,16 @@
 .jb-tutorial-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 9px}
 .jb-tutorial-header h2{margin:0;font:500 clamp(23px,3vw,30px)/1.2 Georgia,'Times New Roman',serif;color:#f5ecfa}
 .jb-tutorial-intro{margin:0 0 16px;color:#bfb6cd;font-size:13px}
+.jb-tutorial-history-guide{margin:0 0 16px}
+.jb-tutorial-recording{margin:0 0 20px;padding:16px;border:1px solid #a78abd75;border-radius:10px;background:#211d29}
+.jb-tutorial-recording h3{margin:0 0 6px;font-size:19px;color:#f1e5f9}
+.jb-tutorial-recording>p{margin:0 0 12px;font-size:12px;color:#c7bdcf}
+.jb-tutorial-recording video{display:block;width:100%;max-height:56vh;margin:10px 0;background:#14111a;border-radius:6px}
+.jb-tutorial-recording video::cue{font:18px/1.4 Arial,sans-serif;color:#fff;background:#17121ff0}
+.jb-tutorial-chapters{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0}
+.jb-feature-tutorial .jb-tutorial-chapters button{min-height:36px;font-size:12px;background:transparent;text-align:left}
+.jb-tutorial-transcript{font-size:13px;color:#c7bdcf;line-height:1.65}
+.jb-tutorial-transcript summary{cursor:pointer;color:#dfc9ed}
 .jb-tutorial-scene{min-width:0;padding:16px;border:1px solid #a698b13b;border-radius:10px;background:#ffffff04}
 .jb-tutorial-scene-title{margin:0 0 12px;font-size:19px;line-height:1.3;color:#f1e5f9}
 .jb-tutorial-instruction{margin:14px 0 7px;font-size:16px;font-weight:600;line-height:1.5;color:#f7eaff}

@@ -25,10 +25,16 @@ import importLink from '../assets/tutorials/import-link.png';
 import importHistory from '../assets/tutorials/import-history.png';
 import importPreview from '../assets/tutorials/import-preview.png';
 import importComplete from '../assets/tutorials/import-complete.png';
+import cardImportOpen from '../assets/tutorials/card-import-open.png';
+import cardImportQueue from '../assets/tutorials/card-import-queue.png';
+import cardImportSaved from '../assets/tutorials/card-import-saved.png';
 import type { TutorialScreenshots } from './feature-tutorials';
 
 /** Real native controls, captured with fictional demo cards; bundled without remote requests. */
 export const tutorialScreenshots: TutorialScreenshots = {
+  'card-import-open': { src: cardImportOpen, alt: 'The regular Import character window on the File tab with Choose card files.', caption: 'Home → 2. Add a card opens this importer. JAR and JAR Bridge are not needed.' },
+  'card-import-queue': { src: cardImportQueue, alt: 'Mira’s fictional JSON card in the regular import queue, Ready to import.', caption: 'Check the queued file, then choose Import. A selected file has not been saved yet.' },
+  'card-import-saved': { src: cardImportSaved, alt: 'Mira’s imported card with Imported to your library and Open character.', caption: 'The success message confirms the save. Open character takes you to its profile.' },
   'group-start': { src: groupStart, alt: 'Character Browser toolbar with the New Group Chat button highlighted.', highlight: { x: 76, y: 54, width: 11, height: 15 }, caption: 'The two-person icon is New Group Chat.' },
   'group-select': { src: groupSelect, alt: 'Select Characters: Mira and Rowan selected, search filtered to Tutorial, and Next available.', highlight: { x: 20, y: 46, width: 31, height: 29 }, caption: 'Click two cards so both are selected, then Next at the bottom right.' },
   'group-greeting': { src: groupGreeting, alt: 'Choose Opening Greeting: the two demo cards offer greetings, with Mira’s greeting selected.', highlight: { x: 3, y: 25, width: 94, height: 23 }, caption: 'This selected greeting will open the new conversation.' },
@@ -55,5 +61,5 @@ export const tutorialScreenshots: TutorialScreenshots = {
   'import-link': { src: importLink, alt: 'JAR Bridge import assistant with JanitorAI link, Import card file, and Chat history tabs, plus the link preview input.', caption: 'Choose the source first, then preview before importing. JAR runs separately on a computer.' },
   'import-history': { src: importHistory, alt: 'JAR Bridge Chat history tab offering From JAR or History file and a conversation link field.', caption: 'Chat history is separate from the card. Load or choose its history file, review it, and select the matching character.' },
   'import-preview': { src: importPreview, alt: 'A fictional card file is selected, with its filename and the Import to Lumiverse confirmation button visible.', highlight: { x: 79, y: 87, width: 19, height: 11 }, instruction: 'For a card file, confirm the selected filename and choose Import to Lumiverse. For a link preview, check the character details before confirming.', result: 'The character is saved in your normal Lumiverse library. If it is already there, use that existing card when loading history.', caption: 'Only selecting a file does not import it. This final button saves the card.' },
-  'import-complete': { src: importComplete, alt: 'A fictional three-message history preview with Mira selected as its destination and Import chat ready to confirm.', highlight: { x: 85, y: 85, width: 13, height: 9 }, caption: 'Check the selected character above, then Import chat. This screenshot is a preview; no duplicate chat was saved for the demo.' },
+  'import-complete': { src: importComplete, alt: 'A fictional three-message history preview with Mira selected as its destination and Import chat ready to confirm.', highlight: { x: 85, y: 85, width: 13, height: 9 }, caption: 'Check the selected character and messages, then Import chat. Continue chat appears after it saves.' },
 };

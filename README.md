@@ -41,9 +41,11 @@ Upgrading from **Janitor Bridge**? Janiverse keeps the `janitor_bridge` identifi
 
 ## Cards and old chats
 
-**[JAR Bridge](https://github.com/lunchberrymail-cmyk/JAR-Bridge) is a separate extension.** Install it to use the guided JanitorAI card and conversation importer from the banner or More menu. [JAR](https://github.com/alpha-omicron/JAR) itself is a separate application; Janiverse does not start it or sign into JanitorAI.
+**Add a card** and **More → Import characters** always open the regular file/link importer, including when JAR Bridge is installed. PNG, JSON, CHARX, and public links supported by Lumiverse's importer work without JAR or JAR Bridge. A portrait alone is not a character card, and a card does not include old messages.
 
-The general **Import card file or link** queue supports PNG, JSON, CHARX, and public links supported by Lumiverse's native importer. Without JAR Bridge, Import characters opens this queue. A plain portrait is not a character card, and a card alone does not include old conversation messages.
+**More → Import old chats (JAR Bridge)** is a separate, optional shortcut. It opens [JAR Bridge](https://github.com/lunchberrymail-cmyk/JAR-Bridge) when available, or explains the setup when it is absent. History files need the extension, but not the separate [JAR app](https://github.com/alpha-omicron/JAR). Live JanitorAI links through the bridge need JAR running and signed in on the computer hosting Lumiverse. Janiverse does not start JAR or sign into JanitorAI.
+
+**Card import guide** now includes a real browser recording of the regular importer, English captions, chapter buttons, a transcript, and written steps with screenshots. **Need your old messages too?** opens the separate recorded history-file walkthrough. Recordings never autoplay; chapter buttons seek without operating the app, and playback pauses when hidden or closed. These short videos are bundled for offline use. Other feature guides still use their existing screenshot walkthroughs. The fictional practice files are in `assets/tutorials/samples`; they contain no credentials or account exports.
 
 ## Native settings and persistence
 

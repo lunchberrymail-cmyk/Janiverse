@@ -1,6 +1,7 @@
 import type { SpindleFrontendContext, SpindleHostSurfaceRef } from 'lumiverse-spindle-types';
+import { createTutorialVideo, type TutorialRecording } from './tutorial-video';
 
-export type TutorialFeature = 'import' | 'memory' | 'lorebooks' | 'group' | 'voice' | 'extensions';
+export type TutorialFeature = 'import' | 'history' | 'memory' | 'lorebooks' | 'group' | 'voice' | 'extensions';
 export type TutorialHighlight = { x: number; y: number; width: number; height: number };
 export type TutorialScreenshot = {
   src: string; alt: string; caption?: string;
@@ -13,10 +14,13 @@ export type TutorialScreenshots = Readonly<Record<string, TutorialScreenshot>>;
 export type FeatureTutorialOptions = {
   invoke: (ref: SpindleHostSurfaceRef) => Promise<boolean>;
   openImport?: () => void | Promise<void>;
+  openHistory?: () => boolean | Promise<boolean>;
+  openHistoryTutorial?: () => void;
   screenshots?: TutorialScreenshots;
+  recordings?: Partial<Record<TutorialFeature, TutorialRecording>>;
   onClose?: () => void;
 };
-type Action = { label: string; destination: SpindleHostSurfaceRef | 'import'; fallback: string };
+type Action = { label: string; destination: SpindleHostSurfaceRef | 'import' | 'history'; fallback: string };
 type Scene = { title: string; instruction: string; result: string; screenshot: string; fallbackScreenshot?: string; action?: Action };
 type Tutorial = { title: string; intro: string; prerequisites: readonly string[]; scenes: readonly Scene[]; help: readonly string[]; setup?: Action };
 const drawer = (id: string): SpindleHostSurfaceRef => ({ kind: 'drawer_tab', id });
@@ -87,12 +91,22 @@ export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
     help: ['Missing controls? Check Enable, startup errors, required permissions and the extension README. Search All, Active or Inactive to find its card.', 'Admin-only installation requires the server owner. Installing an extension does not automatically install its external application, model or provider.', 'Janiverse and JAR Bridge are separate extensions. You can update or disable either independently.'],
   },
   import: {
-    title: 'Bring your old card and conversation', intro: 'Import the character first, then attach the old messages to the right card.',
-    prerequisites: ['JAR Bridge for the guided JanitorAI transfer.', 'For live links: JAR running and signed into JanitorAI on the Lumiverse server computer. Files work separately.'],
+    title: 'Import a character card', intro: 'Use the regular card importer. You do not need JAR or JAR Bridge to add a downloaded card.',
+    prerequisites: ['A real PNG, JSON or CHARX character card, or a supported public character link.', 'A portrait alone is not a character card. A card does not include your old conversations.'],
     scenes: [
-      { title: 'Choose your source', instruction: 'Open the import assistant. Paste a JanitorAI character/conversation link, or choose Import card file.', result: 'Preview link loads a review. A real PNG, JSON or CHARX card supplies the character; a portrait alone does not.', screenshot: 'import-link', action: { label: 'Open import assistant', destination: 'import', fallback: 'Use Janiverse’s Add a card button, or open JAR Import from the sidebar.' } },
-      { title: 'Review the character', instruction: 'Check the name, portrait and fields. Choose Import to Lumiverse, or use an existing character for this chat.', result: 'You have a destination character without needing to import another copy.', screenshot: 'import-preview', fallbackScreenshot: 'import-link' },
-      { title: 'Load old messages', instruction: 'Choose Next: import chat history. Use From JAR with a conversation link, or History file for a JAR JSON / compatible JSONL export.', result: 'Load chat shows the messages and lets you select the matching Lumiverse character.', screenshot: 'import-history' },
+      { title: 'Open the regular card importer', instruction: 'On Home, choose 2. Add a card. File is selected by default.', result: 'The regular Import character window opens, even when JAR Bridge is installed.', screenshot: 'card-import-open', action: { label: 'Open card importer', destination: 'import', fallback: 'Use 2. Add a card on Home, or More → Import characters.' } },
+      { title: 'Choose your card', instruction: 'Choose card files and select the PNG, JSON or CHARX you downloaded. For a supported public character link, use the Link tab instead.', result: 'The queue shows your selected file and Ready to import. Selecting it has not saved the character yet.', screenshot: 'card-import-queue' },
+      { title: 'Import and open the character', instruction: 'Check the queue, then choose Import. After Imported to your library appears, choose Open character.', result: 'The card is saved in your normal Lumiverse library. Its profile lets you review it and start a new chat.', screenshot: 'card-import-saved' },
+    ],
+    help: ['If the card fails, download an actual character-card export rather than a portrait or screenshot.', 'A public link can fail when its source is unavailable or requires sign-in. Try a downloaded card file instead.', 'Only bringing a character? You can stop here. Old messages are a separate, optional history import.', 'If you already have the card, use that saved character as the destination for any history import. You do not need another copy.'],
+  },
+  history: {
+    title: 'Bring your old chat history', intro: 'Optional: attach an old conversation to the right saved character. This uses JAR Bridge.',
+    prerequisites: ['The matching character is already in your Lumiverse library. Use the regular card importer first if needed.', 'JAR Bridge installed and enabled for history import. A JAR JSON or compatible JSONL history file works without the separate JAR app.', 'Only live JanitorAI links need the JAR app running and signed in on the Lumiverse server computer.'],
+    scenes: [
+      { title: 'Open history import', instruction: 'Open More → Import old chats (JAR Bridge), then choose Chat history.', result: 'JAR Bridge offers History file for an export, or From JAR for a live conversation link.', screenshot: 'import-history', action: { label: 'Open history importer', destination: 'history', fallback: 'Install and enable JAR Bridge in Extensions, then use More → Import old chats (JAR Bridge). Card-only imports do not need it.' } },
+      { title: 'Load the conversation', instruction: 'Choose History file and select your JAR JSON or compatible JSONL export. Use From JAR only when the separate JAR app is running and signed in.', result: 'A preview shows the old messages. Loading the file has not saved another chat yet.', screenshot: 'import-history' },
+      { title: 'Choose the saved character', instruction: 'Select the matching character from your Lumiverse library. Review the message count, speakers and text.', result: 'The destination is explicit. An existing character does not need to be imported again.', screenshot: 'import-complete' },
       { title: 'Save and continue', instruction: 'Review the destination and messages, choose Import chat, then Continue chat after it succeeds.', result: 'The imported history becomes a normal saved Lumiverse conversation.', screenshot: 'import-complete', fallbackScreenshot: 'import-history' },
     ],
     help: ['JAR runs on a Windows, macOS or Linux computer with a graphical desktop, on the computer hosting Lumiverse. Extract it fully, start its launcher and leave it running. Open its printed local address, usually http://127.0.0.1:4577.', 'Use log in inside JAR and sign into JanitorAI in the separate browser it opens. Your ordinary browser’s sign-in is a different session. Private conversation links need that JAR session to have access.', 'JAR does not run directly on phones/tablets. A phone can use the bridge when JAR is running on the server computer, or import downloaded files. The assistant’s help includes file-source alternatives.', 'A card does not include old messages. Without JAR Bridge, the normal Janiverse importer handles character files/public links, not conversation history.', 'If a live history link fails but works in JAR, export that conversation from JAR and use History file. Keep your original export. After an interrupted save, check the library or destination character’s chats before retrying to avoid duplicates.'],
@@ -124,6 +138,11 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
   const header = make('header', 'jb-tutorial-header'), title = make('h2', '', tutorial.title);
   const close = make('button', 'jb-tutorial-close', 'Close tutorial'); close.type = 'button'; close.addEventListener('click', () => { if (!disposed) modal.dismiss(); }); header.append(title, close);
   const intro = make('p', 'jb-tutorial-intro', tutorial.intro);
+  const historyGuide = feature === 'import' && options.openHistoryTutorial ? make('button', 'jb-tutorial-history-guide', 'Need your old messages too?') : undefined;
+  historyGuide?.addEventListener('click', () => { if (!disposed && !opening) options.openHistoryTutorial?.(); });
+  const recording = options.recordings?.[feature];
+  const player = recording && createTutorialVideo(recording, target => { if (!disposed && !opening) { stop(); index = Math.min(tutorial.scenes.length - 1, target); renderScene(); renderedIndex = index; } });
+  const poster = screenshotSource(options.screenshots?.[tutorial.scenes[0].screenshot]?.src ?? ''); if (player && poster) player.video.poster = poster;
   const scene = make('section', 'jb-tutorial-scene'); scene.setAttribute('aria-live', 'polite'); scene.setAttribute('aria-atomic', 'true');
   const sceneHeading = make('h3', 'jb-tutorial-scene-title'), instruction = make('p', 'jb-tutorial-instruction'), outcome = make('p', 'jb-tutorial-result');
   const figure = make('figure', 'jb-tutorial-figure'), actions = make('div', 'jb-tutorial-actions');
@@ -132,10 +151,13 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
   const controls = make('nav', 'jb-tutorial-controls'); controls.setAttribute('aria-label', 'Walkthrough scenes');
   const previous = make('button', 'jb-tutorial-previous', 'Back'), next = make('button', 'jb-tutorial-next', 'Next'); previous.type = next.type = 'button';
   const progress = make('span', 'jb-tutorial-progress'), play = make('button', 'jb-tutorial-play', 'Play demo'); play.type = 'button'; play.setAttribute('aria-pressed', 'false'); controls.append(previous, progress, next, play);
+  play.hidden = feature === 'import' || feature === 'history';
   const before = make('details', 'jb-tutorial-before'), checklist = make('ul'); before.append(make('summary', '', 'Before you start')); tutorial.prerequisites.forEach(text => checklist.append(make('li', '', text))); before.append(checklist);
   const setup = tutorial.setup && make('button', 'jb-tutorial-setup', tutorial.setup.label); if (setup) { setup.type = 'button'; before.append(setup); }
   const help = make('details', 'jb-tutorial-help'), tips = make('ul'); help.append(make('summary', '', 'Help & troubleshooting')); tutorial.help.forEach(text => tips.append(make('li', '', text))); help.append(tips);
   const back = make('button', 'jb-tutorial-back', 'Back to banner'); back.type = 'button'; back.addEventListener('click', () => { if (!disposed) modal.dismiss(); }); root.append(header, intro, scene, controls, before, help, back);
+  if (historyGuide) { historyGuide.type = 'button'; intro.after(historyGuide); }
+  if (player) scene.before(player.root);
 
   function stop() {
     playing = false; if (timer !== undefined) { clearTimeout(timer); timer = undefined; }
@@ -193,28 +215,28 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
     playing = true; play.textContent = 'Pause demo'; play.setAttribute('aria-pressed', 'true'); root.classList.add('jb-tutorial-playing'); schedule();
   });
   function openAction(action: Action | undefined) {
-    if (!action || disposed || opening) return; stop(); opening = true; render();
-    void Promise.resolve().then(async () => { if (disposed) return false; return action.destination === 'import' ? options.openImport ? (await options.openImport(), true) : false : options.invoke(action.destination); }).then(ok => {
+    if (!action || disposed || opening) return; stop(); player?.pause(); opening = true; render();
+    void Promise.resolve().then(async () => { if (disposed) return false; return action.destination === 'import' ? options.openImport ? (await options.openImport(), true) : false : action.destination === 'history' ? options.openHistory ? await options.openHistory() : false : options.invoke(action.destination); }).then(ok => {
       if (disposed) return; if (ok) { restoreFocus = false; modal.dismiss(); } else status.textContent = `This shortcut is unavailable. ${action.fallback}`;
     }).catch(() => { if (!disposed) status.textContent = `Could not open that tool. ${action.fallback}`; }).finally(() => {
       opening = false; if (!disposed) { previous.disabled = index === 0; next.disabled = index === tutorial.scenes.length - 1; sceneAction.disabled = false; play.disabled = !!motion?.matches; if (setup) setup.disabled = false; }
     });
   }
   sceneAction.addEventListener('click', () => openAction(tutorial.scenes[index].action)); setup?.addEventListener('click', () => openAction(tutorial.setup));
-  const visibility = () => { if (document.hidden) stop(); };
+  const visibility = () => { if (document.hidden) { stop(); player?.pause(); } };
   const reducedMotion = () => { if (motion?.matches) stop(); if (!disposed) { play.disabled = !!motion?.matches || opening; play.title = motion?.matches ? 'Reduced motion is enabled. Use Back and Next to view each scene.' : 'Preview the screens only; this does not operate Lumiverse.'; } };
   document.addEventListener('visibilitychange', visibility); motion?.addEventListener?.('change', reducedMotion);
   const keydown = (event: KeyboardEvent) => {
     if (disposed) return; if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); modal.dismiss(); return; } if (event.key !== 'Tab') return;
     const focusable = [...root.querySelectorAll<HTMLElement>('*')].filter(node => {
       const closed = node.closest('details:not([open])');
-      return node.matches('button:not(:disabled),a[href],summary,[tabindex="0"]') && !node.hidden && !node.closest('[hidden]') && (!closed || (node.tagName === 'SUMMARY' && node.parentElement === closed));
+      return node.matches('button:not(:disabled),a[href],video[controls],summary,[tabindex="0"]') && !node.hidden && !node.closest('[hidden]') && (!closed || (node.tagName === 'SUMMARY' && node.parentElement === closed));
     });
     const first = focusable[0], last = focusable.at(-1); if (!first || !last) return;
     if (event.shiftKey && (document.activeElement === first || !root.contains(document.activeElement))) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && (document.activeElement === last || !root.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
   };
   root.addEventListener('keydown', keydown);
-  modal.onDismiss(() => { if (disposed) return; disposed = true; stop(); root.removeEventListener('keydown', keydown); document.removeEventListener('visibilitychange', visibility); motion?.removeEventListener?.('change', reducedMotion); if (restoreFocus && previousFocus?.isConnected) previousFocus.focus(); options.onClose?.(); });
+  modal.onDismiss(() => { if (disposed) return; disposed = true; stop(); player?.destroy(); root.removeEventListener('keydown', keydown); document.removeEventListener('visibilitychange', visibility); motion?.removeEventListener?.('change', reducedMotion); if (restoreFocus && previousFocus?.isConnected) previousFocus.focus(); options.onClose?.(); });
   render(); close.focus();
   return { root, destroy() { if (!disposed) modal.dismiss(); } };
 }

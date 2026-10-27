@@ -37,6 +37,7 @@ import { createCharacterCreate } from './character-create';
 import { createPersonaCreate, consumePersonaSetupHandoff, reloadForPersonaSetup } from './persona-create';
 import { openFeatureTutorial, type TutorialFeature } from './feature-tutorials';
 import { tutorialScreenshots } from './tutorial-screenshots';
+import { tutorialRecordings } from './tutorial-recordings';
 import { readOptionalState, subscribeOptionalState } from './optional-state';
 import { createWelcome } from './welcome';
 import { groupCharacters, type CharacterGroup, type CharacterSignatureCache, type CharacterSummary } from './character-library';
@@ -175,15 +176,18 @@ export function setup(ctx: SpindleFrontendContext) {
     catch { if (!disposed) status.textContent = 'Could not open that tool. Please try again from the sidebar.'; return false; }
   }
   function openImport() {
+    cardImport.open();
+  }
+  async function openHistory() {
     const jar = ctx.host.surfaces?.list(['drawer_tab']).find(surface => surface.invocable !== false && surface.keywords?.includes('jar_bridge') && surface.keywords?.includes('jar-bridge-import'));
-    if (jar && jar.keywords?.includes('jar-bridge-guided-import') && ctx.events?.emit) ctx.events.emit('jar_bridge:open_import', {});
-    else if (jar) void invoke({ kind: 'drawer_tab', id: jar.id });
-    else cardImport.open();
+    if (!jar) return false;
+    if (jar.keywords?.includes('jar-bridge-guided-import') && ctx.events?.emit) { ctx.events.emit('jar_bridge:open_import', {}); return true; }
+    return invoke({ kind: 'drawer_tab', id: jar.id });
   }
   function openTutorial(feature: TutorialFeature) {
     tutorialWindow?.destroy();
     const request = ++tutorialRequest;
-    tutorialWindow = openFeatureTutorial(ctx, feature, { invoke, openImport, screenshots: tutorialScreenshots,
+    tutorialWindow = openFeatureTutorial(ctx, feature, { invoke, openImport, openHistory, openHistoryTutorial: () => openTutorial('history'), screenshots: tutorialScreenshots, recordings: tutorialRecordings,
       onClose: () => { if (request === tutorialRequest) tutorialWindow = undefined; },
     });
   }
@@ -206,7 +210,7 @@ export function setup(ctx: SpindleFrontendContext) {
   for (const [label, action] of [
     ['Start here', () => welcome.open()],
     ['Import characters', openImport],
-    ['Import card file or link', () => cardImport.open()],
+    ['Import old chats (JAR Bridge)', () => { void openHistory().catch(() => false).then(opened => { if (!opened && !disposed) openTutorial('history'); }); }],
     ['API Settings', openConnections],
     ['Prompt', () => openPrompt('prompt')],
     ['Generation Settings', () => openPrompt('generation')],

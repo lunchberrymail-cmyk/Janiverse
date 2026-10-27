@@ -962,7 +962,7 @@ test('the optional preset or prompt shortcut opens its editor without saving set
   expect(calls).toEqual([]);
 });
 
-test('import shortcuts discover the installed JAR extension by both unique keywords and invoke its dynamic drawer ID', async () => {
+test('card import stays regular with JAR installed; only the explicit history shortcut invokes JAR', async () => {
   const nativeList = ctx.host.surfaces.list;
   const dynamicId = 'extension:instance-uuid-73:jar-import';
   ctx.host.surfaces.list = (kinds?: string[]) => [
@@ -975,9 +975,15 @@ test('import shortcuts discover the installed JAR extension by both unique keywo
   ];
   start(); await flush();
   findButton('2. Add a card').click(); await flush();
+  expect(document.querySelector('.jb-card-import')).not.toBeNull();
+  expect(calls).toEqual([]);
+  findButton('Close', document.querySelector('.jb-card-import')!).click();
   findButton('Import characters', roots.get('landing_header')!).click(); await flush();
+  expect(document.querySelector('.jb-card-import')).not.toBeNull();
+  expect(calls).toEqual([]);
+  findButton('Close', document.querySelector('.jb-card-import')!).click();
+  findButton('Import old chats (JAR Bridge)', roots.get('landing_header')!).click(); await flush();
   expect(calls).toEqual([
-    { ref: { kind: 'drawer_tab', id: dynamicId }, params: undefined },
     { ref: { kind: 'drawer_tab', id: dynamicId }, params: undefined },
   ]);
   expect(document.querySelector('[role=dialog]')).toBeNull();
@@ -993,7 +999,7 @@ test('the guided JAR capability opens its assistant directly through the shared 
   ctx.events = { emit: (name: string, payload: unknown) => emitted.push({ name, payload }) };
   start(); await flush();
   const priorRequests = requests.length;
-  findButton('2. Add a card').click(); await flush();
+  findButton('Import old chats (JAR Bridge)', roots.get('landing_header')!).click(); await flush();
   expect(emitted).toEqual([{ name: 'jar_bridge:open_import', payload: {} }]);
   expect(calls).toHaveLength(0); expect(requests).toHaveLength(priorRequests);
 });
@@ -1017,6 +1023,17 @@ test('without an invocable JAR drawer import opens the card file/link modal with
   expect(input.multiple).toBe(true); expect(input.accept).toContain('.png'); expect(input.accept).toContain('.json');
   expect(calls).toHaveLength(0); expect(requests).toHaveLength(priorRequests);
   expect(permissionsRead).toBe(0); expect(permissionRequests).toBe(0);
+});
+
+test('history without JAR explains the optional extension without routing card users to it', async () => {
+  start(); await flush();
+  findButton('Import old chats (JAR Bridge)', roots.get('landing_header')!).click(); await flush();
+  const guide = document.querySelector('.jb-feature-tutorial')!;
+  expect(guide.getAttribute('aria-label')).toBe('Bring your old chat history');
+  findButton('Open history importer', guide).click(); await flush();
+  expect(guide.textContent).toContain('Install and enable JAR Bridge');
+  expect(calls).toEqual([]);
+  expect(document.querySelector('.jb-card-import')).toBeNull();
 });
 
 test('first-install welcome on native Characters waits for an explicit Home click before navigating or acknowledging', async () => {
