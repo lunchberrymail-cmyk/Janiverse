@@ -19,6 +19,8 @@ import characterProfileCSS from './character-profile.css' with { type: 'text' };
 import guidedSetupCSS from './guided-setup.css' with { type: 'text' };
 import connectionTutorialCSS from './connection-tutorial.css' with { type: 'text' };
 import importTutorialCSS from './import-tutorial.css' with { type: 'text' };
+import cardSetupCSS from './card-setup.css' with { type: 'text' };
+import { createCardSetup } from './card-setup';
 import type { ImportGuideAttachment } from './import-tutorial';
 import { mountProfileChats } from './profile-chats';
 import frauncesFont from '../assets/fonts/fraunces-latin.woff2';
@@ -175,6 +177,7 @@ export function setup(ctx: SpindleFrontendContext) {
   cleanups.push(ctx.dom.addStyle(guidedSetupCSS));
   cleanups.push(ctx.dom.addStyle(connectionTutorialCSS));
   cleanups.push(ctx.dom.addStyle(importTutorialCSS));
+  cleanups.push(ctx.dom.addStyle(cardSetupCSS));
   const status = el('p', 'jb-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   const navButtons: Array<{ node: HTMLButtonElement; view: View }> = [];
   async function invoke(ref: SpindleHostSurfaceRef, params?: Record<string, string>) {
@@ -185,6 +188,7 @@ export function setup(ctx: SpindleFrontendContext) {
     catch { if (!disposed) status.textContent = 'Could not open that tool. Please try again from the sidebar.'; return false; }
   }
   function openImport(guide?: ImportGuideAttachment) {
+    if (!guide) { if (cardSetup.consumeMenuImport()) return; cardSetup.close(); }
     cardImport.open(guide);
   }
   async function openHistory() {
@@ -194,6 +198,11 @@ export function setup(ctx: SpindleFrontendContext) {
     return invoke({ kind: 'drawer_tab', id: jar.id });
   }
   function openTutorial(feature: TutorialFeature) {
+    cardSetup.close();
+    if (feature === 'import') { tutorialWindow?.destroy(); cardSetup.open(); return; }
+    launchTutorial(feature);
+  }
+  function launchTutorial(feature: TutorialFeature) {
     tutorialWindow?.destroy();
     const request = ++tutorialRequest;
     tutorialWindow = openFeatureTutorial(ctx, feature, { invoke, openImport, openHistory, openHistoryTutorial: () => openTutorial('history'), openCardTutorial: () => openTutorial('import'), screenshots: tutorialScreenshots,
@@ -217,6 +226,7 @@ export function setup(ctx: SpindleFrontendContext) {
     const node = button(text, () => setView(target), 'jb-nav-link'); navButtons.push({ node, view: target }); nav.append(node);
   }
   const more = el('details', 'jb-more'); const moreLabel = el('summary', '', 'More'); const menu = el('div', 'jb-more-menu');
+  let importMenuItem: HTMLButtonElement | undefined;
   for (const [label, action] of [
     ['Start here', () => welcome.open()],
     ['Setup checklist', () => { setView('browse'); homeBanner.reviewSetup(); }],
@@ -227,12 +237,22 @@ export function setup(ctx: SpindleFrontendContext) {
     ['API Settings', openConnections],
     ['Prompt', () => openPrompt('prompt')],
     ['Generation Settings', () => openPrompt('generation')],
-  ] as const) menu.append(button(label, () => { more.open = false; action(); }, 'jb-menu-link'));
+  ] as const) {
+    const item = button(label, () => { more.open = false; action(); }, 'jb-menu-link');
+    if (label === 'Import characters') importMenuItem = item;
+    menu.append(item);
+  }
   for (const [label, id] of [['My Personas', 'personas'], ['Advanced Presets', 'loom'], ['Lorebooks', 'lorebook'], ['Extensions', 'spindle']]) {
     menu.append(button(label, () => { more.open = false; void invoke({ kind: 'drawer_tab', id }); }, 'jb-menu-link'));
   }
   menu.append(button('Chat tools & help', () => { more.open = false; chatTools.openHelp(); }, 'jb-menu-link'));
   more.append(moreLabel, menu);
+  const cardSetup = createCardSetup(ctx, {
+    showImportMenu: () => { setView('browse'); more.open = true; importMenuItem?.classList.add('jb-card-import-target'); importMenuItem?.focus({ preventScroll: true }); },
+    clearImportMenu: () => { if (importMenuItem?.classList.contains('jb-card-import-target')) { importMenuItem.classList.remove('jb-card-import-target'); more.open = false; } },
+    openImportGuide: () => launchTutorial('import'),
+    openCharacters: () => invoke({ kind: 'drawer_tab', id: 'characters' }),
+  });
   const create = button('Create a Character', () => characterCreate.open(), 'jb-create-link');
   masthead.append(nav);
   mounts[0].append(createBrand(() => { if (!disposed) setView('browse'); }), masthead);
@@ -309,7 +329,7 @@ export function setup(ctx: SpindleFrontendContext) {
     } catch { /* The settings dialog reports unavailable saved configurations. */ }
   }
   const home = el('section', 'jb-home'); home.setAttribute('aria-label', 'Character browsing');
-  const homeBanner = createHomeBanner(ctx, { invoke, openApi: openConnections, openImport, openPersona: () => personaCreate.open(), openPrompt: () => openPrompt('prompt'), openTutorial,
+  const homeBanner = createHomeBanner(ctx, { invoke, openApi: openConnections, openImport: () => openTutorial('import'), openPersona: () => personaCreate.open(), openPrompt: () => openPrompt('prompt'), openTutorial,
     chooseCharacter: () => { grid.scrollIntoView({ block: 'start' }); grid.querySelector<HTMLButtonElement>('h3 button')?.focus({ preventScroll: true }); },
   }); home.append(homeBanner.root);
   const recentSection = el('section', 'jb-recent-section'); const recentHeading = el('div', 'jb-section-heading');
@@ -638,7 +658,7 @@ export function setup(ctx: SpindleFrontendContext) {
       setView('browse', false); return true;
     },
     openApi: openConnections,
-    openImport,
+    openImport: () => openTutorial('import'),
   });
   cleanups.push(() => welcome.destroy());
   setView('browse', false);
@@ -648,7 +668,7 @@ export function setup(ctx: SpindleFrontendContext) {
   try { if (consumePersonaSetupHandoff(window.sessionStorage)) void invoke({ kind: 'drawer_tab', id: 'personas' }); }
   catch { /* Storage can be unavailable; ordinary setup still works. */ }
   return () => {
-    disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); tutorialWindow?.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); chatSetup.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
+    disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); tutorialWindow?.destroy(); cardSetup.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); chatSetup.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
     cleanups.reverse().forEach(cleanup => cleanup()); mounts.forEach(root => root.replaceChildren());
     if (oldView === null) document.documentElement.removeAttribute('data-janitor-bridge-view'); else document.documentElement.setAttribute('data-janitor-bridge-view', oldView);
     chatTools.destroy();

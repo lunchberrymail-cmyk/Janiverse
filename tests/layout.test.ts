@@ -995,7 +995,15 @@ test('card import stays regular with JAR installed; only the explicit history sh
   ];
   start(); await flush();
   findButton('2. Add a card').click(); await flush();
+  expect(document.querySelector('.jb-card-methods')).not.toBeNull();
+  expect(document.querySelector('.jb-card-import')).toBeNull();
+  findButton('Learn the Janiverse way').click(); await flush();
+  expect(document.querySelector<HTMLDetailsElement>('.jb-more')!.open).toBe(true);
+  expect(findButton('Import characters', roots.get('landing_header')!).classList.contains('jb-card-import-target')).toBe(true);
+  expect(document.querySelector('.jb-card-import')).toBeNull();
+  findButton('Import characters', roots.get('landing_header')!).click(); await flush();
   expect(document.querySelector('.jb-card-import')).not.toBeNull();
+  expect(document.querySelector('.jb-import-guide')).not.toBeNull();
   expect(calls).toEqual([]);
   findButton('Close', document.querySelector('.jb-card-import')!).click();
   findButton('Import characters', roots.get('landing_header')!).click(); await flush();
@@ -1024,7 +1032,7 @@ test('the guided JAR capability opens its assistant directly through the shared 
   expect(calls).toHaveLength(0); expect(requests).toHaveLength(priorRequests);
 });
 
-test('without an invocable JAR drawer import opens the card file/link modal without requesting permission or writing', async () => {
+test('without an invocable JAR drawer the Basics card guide teaches the menu before opening file/link import', async () => {
   const nativeList = ctx.host.surfaces.list;
   ctx.host.surfaces.list = (kinds?: string[]) => [
     ...nativeList(kinds),
@@ -1035,6 +1043,10 @@ test('without an invocable JAR drawer import opens the card file/link modal with
   ctx.permissions.request = async () => { permissionRequests++; return []; };
   start(); await flush(); const priorRequests = requests.length;
   findButton('2. Add a card').click(); await flush();
+  expect(document.querySelector('[role=dialog]')!.getAttribute('aria-label')).toBe('Add a character card');
+  findButton('Learn the Janiverse way').click(); await flush();
+  expect(requests).toHaveLength(priorRequests); expect(calls).toHaveLength(0);
+  findButton('Import characters', roots.get('landing_header')!).click(); await flush();
   const modal = document.querySelector('[role=dialog]')!;
   expect(modal.getAttribute('aria-label')).toBe('Import character');
   expect(findButton('File', modal).getAttribute('aria-selected')).toBe('true');
@@ -1043,6 +1055,17 @@ test('without an invocable JAR drawer import opens the card file/link modal with
   expect(input.multiple).toBe(true); expect(input.accept).toContain('.png'); expect(input.accept).toContain('.json');
   expect(calls).toHaveLength(0); expect(requests).toHaveLength(priorRequests);
   expect(permissionsRead).toBe(0); expect(permissionRequests).toBe(0);
+});
+
+test('the live checklist offers the traditional native menu and cleans up its guide with the extension', async () => {
+  start(); await flush();
+  document.querySelector<HTMLButtonElement>('.jb-setup-step[data-step=card]')!.click(); await flush();
+  expect(document.querySelector('.jb-card-methods')).not.toBeNull();
+  findButton('Learn the Lumiverse way').click(); await flush();
+  expect(calls).toEqual([{ ref: { kind: 'drawer_tab', id: 'characters' }, params: undefined }]);
+  expect(document.querySelector('.jb-card-import')).toBeNull(); expect(document.querySelector('.jb-card-menu-guide')!.textContent).toContain('Chars → +');
+  expect(requests.every(request => !request.options.method || request.options.method === 'GET')).toBe(true);
+  stop!(); stop = undefined; expect(document.querySelector('.jb-card-menu-guide')).toBeNull();
 });
 
 test('history without JAR explains the optional extension without routing card users to it', async () => {
