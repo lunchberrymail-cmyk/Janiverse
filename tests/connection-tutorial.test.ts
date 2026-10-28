@@ -41,7 +41,7 @@ test('opens the native workspace once and keeps visible guidance in its footer w
 });
 
 test('leaving for the native form keeps the step and guide available; keyboard focus is not trapped', async () => {
-  const view = start(); await settle(); step(3); const focused = document.querySelector<HTMLElement>('#outside')!; focused.focus();
+  const view = start(); await settle(); view.root.scrollTop = 120; step(3); expect(view.root.scrollTop).toBe(0); const focused = document.querySelector<HTMLElement>('#outside')!; focused.focus();
   focused.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true })); expect(document.activeElement).toBe(focused); expect(view.root.isConnected).toBe(true); expect(view.root.dataset.scene).toBe('3');
   button('Close tutorial').click(); expect(view.root.isConnected).toBe(false); expect(document.querySelector<HTMLInputElement>('#native input')!.value).toBe('private-draft'); expect(document.activeElement!.id).toBe('launch');
 });

@@ -111,7 +111,7 @@ export function openConnectionTutorial(ctx: SpindleFrontendContext, scenes: read
       shot.append(image); const legend = screenshot.callouts && screenshotAnnotations(shot, screenshot.callouts); figure.append(shot); if (legend) figure.append(legend);
       image.addEventListener('error', () => { if (!disposed && figure.contains(image)) figure.replaceChildren(make('p', '', 'Screenshot unavailable. Follow the instruction above.')); });
     } else figure.append(make('p', '', 'Follow the instruction above in Connections.'));
-    syncControls();
+    syncControls(); root.scrollTop = 0;
   }
   function chooseScene(value: number) { if (disposed || opening) return; interacted = true; index = Math.max(0, Math.min(scenes.length - 1, value)); persist(); renderScene(); }
   async function openConnections() {
