@@ -32,6 +32,10 @@
 .jb-tutorial-intro{margin:0 0 12px;color:#bfb6cd;font-size:12px}
 .jb-tutorial-instruction{margin:8px 0;font-size:13px;font-weight:600;color:#f7eaff}
 .jb-tutorial-result{margin:8px 0;color:#c7bdcf;font-size:12px}
+.jb-history-picture{margin:12px 0}
+.jb-history-picture>summary{cursor:pointer;font-size:12px;color:#c6b5d0;padding:6px 0}
+.jb-history-picture .jb-tutorial-figure{margin-top:8px}
+.jb-feature-tutorial[data-feature="history"] button{min-height:44px}
 .jb-tutorial-before,.jb-tutorial-help{margin:8px 0;border:1px solid #a698b130;border-radius:7px;padding:8px 10px;font-size:12px}
 .jb-tutorial-before summary,.jb-tutorial-help summary{cursor:pointer;font-weight:600}
 .jb-tutorial-before ul,.jb-tutorial-help ul{margin:8px 0 0;padding-left:18px}

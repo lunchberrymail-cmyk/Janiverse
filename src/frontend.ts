@@ -18,6 +18,8 @@ import visualCSS from './visual-style.css' with { type: 'text' };
 import characterProfileCSS from './character-profile.css' with { type: 'text' };
 import guidedSetupCSS from './guided-setup.css' with { type: 'text' };
 import connectionTutorialCSS from './connection-tutorial.css' with { type: 'text' };
+import importTutorialCSS from './import-tutorial.css' with { type: 'text' };
+import type { ImportGuideAttachment } from './import-tutorial';
 import { mountProfileChats } from './profile-chats';
 import frauncesFont from '../assets/fonts/fraunces-latin.woff2';
 import juraFont from '../assets/fonts/jura-latin.woff2';
@@ -171,6 +173,7 @@ export function setup(ctx: SpindleFrontendContext) {
   cleanups.push(ctx.dom.addStyle(characterProfileCSS));
   cleanups.push(ctx.dom.addStyle(guidedSetupCSS));
   cleanups.push(ctx.dom.addStyle(connectionTutorialCSS));
+  cleanups.push(ctx.dom.addStyle(importTutorialCSS));
   const status = el('p', 'jb-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   const navButtons: Array<{ node: HTMLButtonElement; view: View }> = [];
   async function invoke(ref: SpindleHostSurfaceRef, params?: Record<string, string>) {
@@ -180,8 +183,8 @@ export function setup(ctx: SpindleFrontendContext) {
     try { await ctx.host.surfaces.invoke(ref, params); return true; }
     catch { if (!disposed) status.textContent = 'Could not open that tool. Please try again from the sidebar.'; return false; }
   }
-  function openImport() {
-    cardImport.open();
+  function openImport(guide?: ImportGuideAttachment) {
+    cardImport.open(guide);
   }
   async function openHistory() {
     const jar = ctx.host.surfaces?.list(['drawer_tab']).find(surface => surface.invocable !== false && surface.keywords?.includes('jar_bridge') && surface.keywords?.includes('jar-bridge-import'));
@@ -192,7 +195,7 @@ export function setup(ctx: SpindleFrontendContext) {
   function openTutorial(feature: TutorialFeature) {
     tutorialWindow?.destroy();
     const request = ++tutorialRequest;
-    tutorialWindow = openFeatureTutorial(ctx, feature, { invoke, openImport, openHistory, openHistoryTutorial: () => openTutorial('history'), screenshots: tutorialScreenshots,
+    tutorialWindow = openFeatureTutorial(ctx, feature, { invoke, openImport, openHistory, openHistoryTutorial: () => openTutorial('history'), openCardTutorial: () => openTutorial('import'), screenshots: tutorialScreenshots,
       onClose: () => { if (request === tutorialRequest) tutorialWindow = undefined; },
     });
   }
@@ -216,6 +219,8 @@ export function setup(ctx: SpindleFrontendContext) {
   for (const [label, action] of [
     ['Start here', () => welcome.open()],
     ['Setup checklist', () => { setView('browse'); homeBanner.reviewSetup(); }],
+    ['Card import guide', () => openTutorial('import')],
+    ['Old chat import guide', () => openTutorial('history')],
     ['Import characters', openImport],
     ['Import old chats (JAR Bridge)', () => { void openHistory().catch(() => false).then(opened => { if (!opened && !disposed) openTutorial('history'); }); }],
     ['API Settings', openConnections],

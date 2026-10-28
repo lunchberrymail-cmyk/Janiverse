@@ -1,0 +1,19 @@
+.jb-card-import.jb-card-import-guided { display: flex; flex-direction: column; min-height: 0; height: min(700px, calc(100dvh - 130px)); padding: 0; overflow: hidden; }
+.jb-import-workspace { flex: 1 1 auto; min-height: 0; padding: 18px; overflow-y: auto; overscroll-behavior: contain; overflow-anchor: none; }
+.jb-card-import-guided .jb-import-workspace > .jb-settings-tabs { margin-bottom: 12px; }
+.jb-card-import-guided .jb-import-drop { padding: 14px; gap: 8px; }
+.jb-card-import-guided .jb-import-drop-icon { display: none; }
+.jb-card-import-guided .jb-import-workspace > .jb-settings-intro { margin-bottom: 12px; }
+.jb-card-import-guided > .jb-settings-actions { flex: 0 0 auto; position: static; margin: 0; padding: 10px 18px; }
+.jb-import-guide { flex: 0 0 auto; max-height: min(42dvh, 320px); font-size: 12px; padding: 6px 14px; }
+.jb-import-guide .jb-import-guide-history { margin-top: 8px; background: transparent; border: 0; padding: 5px 0; color: #d5bee8; font-weight: 400; text-decoration: underline; text-underline-offset: 3px; }
+.jb-import-guide .jb-api-guide-nav { margin-top: 6px; }
+.jb-import-guide .jb-api-guide-nav > :last-child { margin-left: auto; }
+.jb-import-guide .jb-api-guide-figure .jb-tutorial-shot img { max-height: 190px; }
+@media (max-width: 600px) {
+  .jb-card-import.jb-card-import-guided { height: calc(100dvh - 115px); }
+  .jb-import-workspace { padding: 12px; }
+  .jb-import-guide { padding: 4px 12px 6px; max-height: 44dvh; }
+  .jb-card-import-guided > .jb-settings-actions { padding: 8px 12px; gap: 8px; }
+  .jb-card-import-guided > .jb-settings-actions > button { min-height: 44px; }
+}

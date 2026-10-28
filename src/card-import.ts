@@ -1,5 +1,6 @@
 import type { SpindleFrontendContext, SpindleModalHandle } from 'lumiverse-spindle-types';
 import { icon } from './icons';
+import type { ImportGuideAttachment } from './import-tutorial';
 
 type Character = { id: string; name: string; image_id?: string };
 type Item = { key: number; source: string; kind: 'file' | 'link'; label: string; detail: string; file?: File; url?: string; state: 'queued' | 'importing' | 'success' | 'error' | 'uncertain'; message?: string; character?: Character };
@@ -39,13 +40,13 @@ function errorText(value: unknown, item: Item) {
 export function createCardImport(ctx: SpindleFrontendContext, options: Options = {}) {
   let disposed = false, serial = 0;
   let active: Session | undefined;
-  function open() {
+  function open(guide?: ImportGuideAttachment) {
     if (disposed) return;
     active?.modal.dismiss();
     const modal = ctx.ui.showModal({ title: 'Import character', width: 680, maxHeight: 820 });
     const session: Session = { modal, abort: new AbortController(), closed: false }; active = session;
     const current = () => !disposed && active === session && !session.closed;
-    modal.onDismiss(() => { session.closed = true; session.abort.abort(); if (active === session) active = undefined; });
+    modal.onDismiss(() => { session.closed = true; session.abort.abort(); if (active === session) active = undefined; try { guide?.dismiss(); } catch { /* Guidance cannot interrupt importer cleanup. */ } });
     modal.root.classList.add('jb-settings', 'jb-card-import');
     const suffix = `jb-import-${++serial}`;
     let queue: Item[] = [], running = false, starting = false, attemptedPermission = false;
@@ -100,7 +101,12 @@ export function createCardImport(ctx: SpindleFrontendContext, options: Options =
     }, 'jb-settings-link');
     library.hidden = !ctx.host?.surfaces?.list(['drawer_tab']).some(item => item.id === 'characters' && item.invocable !== false);
     actions.append(library, allow, retry, close, importButton);
-    modal.root.append(tabs, heading, intro, filesPanel, linkPanel, queueSection, status, note, actions); show('file');
+    if (guide) {
+      const workspace = el('div', 'jb-import-workspace'); workspace.append(tabs, heading, intro, filesPanel, linkPanel, queueSection, status, note);
+      workspace.addEventListener('pointerdown', () => guide.interact(), true); workspace.addEventListener('keydown', () => guide.interact(), true);
+      modal.root.classList.add('jb-card-import-guided'); modal.root.append(workspace, guide.root, actions); guide.mounted(() => modal.dismiss());
+    } else modal.root.append(tabs, heading, intro, filesPanel, linkPanel, queueSection, status, note, actions);
+    show('file'); render();
     function message(text: string, tone = '') { if (current()) { status.textContent = text; status.dataset.tone = tone; } }
     function render() {
       if (!current()) return;
@@ -125,6 +131,7 @@ export function createCardImport(ctx: SpindleFrontendContext, options: Options =
       retry.hidden = !queue.some(item => item.state === 'error'); retry.disabled = running || starting;
       allow.disabled = running || starting; drop.setAttribute('aria-busy', String(running || starting));
       note.hidden = !running && !queue.some(item => item.state === 'uncertain');
+      try { guide?.update({ queued: queue.filter(item => item.state === 'queued').length, saved: queue.filter(item => item.state === 'success').length, failed: queue.filter(item => item.state === 'error').length, uncertain: queue.filter(item => item.state === 'uncertain').length, busy: running || starting }); } catch { /* Guidance cannot change an import result. */ }
     }
     function addFiles(files: File[]) {
       if (!current() || running || starting) return;

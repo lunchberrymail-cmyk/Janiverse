@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
-import { openFeatureTutorial, type TutorialFeature } from '../src/feature-tutorials';
+import { HISTORY_GUIDE_KEY, openFeatureTutorial, type TutorialFeature } from '../src/feature-tutorials';
 
 let dom: any, oldDocument: any, ctx: any, handles: any[], invoked: unknown[], imports: number;
 let result: (ref: unknown) => Promise<boolean>;
@@ -125,7 +125,7 @@ test('overview fallbacks never reuse a different scene’s pointer or instructio
 });
 
 test('every feature has a short navigable path; memory retains prompt placement and optional help', () => {
-  for (const feature of ['import', 'history', 'memory', 'lorebooks', 'group', 'voice', 'extensions'] satisfies TutorialFeature[]) {
+  for (const feature of ['history', 'memory', 'lorebooks', 'group', 'voice', 'extensions'] satisfies TutorialFeature[]) {
     const tutorial = openFeatureTutorial(ctx, feature, options()); const instructions: string[] = [];
     expect(tutorial.root.querySelectorAll('details[open]')).toHaveLength(0);
     while (true) { instructions.push(tutorial.root.querySelector('.jb-tutorial-instruction')!.textContent!); if (find('Next').disabled) break; find('Next').click(); }
@@ -207,9 +207,9 @@ test('changed scenes reveal their start without stealing focus or resetting same
   tutorial.destroy();
 });
 
-test('the importer opens only on request and a missing callback gives recovery', async () => {
-  openFeatureTutorial(ctx, 'import', options()); expect(imports).toBe(0); find('Open card importer').click(); await flush(); expect(imports).toBe(1); expect(document.querySelector('.jb-feature-tutorial')).toBeNull();
-  const tutorial = openFeatureTutorial(ctx, 'import', { invoke: options().invoke }); find('Open card importer').click(); await flush(); expect(tutorial.root.isConnected).toBe(true); expect(tutorial.root.textContent).toContain('Add a card');
+test('the card guide opens its ordinary importer without adding a second modal and gives missing-callback recovery', async () => {
+  const first = openFeatureTutorial(ctx, 'import', options()); await flush(); expect(imports).toBe(1); expect(handles).toHaveLength(0); expect(first.root.getAttribute('role')).toBe('complementary'); first.destroy();
+  const tutorial = openFeatureTutorial(ctx, 'import', { invoke: options().invoke }); await flush(); expect(tutorial.root.isConnected).toBe(true); expect(tutorial.root.textContent).toContain('More → Import characters'); tutorial.destroy();
 });
 
 test('card guidance does not require JAR and its history guide is a separate explicit action', async () => {
@@ -217,7 +217,7 @@ test('card guidance does not require JAR and its history guide is a separate exp
   const tutorial = openFeatureTutorial(ctx, 'import', { ...options(), openHistoryTutorial: () => histories++ });
   expect(tutorial.root.textContent).toContain('You do not need JAR or JAR Bridge');
   expect(tutorial.root.querySelector('.jb-tutorial-play')).toBeNull();
-  find('Next').click(); expect(tutorial.root.textContent).toContain('Choose card files');
+  find('Next').click(); expect(tutorial.root.textContent).toContain('Ready to import');
   find('Next').click(); expect(tutorial.root.textContent).toContain('Imported to your library');
   expect(imports).toBe(0); expect(histories).toBe(0); expect(invoked).toEqual([]);
   find('Need your old messages too?').click(); expect(histories).toBe(1);
@@ -230,4 +230,25 @@ test('history uses only its explicit callback and explains missing JAR separatel
   find('Open history importer').click(); await flush();
   expect(histories).toBe(1); expect(imports).toBe(0); expect(tutorial.root.isConnected).toBe(true);
   expect(tutorial.root.textContent).toContain('Install and enable JAR Bridge');
+});
+
+test('history instructions stay visible, screenshots are optional, and returning to the guide resumes its saved step', async () => {
+  let saved: unknown; const writes: unknown[] = []; ctx.settings = { get: async () => saved, set: async (key: string, value: unknown) => { expect(key).toBe(HISTORY_GUIDE_KEY); saved = value; writes.push(value); } };
+  let tutorial = openFeatureTutorial(ctx, 'history', options()); await flush();
+  expect(tutorial.root.querySelector('.jb-tutorial-instruction')!.closest('details')).toBeNull(); expect(tutorial.root.querySelector<HTMLDetailsElement>('.jb-history-picture')!.open).toBe(false);
+  find('Next').click(); find('Next').click(); await flush(); tutorial.destroy(); tutorial = openFeatureTutorial(ctx, 'history', options()); await flush();
+  expect(tutorial.root.dataset.scene).toBe('3'); expect(find('Open history importer').hidden).toBe(false); expect(writes.at(-1)).toEqual({ step: 2 }); expect(imports).toBe(0);
+});
+
+test('opening history import saves the next reading step without loading a file or guessing a successful import', async () => {
+  let saved: unknown; let histories = 0; ctx.settings = { get: async () => saved, set: async (_key: string, value: unknown) => { saved = value; } };
+  let tutorial = openFeatureTutorial(ctx, 'history', { ...options(), openHistory: async () => { histories++; return true; } }); await flush(); find('Open history importer').click(); await flush();
+  expect(tutorial.root.isConnected).toBe(false); expect(saved).toEqual({ step: 1 }); expect(histories).toBe(1); expect(imports).toBe(0);
+  tutorial = openFeatureTutorial(ctx, 'history', options()); await flush(); expect(tutorial.root.dataset.scene).toBe('2'); expect(tutorial.root.textContent).toContain('Loading the file has not saved another chat yet');
+});
+
+test('late history preferences cannot override navigation, and the card path closes history before opening its own guide', async () => {
+  let complete!: (value: unknown) => void, cards = 0; ctx.settings = { get: () => new Promise(resolve => { complete = resolve; }) };
+  const tutorial = openFeatureTutorial(ctx, 'history', { ...options(), openCardTutorial: () => { expect(tutorial.root.isConnected).toBe(false); cards++; } }); await flush(); find('Next').click(); complete({ step: 3 }); await flush(); expect(tutorial.root.dataset.scene).toBe('2');
+  find('Need the character card first?').click(); expect(cards).toBe(1); expect(imports).toBe(0);
 });

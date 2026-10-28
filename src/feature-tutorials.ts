@@ -1,6 +1,10 @@
 import type { SpindleFrontendContext, SpindleHostSurfaceRef } from 'lumiverse-spindle-types';
 import { screenshotAnnotations, type TutorialCallout } from './tutorial-annotations';
 import { openConnectionTutorial } from './connection-tutorial';
+import { openImportTutorial, type ImportGuideAttachment } from './import-tutorial';
+import { record } from './setup-data';
+
+export const HISTORY_GUIDE_KEY = 'onboarding:history_guide_v2';
 
 export type TutorialFeature = 'connections' | 'import' | 'history' | 'memory' | 'lorebooks' | 'group' | 'voice' | 'extensions';
 export type TutorialHighlight = { x: number; y: number; width: number; height: number };
@@ -16,9 +20,10 @@ export type TutorialScreenshot = {
 export type TutorialScreenshots = Readonly<Record<string, TutorialScreenshot>>;
 export type FeatureTutorialOptions = {
   invoke: (ref: SpindleHostSurfaceRef) => Promise<boolean>;
-  openImport?: () => void | Promise<void>;
+  openImport?: (guide?: ImportGuideAttachment) => void | Promise<void>;
   openHistory?: () => boolean | Promise<boolean>;
   openHistoryTutorial?: () => void;
+  openCardTutorial?: () => void;
   screenshots?: TutorialScreenshots;
   onClose?: () => void;
 };
@@ -110,9 +115,10 @@ export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
     title: 'Import a character card', intro: 'Use the regular card importer. You do not need JAR or JAR Bridge to add a downloaded card.',
     prerequisites: ['A real PNG, JSON or CHARX character card, or a supported public character link.', 'A portrait alone is not a character card. A card does not include your old conversations.'],
     scenes: [
-      { title: 'Open the regular card importer', instruction: 'On Home, choose 2. Add a card. File is selected by default.', result: 'The regular Import character window opens, even when JAR Bridge is installed.', screenshot: 'card-import-open', action: { label: 'Open card importer', destination: 'import', fallback: 'Use 2. Add a card on Home, or More → Import characters.' } },
-      { title: 'Choose your card', instruction: 'Choose card files and select the PNG, JSON or CHARX you downloaded. For a supported public character link, use the Link tab instead.', result: 'The queue shows your selected file and Ready to import. Selecting it has not saved the character yet.', screenshot: 'card-import-queue' },
-      { title: 'Import and open the character', instruction: 'Check the queue, then choose Import. After Imported to your library appears, choose Open character.', result: 'The card is saved in your normal Lumiverse library. Its profile lets you review it and start a new chat.', screenshot: 'card-import-saved' },
+      { title: 'Choose a character card', instruction: 'Choose card files above for a PNG, JSON or CHARX export. For a public character link, use Link → Add link.', result: 'Your selection appears in the queue. You do not need JAR or JAR Bridge.', screenshot: 'card-import-open' },
+      { title: 'Check your queue', instruction: 'Check the filename or public link in the queue. Remove anything you do not want to import.', result: 'Ready to import means the card is queued, not saved yet.', screenshot: 'card-import-queue' },
+      { title: 'Save the card', instruction: 'Choose Import at the bottom of this window, then wait for the result.', result: 'Imported to your library confirms a saved card. A problem appears on its queue row.', screenshot: 'card-import-saved' },
+      { title: 'Review the saved character', instruction: 'Choose Open character on the saved queue row to review its profile. Start new chat creates a fresh conversation.', result: 'The card stays in your normal library. Old messages are a separate, optional import.', screenshot: 'card-import-saved' },
     ],
     help: ['If the card fails, download an actual character-card export rather than a portrait or screenshot.', 'A public link can fail when its source is unavailable or requires sign-in. Try a downloaded card file instead.', 'Only bringing a character? You can stop here. Old messages are a separate, optional history import.', 'If you already have the card, use that saved character as the destination for any history import. You do not need another copy.'],
   },
@@ -142,24 +148,30 @@ function validHighlight(value: TutorialHighlight | undefined): value is Tutorial
   return !!value && [value.x, value.y, value.width, value.height].every(Number.isFinite) && value.x >= 0 && value.y >= 0 && value.width > 0 && value.height > 0 && value.x + value.width <= 100 && value.y + value.height <= 100;
 }
 
-/** The API guide opens Connections; other guides open tools through their shortcuts. */
+/** API and card guides open their workspaces; other guides use explicit shortcuts. */
 export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: TutorialFeature, options: FeatureTutorialOptions) {
   if (feature === 'connections') return openConnectionTutorial(ctx, featureTutorials.connections.scenes, options);
+  if (feature === 'import') return openImportTutorial(ctx, featureTutorials.import.scenes, options);
   const tutorial = featureTutorials[feature], previousFocus = document.activeElement as HTMLElement | null;
-  const modal = ctx.ui.showModal({ title: tutorial.title, width: 780, maxHeight: 700 });
+  const modal = ctx.ui.showModal({ title: tutorial.title, width: feature === 'history' ? 560 : 780, maxHeight: 700 });
   const root = modal.root; root.classList.add('jb-feature-tutorial'); root.dataset.feature = feature;
   root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', tutorial.title); root.setAttribute('aria-modal', 'true');
-  let disposed = false, opening = false, restoreFocus = true, index = 0, renderedIndex = 0;
+  let disposed = false, opening = false, restoreFocus = true, index = 0, renderedIndex = 0, interacted = false;
+  let writes = Promise.resolve();
+  function persist(step = index) { if (feature === 'history' && ctx.settings?.set) writes = writes.then(() => ctx.settings.set(HISTORY_GUIDE_KEY, { step })).catch(() => {}); }
   const header = make('header', 'jb-tutorial-header'), title = make('h2', '', tutorial.title);
   const close = make('button', 'jb-tutorial-close', 'Close tutorial'); close.type = 'button'; close.addEventListener('click', () => { if (!disposed) modal.dismiss(); }); header.append(title, close);
   const intro = make('p', 'jb-tutorial-intro', tutorial.intro);
-  const historyGuide = feature === 'import' && options.openHistoryTutorial ? make('button', 'jb-tutorial-history-guide', 'Need your old messages too?') : undefined;
-  historyGuide?.addEventListener('click', () => { if (!disposed && !opening) options.openHistoryTutorial?.(); });
+  const cardGuide = feature === 'history' && options.openCardTutorial ? make('button', 'jb-tutorial-history-guide', 'Need the character card first?') : undefined;
+  cardGuide?.addEventListener('click', () => { if (disposed || opening) return; restoreFocus = false; modal.dismiss(); options.openCardTutorial?.(); });
   const scene = make('section', 'jb-tutorial-scene'); scene.setAttribute('aria-live', 'polite'); scene.setAttribute('aria-atomic', 'true');
   const sceneHeading = make('h3', 'jb-tutorial-scene-title'), instruction = make('p', 'jb-tutorial-instruction'), outcome = make('p', 'jb-tutorial-result');
   const figure = make('figure', 'jb-tutorial-figure'), actions = make('div', 'jb-tutorial-actions');
   const status = make('p', 'jb-tutorial-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
-  const sceneAction = make('button', 'jb-tutorial-action'); sceneAction.type = 'button'; actions.append(sceneAction, status); scene.append(sceneHeading, figure, actions);
+  const sceneAction = make('button', 'jb-tutorial-action'); sceneAction.type = 'button'; actions.append(sceneAction, status);
+  const illustration = feature === 'history' ? make('details', 'jb-history-picture') : undefined;
+  if (illustration) { illustration.append(make('summary', '', 'Show example screenshot'), figure); scene.append(sceneHeading, intro, instruction, outcome, illustration, actions); }
+  else scene.append(sceneHeading, figure, actions);
   const controls = make('nav', 'jb-tutorial-controls'); controls.setAttribute('aria-label', 'Walkthrough steps');
   const previous = make('button', 'jb-tutorial-previous', 'Back'), next = make('button', 'jb-tutorial-next', 'Next'); previous.type = next.type = 'button';
   const progress = make('span', 'jb-tutorial-progress'); controls.append(previous, progress, next);
@@ -167,10 +179,13 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
   const setup = tutorial.setup && make('button', 'jb-tutorial-setup', tutorial.setup.label); if (setup) { setup.type = 'button'; before.append(setup); }
   const help = make('details', 'jb-tutorial-help'), tips = make('ul'); help.append(make('summary', '', 'Help & troubleshooting')); tutorial.help.forEach(text => tips.append(make('li', '', text))); help.append(tips);
   const back = make('button', 'jb-tutorial-back', 'Back to banner'); back.hidden = true; back.type = 'button'; back.addEventListener('click', () => { if (!disposed) modal.dismiss(); });
-  const reading = make('details', 'jb-tutorial-reading'); reading.append(make('summary', '', 'Instructions & help'), intro, instruction, outcome, before, help);
+  const reading = make('details', 'jb-tutorial-reading'); reading.append(make('summary', '', feature === 'history' ? 'Before you start / Need help?' : 'Instructions & help'));
+  if (feature !== 'history') reading.append(intro, instruction, outcome);
+  reading.append(before, help);
+  if (feature === 'history') { const restart = make('button', '', 'Restart guide'); restart.type = 'button'; restart.addEventListener('click', () => chooseScene(0)); reading.append(restart); }
   const footer = make('footer', 'jb-tutorial-footer'); footer.append(controls, reading);
   root.append(header, scene, footer, back);
-  if (historyGuide) { historyGuide.type = 'button'; footer.append(historyGuide); }
+  if (cardGuide) { cardGuide.type = 'button'; footer.append(cardGuide); }
   // The host already supplies the window title. Keep one accessible close control.
   title.classList.add('jb-tutorial-sr-only');
 
@@ -187,8 +202,10 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
     sceneHeading.textContent = `Step ${index + 1}. ${current.title}`; instruction.textContent = current.instruction; outcome.textContent = `Then: ${current.result}`;
     progress.textContent = `${index + 1} / ${tutorial.scenes.length}`; progress.setAttribute('aria-label', `Scene ${index + 1} of ${tutorial.scenes.length}`);
     previous.disabled = index === 0 || opening; next.disabled = index === tutorial.scenes.length - 1 || opening;
-    sceneAction.hidden = !current.action; sceneAction.textContent = current.action?.label ?? ''; sceneAction.disabled = opening; if (setup) setup.disabled = opening;
+    const action = current.action ?? (feature === 'history' ? tutorial.scenes[0].action : undefined);
+    sceneAction.hidden = !action; sceneAction.textContent = action?.label ?? ''; sceneAction.disabled = opening; if (setup) setup.disabled = opening;
     status.textContent = ''; figure.replaceChildren(); reading.querySelector('.jb-tutorial-callouts')?.remove();
+    if (illustration) { illustration.open = false; illustration.querySelector('.jb-tutorial-callouts')?.remove(); }
     const exact = options.screenshots?.[current.screenshot], fallback = current.fallbackScreenshot && options.screenshots?.[current.fallbackScreenshot];
     const screenshot = exact ?? fallback, source = screenshot && screenshotSource(screenshot.src);
     if (!screenshot || !source) { figure.append(make('p', 'jb-tutorial-image-error', current.instruction)); return; }
@@ -210,21 +227,21 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
     enlarge.addEventListener('click', () => { if (disposed) return; const expanded = viewport.classList.toggle('jb-tutorial-image-expanded'); enlarge.textContent = expanded ? 'Fit screenshot' : 'Enlarge screenshot'; enlarge.setAttribute('aria-pressed', String(expanded)); });
     const failed = make('p', 'jb-tutorial-image-error', 'This screenshot could not load. Follow the instruction above in Lumiverse.'); failed.hidden = true;
     image.addEventListener('error', () => { if (!disposed && figure.contains(image)) { viewport.hidden = true; enlarge.hidden = true; if (legend) legend.hidden = true; failed.hidden = false; reading.open = true; } });
-    if (legend) reading.insertBefore(legend, outcome);
+    if (legend) { if (illustration) illustration.append(legend); else reading.insertBefore(legend, outcome); }
     caption.classList.add('jb-tutorial-sr-only');
     figure.append(viewport, caption, enlarge, failed);
   }
-  function chooseScene(target: number) { if (disposed || opening) return; index = Math.max(0, Math.min(tutorial.scenes.length - 1, target)); render(); }
+  function chooseScene(target: number) { if (disposed || opening) return; interacted = true; index = Math.max(0, Math.min(tutorial.scenes.length - 1, target)); persist(); render(); }
   previous.addEventListener('click', () => chooseScene(index - 1)); next.addEventListener('click', () => chooseScene(index + 1));
   function openAction(action: Action | undefined) {
     if (!action || disposed || opening) return; opening = true; render();
     void Promise.resolve().then(async () => { if (disposed) return false; return action.destination === 'import' ? options.openImport ? (await options.openImport(), true) : false : action.destination === 'history' ? options.openHistory ? await options.openHistory() : false : options.invoke(action.destination); }).then(ok => {
-      if (disposed) return; if (ok) { restoreFocus = false; modal.dismiss(); } else status.textContent = `This shortcut is unavailable. ${action.fallback}`;
+      if (disposed) return; if (ok) { if (feature === 'history') persist(Math.max(1, index)); restoreFocus = false; modal.dismiss(); } else status.textContent = `This shortcut is unavailable. ${action.fallback}`;
     }).catch(() => { if (!disposed) status.textContent = `Could not open that tool. ${action.fallback}`; }).finally(() => {
       opening = false; if (!disposed) { previous.disabled = index === 0; next.disabled = index === tutorial.scenes.length - 1; sceneAction.disabled = false; if (setup) setup.disabled = false; }
     });
   }
-  sceneAction.addEventListener('click', () => openAction(tutorial.scenes[index].action)); setup?.addEventListener('click', () => openAction(tutorial.setup));
+  sceneAction.addEventListener('click', () => { interacted = true; openAction(tutorial.scenes[index].action ?? (feature === 'history' ? tutorial.scenes[0].action : undefined)); }); setup?.addEventListener('click', () => openAction(tutorial.setup));
   const keydown = (event: KeyboardEvent) => {
     if (disposed) return; if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); modal.dismiss(); return; } if (event.key !== 'Tab') return;
     const focusable = [...root.querySelectorAll<HTMLElement>('*')].filter(node => {
@@ -240,5 +257,6 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
   root.addEventListener('keydown', keydown);
   modal.onDismiss(() => { if (disposed) return; disposed = true; root.removeEventListener('keydown', keydown); if (restoreFocus && previousFocus?.isConnected) previousFocus.focus(); options.onClose?.(); });
   render(); close.focus();
+  if (feature === 'history' && ctx.settings?.get) void Promise.resolve().then(() => ctx.settings.get(HISTORY_GUIDE_KEY)).then(value => { if (disposed || interacted) return; const saved = record(value); if (typeof saved.step === 'number' && Number.isInteger(saved.step) && saved.step >= 0 && saved.step < tutorial.scenes.length) { index = saved.step; render(); } }).catch(() => {});
   return { root, destroy() { if (!disposed) modal.dismiss(); } };
 }
