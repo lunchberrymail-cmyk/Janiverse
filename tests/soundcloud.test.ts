@@ -161,12 +161,33 @@ describe('direct playback inside the chat', () => {
     expect(node('iframe')).toBe(engine.frame); expect(engine.frame.hidden).toBe(false); expect(engines).toHaveLength(1); expect(engine.commands).toEqual(['play']);
     expect(node<HTMLButtonElement>('.jb-soundcloud-play').hidden).toBe(true); expect(node('.jb-soundcloud-status').textContent).toBe('');
   });
+  test('Minimize keeps the same playing engine, exposes Pause, and reopens without a reload or playback command', async () => {
+    policy(allowedPolicy); setup(); await settle(); const engine = await loadEngine(), frame = engine.frame;
+    node<HTMLButtonElement>('.jb-soundcloud-show').click(); expect(node('.jb-soundcloud-show').textContent).toBe('Minimize');
+    node<HTMLButtonElement>('.jb-soundcloud-show').click();
+    expect(frame.isConnected).toBe(true); expect(frame.hidden).toBe(true); expect(frame.tabIndex).toBe(-1); expect(frame.getAttribute('aria-hidden')).toBe('true');
+    expect(node<HTMLButtonElement>('.jb-soundcloud-play').hidden).toBe(false); expect(node('.jb-soundcloud-play').textContent).toBe('Pause');
+    expect(node('.jb-soundcloud-show').getAttribute('aria-expanded')).toBe('false'); expect(engine.commands).toEqual(['play']);
+    node('#native').dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    node<HTMLButtonElement>('.jb-soundcloud-show').click(); expect(node('iframe')).toBe(frame); expect(frame.hidden).toBe(false); expect(engines).toHaveLength(1); expect(engine.commands).toEqual(['play']);
+    node<HTMLButtonElement>('.jb-soundcloud-show').click(); node<HTMLButtonElement>('.jb-soundcloud-play').click(); expect(engine.commands).toEqual(['play', 'pause']); expect(frame.isConnected).toBe(true);
+  });
+  test('minimizing the Android player while its controller loads never starts music or recreates the frame', async () => {
+    Object.defineProperty(dom.window.navigator, 'userAgent', { value: 'Android; wv' });
+    policy(allowedPolicy); setApi(undefined); setup(); await settle(); node<HTMLButtonElement>('.jb-soundcloud-play').click();
+    const frame = node<HTMLIFrameElement>('iframe'); node<HTMLButtonElement>('.jb-soundcloud-show').click(); expect(frame.hidden).toBe(true);
+    setApi(factory); node('script').dispatchEvent(new dom.window.Event('load')); await settle(); const engine = engines[0]; engine.emit('ready');
+    expect(engine.commands).toEqual([]); expect(frame.hidden).toBe(true); expect(node('iframe')).toBe(frame);
+    node<HTMLButtonElement>('.jb-soundcloud-show').click(); expect(frame.hidden).toBe(false); expect(engine.commands).toEqual([]); expect(engines).toHaveLength(1);
+  });
   test('direct player remains usable if its optional parent controller fails, until Stop or navigation', async () => {
     policy(allowedPolicy); setApi(undefined); setup(); await settle(); node<HTMLButtonElement>('.jb-soundcloud-show').click();
     const frame = node<HTMLIFrameElement>('iframe'); expect(frame.hidden).toBe(false);
     node('script').dispatchEvent(new dom.window.Event('error')); await settle();
     expect(frame.isConnected).toBe(true); expect(node('.jb-soundcloud-status').textContent).toContain('player below');
     expect(node<HTMLButtonElement>('.jb-soundcloud-close').hidden).toBe(false); expect(fetches).toHaveLength(0);
+    node<HTMLButtonElement>('.jb-soundcloud-show').click(); expect(frame.hidden).toBe(true);
+    node<HTMLButtonElement>('.jb-soundcloud-play').click(); expect(frame.hidden).toBe(false); expect(node('iframe')).toBe(frame); expect(document.querySelectorAll('iframe')).toHaveLength(1);
     node<HTMLButtonElement>('.jb-soundcloud-close').click(); expect(document.querySelector('iframe')).toBeNull();
   });
   test('blocked Android host reports the required Lumiverse update without attempting another frame', async () => {
