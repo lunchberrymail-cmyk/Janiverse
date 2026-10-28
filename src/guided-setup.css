@@ -31,6 +31,11 @@
 .jb-chat-setup-retry { grid-column: 1 / -1; justify-self: start; min-height: 32px; padding: 4px 0; border: 0; background: transparent; color: #d2b3e5; font: 12px/1.4 Arial, Helvetica, sans-serif; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .jb-chat-setup [hidden], .jb-chat-setup[hidden], .jb-setup-checklist[hidden] { display: none !important; }
 @media (max-width: 500px) {
+  .jb-discover-basics:has(.jb-setup-checklist) .jb-discover-description { display: none; }
+  .jb-discover-basics:has(.jb-setup-checklist) .jb-discover-footer { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; width: 100%; }
+  .jb-discover-basics:has(.jb-setup-checklist) .jb-discover-progress { grid-area: 1 / 1; }
+  .jb-discover-basics:has(.jb-setup-checklist) .jb-discover-next { grid-area: 1 / 2; justify-self: end; }
+  .jb-discover-basics:has(.jb-setup-checklist) .jb-discover-tutorial { text-align: left; }
   .jb-setup-steps { gap: 8px; }
   .jb-discover .jb-setup-step { gap: 8px; min-height: 88px; padding: 10px; }
   .jb-setup-mark { flex-basis: 23px; height: 23px; font-size: 12px; }
