@@ -1,0 +1,12 @@
+diff --git a/frontend/index.html b/frontend/index.html
+--- a/frontend/index.html
++++ b/frontend/index.html
+@@ -15,7 +15,7 @@
+     <!-- Frames are allowed only so Lumiverse can create opaque-origin sandbox
+          frames for Spindle extension isolation. Extension code is still
+          prohibited from creating raw iframes by the Spindle DOM APIs. -->
+-    <meta http-equiv="Content-Security-Policy" content="frame-src 'self' blob: https://www.youtube-nocookie.com; child-src 'self' blob: https://www.youtube-nocookie.com; object-src 'none'; worker-src 'self' blob:;" />
++    <meta http-equiv="Content-Security-Policy" content="frame-src 'self' blob: https://www.youtube-nocookie.com https://w.soundcloud.com; child-src 'self' blob: https://www.youtube-nocookie.com https://w.soundcloud.com; object-src 'none'; worker-src 'self' blob:;" />
+   </head>
+   <body>
+     <div id="root"></div>

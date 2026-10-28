@@ -2,7 +2,7 @@ import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
 
 const PLAYER_ORIGIN = 'https://w.soundcloud.com';
 const API_SCRIPT = `${PLAYER_ORIGIN}/player/api.js`;
-const BLOCKED_MESSAGE = 'In-chat playback is blocked by this Lumiverse copy. You can open the track externally.';
+const BLOCKED_MESSAGE = 'In-chat SoundCloud is blocked by this Lumiverse host. It needs an update that allows the SoundCloud player; updating Janiverse alone cannot remove this block.';
 const TRACK_ID = /^[1-9]\d{0,19}$/;
 const SLUG = /^[a-z\d_-]+$/i;
 const NON_TRACK_NAMES = new Set(['sets', 'tracks', 'albums', 'reposts', 'likes', 'popular-tracks', 'followers', 'following', 'comments']);
@@ -127,36 +127,39 @@ function loadWidgetApi(doc: Document): Promise<WidgetFactory> {
   return promise;
 }
 
-/** Compact controls for the official audio engine. No popup, waveform, or playback polling. */
+/** Compact controls with an optional official inline player. No popup or playback polling. */
 export function createSoundCloud(ctx: SpindleFrontendContext, options: { characterId?: string; character?: unknown } = {}) {
   let disposed = false, request = 0, playerRequest = 0;
   let initialCharacter = options.character;
   let source: { chatId: string; characterId: string; track: string; url: string; name: string } | undefined;
   let frame: HTMLIFrameElement | undefined, headerBlocked = false;
   let widget: Widget | undefined, api: WidgetFactory | undefined;
-  let ready = false, playing = false, pending = false;
+  let ready = false, playing = false, pending = false, inlinePlayer = false;
+  const needsDirectTap = /Android/i.test(document.defaultView?.navigator.userAgent ?? '');
   let timer: ReturnType<typeof setTimeout> | undefined;
   const cleanups: Array<() => void> = [];
   const root = el('section', 'jb-soundcloud'); root.hidden = true; root.setAttribute('aria-label', 'Character soundtrack');
   const bar = el('div', 'jb-soundcloud-bar');
   const label = el('span', 'jb-soundcloud-label', 'SoundCloud track');
   const play = el('button', 'jb-soundcloud-play', 'Play'); play.type = 'button'; play.setAttribute('aria-pressed', 'false');
+  const showPlayer = el('button', 'jb-soundcloud-show', 'Player'); showPlayer.type = 'button'; showPlayer.title = 'Open SoundCloud’s controls inside this chat';
   const open = el('a', 'jb-soundcloud-open', 'SoundCloud ↗'); open.target = '_blank'; open.rel = 'noopener noreferrer'; open.referrerPolicy = 'no-referrer';
   const close = el('button', 'jb-soundcloud-close', 'Stop'); close.type = 'button'; close.hidden = true; close.title = 'Stop and unload the soundtrack';
   const status = el('p', 'jb-soundcloud-status'); status.hidden = true; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
-  bar.append(play, label, status, open, close); root.append(bar);
+  bar.append(play, label, status, showPlayer, open, close); root.append(bar);
 
   function message(text: string) { status.textContent = text; status.title = text; status.hidden = !text; label.hidden = !!text; }
   function controls() {
     play.textContent = pending ? ready ? 'Starting…' : 'Loading…' : playing ? 'Pause' : 'Play';
     play.setAttribute('aria-pressed', String(playing));
     play.disabled = pending || headerBlocked || !soundCloudFrameAllowed();
+    play.hidden = inlinePlayer; showPlayer.hidden = inlinePlayer; showPlayer.disabled = play.disabled;
     close.hidden = !frame && !pending;
   }
   function closePlayer(focus = false) {
     playerRequest++; clearTimeout(timer); timer = undefined;
     if (widget && api) for (const name of ['READY', 'PLAY', 'PAUSE', 'FINISH', 'ERROR'] as const) { try { widget.unbind(api.Events[name]); } catch { /* Removing the iframe also releases playback. */ } }
-    widget = undefined; api = undefined; ready = false; playing = false; pending = false;
+    widget = undefined; api = undefined; ready = false; playing = false; pending = false; inlinePlayer = false;
     frame?.remove(); frame = undefined; controls();
     if (focus && !play.disabled) play.focus();
   }
@@ -177,6 +180,17 @@ export function createSoundCloud(ctx: SpindleFrontendContext, options: { charact
   }
   function sourceCurrent() { const snapshot = active(); return !disposed && !!source && snapshot.chatId === source.chatId && snapshot.characterId === source.characterId; }
   function playbackFailed(text: string) { closePlayer(); message(text); }
+  function revealPlayer() {
+    if (!frame) return;
+    inlinePlayer = true; frame.hidden = false; frame.tabIndex = 0; frame.removeAttribute('aria-hidden'); frame.classList.add('jb-soundcloud-frame'); controls();
+  }
+  function createFrame(visible: boolean) {
+    frame = el('iframe', 'jb-soundcloud-engine'); frame.hidden = true; frame.tabIndex = -1; frame.setAttribute('aria-hidden', 'true');
+    frame.title = 'SoundCloud player — tap Play to listen while chatting'; frame.referrerPolicy = 'no-referrer'; frame.loading = 'eager';
+    frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox');
+    frame.setAttribute('allow', 'autoplay'); frame.src = source!.url; root.append(frame);
+    if (visible) revealPlayer();
+  }
   function requestPlayback(wantPlay: boolean) {
     if (!widget || !ready || !sourceCurrent()) return;
     const engine = widget, generation = playerRequest;
@@ -184,31 +198,31 @@ export function createSoundCloud(ctx: SpindleFrontendContext, options: { charact
     timer = setTimeout(() => {
       if (generation !== playerRequest || !sourceCurrent()) return;
       pending = false;
-      if (wantPlay) { controls(); message('Ready—press Play.'); }
+      if (wantPlay) { revealPlayer(); message('Tap Play in the player below to listen here.'); }
       else playbackFailed('Pause did not respond. Playback was stopped.');
     }, 4_000);
     try { if (wantPlay) engine.play(); else engine.pause(); }
-    catch { clearTimeout(timer); timer = undefined; pending = false; if (wantPlay) { controls(); message('Ready—press Play.'); } else playbackFailed('Playback was stopped.'); }
+    catch { clearTimeout(timer); timer = undefined; pending = false; if (wantPlay) { revealPlayer(); message('Tap Play in the player below to listen here.'); } else playbackFailed('Playback was stopped.'); }
   }
-  async function loadPlayer() {
+  async function loadPlayer(visible = needsDirectTap) {
     const generation = ++playerRequest; pending = true; controls(); message('');
     const current = () => generation === playerRequest && sourceCurrent();
+    // Android WebView may require a gesture inside the media frame itself.
+    // Show the official player before loading its optional parent controller.
+    if (visible) { createFrame(true); message('Tap Play in the player below to listen while you chat.'); }
     try {
       const factory = await loadWidgetApi(document); if (!current()) return;
       if (!updatePolicy()) { pending = false; controls(); return; }
       api = factory;
-      frame = el('iframe', 'jb-soundcloud-engine'); frame.hidden = true; frame.tabIndex = -1; frame.setAttribute('aria-hidden', 'true');
-      frame.title = 'SoundCloud playback engine'; frame.referrerPolicy = 'no-referrer'; frame.loading = 'eager';
       // SoundCloud owns the stream. Our small controls use only its documented Widget API.
-      frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox');
-      frame.setAttribute('allow', 'autoplay'); frame.src = source!.url; root.append(frame);
-      const engine = factory(frame); widget = engine;
+      if (!frame) createFrame(false);
+      const engine = factory(frame!); widget = engine;
       const updatePlayback = (value: boolean) => { if (!current()) return; clearTimeout(timer); timer = undefined; playing = value; pending = false; controls(); message(''); };
       engine.bind(factory.Events.PLAY, () => updatePlayback(true));
       engine.bind(factory.Events.PAUSE, () => updatePlayback(false));
       engine.bind(factory.Events.FINISH, () => updatePlayback(false));
       engine.bind(factory.Events.ERROR, () => { if (current()) playbackFailed('Track unavailable here. Open SoundCloud or try again.'); });
-      timer = setTimeout(() => { if (current() && !ready) playbackFailed('SoundCloud did not load. Open it or try again.'); }, 20_000);
+      timer = setTimeout(() => { if (current() && !ready) { if (inlinePlayer) { pending = false; controls(); message('Use Play in the player below. Stop closes the player.'); } else playbackFailed('SoundCloud did not load. Open it or try again.'); } }, 20_000);
       engine.bind(factory.Events.READY, () => {
         if (!current() || ready) return;
         clearTimeout(timer); timer = undefined; ready = true; pending = false; controls();
@@ -225,10 +239,11 @@ export function createSoundCloud(ctx: SpindleFrontendContext, options: { charact
           });
         } catch { /* Track metadata is optional; the SoundCloud source link remains available. */ }
         // This single attempt belongs to the user's Play click, never to chat opening or refresh.
-        requestPlayback(true);
+        if (inlinePlayer) message('Tap Play in the player below to listen while you chat.');
+        else requestPlayback(true);
       });
       controls();
-    } catch { if (current()) playbackFailed('Player could not load. Open SoundCloud or try again.'); }
+    } catch { if (current()) { if (inlinePlayer && frame) { pending = false; controls(); message('Use Play in the player below. Stop closes the player.'); } else playbackFailed('Player could not load. Open SoundCloud or try again.'); } }
   }
   play.addEventListener('click', () => {
     if (!sourceCurrent()) { clear(); void load(); return; }
@@ -236,11 +251,20 @@ export function createSoundCloud(ctx: SpindleFrontendContext, options: { charact
     if (!widget || !ready) { void loadPlayer(); return; }
     requestPlayback(!playing);
   });
+  showPlayer.addEventListener('click', () => {
+    if (!sourceCurrent() || pending || !updatePolicy()) return;
+    if (frame) { revealPlayer(); message(playing ? '' : 'Tap Play in the player below to listen here.'); }
+    else void loadPlayer(true);
+  });
   close.addEventListener('click', () => { closePlayer(true); message(''); updatePolicy(); });
   open.addEventListener('click', event => { if (!sourceCurrent()) { event.preventDefault(); clear(); void load(); } });
   const onPolicyViolation = (event: Event) => {
     const violation = event as SecurityPolicyViolationEvent;
-    if (pending && violation.disposition !== 'report' && ['script-src', 'script-src-elem'].includes(violation.effectiveDirective) && [API_SCRIPT, PLAYER_ORIGIN].includes(violation.blockedURI)) { closePlayer(); message('SoundCloud’s controller is blocked by this site’s script policy. Open SoundCloud to listen.'); return; }
+    if (pending && violation.disposition !== 'report' && ['script-src', 'script-src-elem'].includes(violation.effectiveDirective) && [API_SCRIPT, PLAYER_ORIGIN].includes(violation.blockedURI)) {
+      if (inlinePlayer && frame) { playerRequest++; pending = false; controls(); message('Use Play in the player below. Stop closes the player.'); }
+      else { closePlayer(); message('SoundCloud’s controller is blocked by this site’s script policy. Open SoundCloud to listen.'); }
+      return;
+    }
     if (!frame || violation.disposition === 'report' || !['frame-src', 'child-src', 'default-src'].includes(violation.effectiveDirective)) return;
     try { if (new URL(violation.blockedURI).origin !== PLAYER_ORIGIN) return; } catch { return; }
     headerBlocked = true; closePlayer(); updatePolicy();
