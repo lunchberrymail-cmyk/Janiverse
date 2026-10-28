@@ -88,3 +88,12 @@ test('older hosts without a footer keep readable traditional guidance and clean 
   const panel = document.querySelector<HTMLElement>('.jb-card-menu-guide')!; expect(panel.classList.contains('jb-api-guide-fallback')).toBe(true);
   panel.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); expect(panel.isConnected).toBe(false); expect(calls).toBe(0);
 });
+
+test('a covering native panel is explained before the Home menu and the instruction follows its Close control', async () => {
+  let changed: ((value: { open: boolean }) => void) | undefined, stopped = 0;
+  ctx.ui.events = { getDrawerState: () => ({ open: true, tabId: 'characters' }), onDrawerChange: (fn: typeof changed) => { changed = fn; return () => { stopped++; }; } };
+  guide.open(); expect(document.querySelector('h3')!.textContent).toBe('Close the side panel'); expect(button('Show More menu').hidden).toBe(true);
+  expect(document.body.textContent).toContain('× → More → Import characters'); expect(importers).toBe(0);
+  changed!({ open: false }); expect(document.querySelector('h3')!.textContent).toBe('Open Import characters'); expect(button('Show More menu').hidden).toBe(false);
+  guide.close(); expect(stopped).toBe(1); changed!({ open: true }); expect(document.querySelector('.jb-card-menu-guide')).toBeNull(); expect(calls).toBe(0);
+});

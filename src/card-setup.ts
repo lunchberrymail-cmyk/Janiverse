@@ -17,8 +17,9 @@ const nativeSteps = [
 export function createCardSetup(ctx: SpindleFrontendContext, options: Options) {
   let disposed = false, root: HTMLElement | undefined;
   let pendingMenu = false, epoch = 0;
+  let stopDrawer: (() => void) | undefined;
   function close() {
-    epoch++; pendingMenu = false; options.clearImportMenu(); root?.remove(); root = undefined;
+    epoch++; pendingMenu = false; stopDrawer?.(); stopDrawer = undefined; options.clearImportMenu(); root?.remove(); root = undefined;
   }
   function companion(native: boolean) {
     close(); const session = ++epoch;
@@ -30,13 +31,17 @@ export function createCardSetup(ctx: SpindleFrontendContext, options: Options) {
     const body = make('div', 'jb-api-guide-body'), title = make('h3', 'jb-api-guide-title'), path = make('p', 'jb-card-menu-path'), instruction = make('p', 'jb-api-guide-instruction'), status = make('p', 'jb-api-guide-status'); status.setAttribute('role', 'status');
     const actions = make('div', 'jb-api-guide-actions'), reopen = make('button', '', native ? 'Open Characters' : 'Show More menu'), methods = make('button', '', native ? 'Use More → Import instead' : 'Use Chars → + instead'); reopen.type = methods.type = 'button'; actions.append(reopen, methods);
     body.append(title, path, instruction, status, actions); panel.append(header, body);
-    let index = 0, minimized = false, opening = false;
+    let index = 0, minimized = false, opening = false, drawerOpen = false;
+    try { drawerOpen = ctx.ui.events?.getDrawerState?.().open === true; } catch { /* Optional on older hosts. */ }
     const current = () => !disposed && epoch === session;
     const back = make('button', '', 'Back'), next = make('button', 'jb-api-guide-primary', 'Next'); back.type = next.type = 'button';
     function render() {
       count.textContent = native ? `Character menu · ${index + 1} / ${nativeSteps.length}` : 'Import a card · Find the menu';
-      const scene = native ? nativeSteps[index] : ['Open Import characters', 'More → Import characters', 'Choose the highlighted item. Then select a card file or link, review the queue, and choose Import.'];
+      const scene = native ? nativeSteps[index] : drawerOpen
+        ? ['Close the side panel', '× → More → Import characters', 'Close the side panel with × at its top right. Then choose the highlighted Import characters item in More.']
+        : ['Open Import characters', 'More → Import characters', 'Choose the highlighted item. Then select a card file or link, review the queue, and choose Import.'];
       title.textContent = scene[0]; path.textContent = scene[1]; instruction.textContent = scene[2]; back.disabled = index === 0; next.textContent = index === nativeSteps.length - 1 ? 'Close guide' : 'Next';
+      reopen.hidden = !native && drawerOpen;
     }
     async function show() {
       if (!current() || opening) return;
@@ -53,7 +58,10 @@ export function createCardSetup(ctx: SpindleFrontendContext, options: Options) {
       try { mount = ctx.ui.mount('drawer_footer'); } catch { /* Older hosts use a floating companion. */ }
       if (mount) { mount.classList.add('jb-api-guide-mount'); mount.append(panel); }
       else { panel.classList.add('jb-api-guide-fallback'); document.body.append(panel); }
-    } else { pendingMenu = true; panel.classList.add('jb-api-guide-fallback'); document.body.append(panel); }
+    } else {
+      pendingMenu = true; panel.classList.add('jb-api-guide-fallback'); document.body.append(panel);
+      try { stopDrawer = ctx.ui.events?.onDrawerChange?.(state => { if (current()) { drawerOpen = state.open; render(); } }); } catch { /* Instructions still work without notifications. */ }
+    }
     minimize.addEventListener('click', () => {
       if (!current()) return; minimized = !minimized; body.hidden = minimized; minimize.textContent = minimized ? '+' : '−'; minimize.setAttribute('aria-expanded', String(!minimized)); minimize.setAttribute('aria-label', minimized ? 'Resume card guide' : 'Minimize card guide');
     });
