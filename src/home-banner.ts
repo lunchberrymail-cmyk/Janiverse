@@ -175,7 +175,6 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
     const isBasics = idea.name === 'Basics';
     eyebrow.textContent = isLunch ? 'LUNCH’S PICKS' : idea.name === 'Memory' ? 'HELP YOUR CHARACTERS REMEMBER MORE' : isBasics ? 'START HERE' : 'A LITTLE MORE LUMIVERSE';
     tutorial.hidden = isLunch;
-    apiTutorial.hidden = !isBasics;
     tutorial.textContent = isBasics ? 'Card import guide' : 'Full tutorial';
     root.classList.toggle('jb-discover-lunch', isLunch);
     root.classList.toggle('jb-discover-basics', isBasics);
@@ -183,7 +182,6 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
     actions.hidden = isBasics && !!checklist;
     if (checklist) {
       checklist.root.hidden = !isBasics;
-      if (active && isBasics) checklist.activate(); else checklist.deactivate();
     }
     cortexButton.hidden = idea.name !== 'Memory';
     root.dataset.idea = idea.name.toLowerCase(); title.textContent = idea.title;
@@ -193,13 +191,16 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
     next.setAttribute('aria-label', `Next idea: ${ideas[(index + 1) % ideas.length].name}`); status.textContent = '';
     const front = art.querySelector('.jb-discover-card-front')!;
     front.querySelector('svg')?.replaceWith(icon(idea.picture));
+    // A remembered dismissal can render another idea synchronously. Activate last
+    // so this render cannot overwrite that idea with stale Basics copy.
+    if (active && isBasics) checklist?.activate(); else checklist?.deactivate();
   }
   tutorial.addEventListener('click', () => {
     if (disposed) return;
     const feature = ideas[index].tutorial;
     if (feature) options.openTutorial?.(feature);
   });
-  apiTutorial.addEventListener('click', () => { if (!disposed && index === 0) options.openTutorial?.('connections'); });
+  apiTutorial.addEventListener('click', () => { if (!disposed) options.openTutorial?.('connections'); });
   next.addEventListener('click', () => { index = (index + 1) % ideas.length; render(); });
   tryButton.addEventListener('click', () => {
     if (disposed) return;

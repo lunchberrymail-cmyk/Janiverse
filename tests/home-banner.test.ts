@@ -109,13 +109,13 @@ test('full tutorials open only on request with the right feature and preserve th
   const oldTutorial = find('Full tutorial'); banner.destroy(); oldTutorial.click(); expect(tutorials).toHaveLength(6);
 });
 
-test('the API guide is separate from connection setup and becomes inert away from Basics or after cleanup', () => {
+test('the API guide stays available across banner ideas and becomes inert only after cleanup', () => {
   const guide = find('API connection guide');
   expect(guide.hidden).toBe(false); guide.click();
   expect(tutorials).toEqual(['connections']); expect(apiOpens).toBe(0); expect(invoked).toEqual([]);
-  find('Next idea').click(); expect(guide.hidden).toBe(true); guide.click();
-  expect(tutorials).toEqual(['connections']);
-  banner.destroy(); guide.click(); expect(tutorials).toEqual(['connections']);
+  for (let idea = 0; idea < 7; idea++) { find('Next idea').click(); expect(guide.hidden).toBe(false); guide.click(); }
+  expect(tutorials).toEqual(Array(8).fill('connections'));
+  banner.destroy(); guide.click(); expect(tutorials).toEqual(Array(8).fill('connections'));
 });
 
 test('reopening Lunch picks replaces its window and disabling the banner closes it and stops old actions', async () => {
