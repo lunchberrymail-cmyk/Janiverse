@@ -1168,7 +1168,7 @@ html[data-jb-composer="true"] [data-component="InputArea"] .jb-composer-popover-
 .jb-tutorial-figure{min-width:0;margin:0;text-align:center}
 .jb-tutorial-image-box{max-width:100%;overflow:hidden;border-radius:7px;background:#201c27}
 .jb-tutorial-shot{position:relative;display:table;width:fit-content;max-width:100%;margin:auto;line-height:0}
-.jb-tutorial-shot img{display:block;max-width:100%;max-height:min(400px,calc(var(--app-scaled-viewport-height,100dvh) - 270px));width:auto;height:auto;margin:auto;object-fit:contain}
+.jb-tutorial-shot img{display:block;max-width:100%;max-height:min(400px,calc(var(--app-scaled-viewport-height,100dvh) - 330px));width:auto;height:auto;margin:auto;object-fit:contain}
 .jb-tutorial-image-expanded{max-height:65vh;overflow:auto}
 .jb-tutorial-image-expanded .jb-tutorial-shot{max-width:none;margin:0}
 .jb-tutorial-image-expanded img{max-width:none;max-height:none;margin:0}
@@ -1208,7 +1208,7 @@ html[data-jb-composer="true"] [data-component="InputArea"] .jb-composer-popover-
 .jb-tutorial-callouts{display:grid;gap:7px;margin:10px 0;padding:0;list-style:none;text-align:left;color:#e6ddec;font:12px/1.45 Arial,Helvetica,sans-serif}
 .jb-tutorial-callouts li{display:flex;align-items:flex-start;gap:8px}
 .jb-tutorial-callout-number{width:22px;height:22px;flex-basis:22px;font-size:11px}
-@media(max-width:600px){.jb-tutorial-shot img{max-height:calc(var(--app-scaled-viewport-height,100dvh) - 285px)}.jb-tutorial-scene-title{font-size:15px}.jb-tutorial-controls button{min-height:42px;min-width:75px}.jb-tutorial-number{width:23px;height:23px;font-size:12px}.jb-tutorial-highlight{border-width:2px}}
+@media(max-width:600px){.jb-tutorial-shot img{max-height:calc(var(--app-scaled-viewport-height,100dvh) - 330px)}.jb-tutorial-scene-title{font-size:15px}.jb-tutorial-controls button{min-height:42px;min-width:75px}.jb-tutorial-number{width:23px;height:23px;font-size:12px}.jb-tutorial-highlight{border-width:2px}}
 @media(prefers-reduced-motion:reduce){.jb-feature-tutorial *{animation:none!important;transition:none!important}}\r
 `;var Er=`.jb-welcome { color: #e8e4ee; font-size: 14px; line-height: 1.6; }
 .jb-welcome .jb-welcome-lead { margin: 0 0 16px; color: #f1eaf7; font-size: 20px; font-weight: 600; }
