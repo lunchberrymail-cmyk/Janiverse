@@ -125,7 +125,7 @@ test('overview fallbacks never reuse a different scene’s pointer or instructio
 });
 
 test('every feature has a short navigable path; memory retains prompt placement and optional help', () => {
-  for (const feature of ['connections', 'import', 'history', 'memory', 'lorebooks', 'group', 'voice', 'extensions'] satisfies TutorialFeature[]) {
+  for (const feature of ['import', 'history', 'memory', 'lorebooks', 'group', 'voice', 'extensions'] satisfies TutorialFeature[]) {
     const tutorial = openFeatureTutorial(ctx, feature, options()); const instructions: string[] = [];
     expect(tutorial.root.querySelectorAll('details[open]')).toHaveLength(0);
     while (true) { instructions.push(tutorial.root.querySelector('.jb-tutorial-instruction')!.textContent!); if (find('Next').disabled) break; find('Next').click(); }
@@ -136,7 +136,7 @@ test('every feature has a short navigable path; memory retains prompt placement 
   expect(invoked).toEqual([]); expect(imports).toBe(0);
 });
 
-test('API guidance separates saving, selection and credential testing, and opens only the native drawer on request', async () => {
+test('API guidance separates saving, selection and credential testing while keeping the native workspace available', async () => {
   const tutorial = openFeatureTutorial(ctx, 'connections', options());
   expect(tutorial.root.querySelector('.jb-tutorial-play')).toBeNull();
   expect(invoked).toEqual([]);
@@ -144,11 +144,11 @@ test('API guidance separates saving, selection and credential testing, and opens
   find('Next').click(); expect(tutorial.root.textContent).toContain('Refresh models');
   find('Next').click(); expect(tutorial.root.textContent).toContain('Scroll to the bottom');
   find('Next').click(); expect(tutorial.root.textContent).toContain('click the connection’s name to make it active');
-  find('Next').click(); expect(tutorial.root.textContent).toContain('More actions (⋮)');
-  expect(tutorial.root.querySelector('.jb-tutorial-help')!.textContent).toContain('does not guarantee that every model');
+  find('Next').click(); expect(tutorial.root.textContent).toContain('Test selected connection');
+  expect(tutorial.root.querySelector('.jb-api-guide-help')!.textContent).toContain('does not guarantee access to every model');
   while (!find('Back').disabled) find('Back').click();
   find('Open Connections').click(); await flush();
-  expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'connections' }]); expect(tutorial.root.isConnected).toBe(false);
+  expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'connections' }]); expect(tutorial.root.isConnected).toBe(true); tutorial.destroy();
 });
 
 test('guides stay on the chosen screenshot until Back or Next is selected', () => {
@@ -159,14 +159,14 @@ test('guides stay on the chosen screenshot until Back or Next is selected', () =
   const oldNext=find('Next'); tutorial.destroy(); oldNext.click(); expect(tutorial.root.dataset.scene).toBe('2'); expect(invoked).toEqual([]);
 });
 
-test('the compact guide keeps its picture and navigation outside optional instructions', () => {
+test('the API companion keeps instructions and navigation visible while its example screenshot is optional', () => {
   const tutorial = openFeatureTutorial(ctx, 'connections', { ...options(), screenshots: { 'api-connection-open': { src: pixel, alt: 'Connections' } } });
-  expect(handles[0].request.width).toBe(780);
-  const reading = tutorial.root.querySelector<HTMLDetailsElement>('.jb-tutorial-reading')!;
-  expect(reading.open).toBe(false); expect(reading.querySelector('.jb-tutorial-instruction')).not.toBeNull();
-  expect(tutorial.root.querySelector('.jb-tutorial-figure')!.closest('details')).toBeNull();
+  expect(handles).toHaveLength(0);
+  const picture = tutorial.root.querySelector<HTMLDetailsElement>('.jb-api-guide-picture')!;
+  expect(picture.open).toBe(false); expect(tutorial.root.querySelector('.jb-api-guide-instruction')!.closest('details')).toBeNull();
+  expect(tutorial.root.querySelector('.jb-api-guide-result')!.closest('details')).toBeNull();
   expect(find('Next').closest('details')).toBeNull();
-  find('Next').click(); expect(find('Back').disabled).toBe(false); expect(reading.open).toBe(false);
+  find('Next').click(); expect(find('Back').disabled).toBe(false); expect(picture.open).toBe(false); tutorial.destroy();
 });
 
 test('numbered arrows match readable instructions, reject invalid coordinates, and never run native actions', () => {

@@ -1,5 +1,6 @@
 import type { SpindleFrontendContext, SpindleHostSurfaceRef } from 'lumiverse-spindle-types';
 import { screenshotAnnotations, type TutorialCallout } from './tutorial-annotations';
+import { openConnectionTutorial } from './connection-tutorial';
 
 export type TutorialFeature = 'connections' | 'import' | 'history' | 'memory' | 'lorebooks' | 'group' | 'voice' | 'extensions';
 export type TutorialHighlight = { x: number; y: number; width: number; height: number };
@@ -22,7 +23,7 @@ export type FeatureTutorialOptions = {
   onClose?: () => void;
 };
 type Action = { label: string; destination: SpindleHostSurfaceRef | 'import' | 'history'; fallback: string };
-type Scene = { title: string; instruction: string; result: string; screenshot: string; fallbackScreenshot?: string; action?: Action };
+export type Scene = { title: string; instruction: string; result: string; screenshot: string; fallbackScreenshot?: string; action?: Action };
 type Tutorial = { title: string; intro: string; prerequisites: readonly string[]; scenes: readonly Scene[]; help: readonly string[]; setup?: Action };
 const drawer = (id: string): SpindleHostSurfaceRef => ({ kind: 'drawer_tab', id });
 const settings = (id: string): SpindleHostSurfaceRef => ({ kind: 'settings_tab', id });
@@ -35,13 +36,13 @@ export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
     title: 'Add an API connection', intro: 'Connect a model provider in Lumiverse’s native Connections drawer. These steps use OpenRouter.',
     prerequisites: ['An API key from your model provider. Use your own key; the example key stays masked.', 'Use New Connection at the top of the drawer for chat models. Decision, embedding, image and speech connections have separate sections.'],
     scenes: [
-      { title: 'Open Connections', instruction: 'On Home, choose 1. Add API connection. At the top of the Connections drawer, choose New Connection.', result: 'A new chat connection form opens.', screenshot: 'api-connection-open', action: connections },
-      { title: 'Name it and enter your provider key', instruction: 'Give the connection a name, select OpenRouter under Provider, then paste your own key into API Key. OpenRouter uses its provider URL automatically.', result: 'The key stays masked. Selecting a provider does not save the form.', screenshot: 'api-connection-key' },
-      { title: 'Choose a model', instruction: 'Choose Refresh models beside Model. Click the Model field, type to filter the list, and select the model you want.', result: 'The chosen model ID is included with the connection. Refresh uses your current form values before saving.', screenshot: 'api-connection-model' },
-      { title: 'Save the connection', instruction: 'Scroll to the bottom of the form and choose Create. Set as default connection is optional.', result: 'The profile is saved in Connections. Saving it does not select it for every chat.', screenshot: 'api-connection-create' },
-      { title: 'Select the saved connection', instruction: 'In the saved list, click the connection’s name to make it active.', result: 'Its row has an active check mark. Chats that follow the active connection can now use it.', screenshot: 'api-connection-saved' },
-      { title: 'Test the saved key', instruction: 'Open the connection’s More actions (⋮) menu and choose Test connection.', result: 'Connection successful confirms the provider accepted the saved credentials.', screenshot: 'api-connection-menu' },
-      { title: 'Check the result', instruction: 'Look for Connection successful below the saved connection’s name. If it fails, use Edit to check the provider and replace an expired or incorrect key.', result: 'The saved credentials were accepted. Model access still depends on the provider and your account.', screenshot: 'api-connection-tested' },
+      { title: 'Open the connection form', instruction: 'At the top of Connections, choose New Connection.', result: 'You should see the Name and Provider fields.', screenshot: 'api-connection-open', action: connections },
+      { title: 'Name it and add your key', instruction: 'Name the connection, choose your provider, and paste your API key. This example uses OpenRouter.', result: 'OpenRouter uses its provider URL automatically. Keep the key masked.', screenshot: 'api-connection-key' },
+      { title: 'Choose a model', instruction: 'Choose Refresh models (↻), then select a model in the Model field. Type to filter the list.', result: 'Your chosen model ID appears in the form.', screenshot: 'api-connection-model' },
+      { title: 'Save the connection', instruction: 'Scroll to the bottom of the form and choose Create. Set as default connection is optional.', result: 'The profile appears in Connections. Choose it below to follow its setup.', screenshot: 'api-connection-create' },
+      { title: 'Make it active', instruction: 'In the saved list, click the connection’s name to make it active.', result: 'Its row has an active check mark. Chats without another pinned connection follow it.', screenshot: 'api-connection-saved' },
+      { title: 'Test the saved credentials', instruction: 'Choose Test selected connection below to check the saved credentials with your provider.', result: 'A successful test moves this guide to the final check.', screenshot: 'api-connection-menu' },
+      { title: 'Check your connection', instruction: 'Saved, Active, and Test passed should all be checked below. Then choose Finish guide.', result: 'You can try a character next. Model access and replies still depend on your provider and account.', screenshot: 'api-connection-tested' },
     ],
     help: ['Test connection checks the provider credentials. A successful test does not guarantee that every model or provider route is available to your account.', 'No model list? Check the provider, API key and API URL, then Refresh models again. A supported model ID can also be entered directly.', 'If a key expires or is rejected, Edit the saved connection and replace the key, then save and test again.', 'A chat pinned to a different connection can keep using that profile. Check the chat’s API connection picker if it does not follow your active connection.'],
   },
@@ -129,7 +130,7 @@ export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
 };
 
 function make<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') { const node = document.createElement(tag); node.className = className; node.textContent = text; return node; }
-function screenshotSource(value: string): string | undefined {
+export function screenshotSource(value: string): string | undefined {
   if (/^data:image\/(?:png|jpeg|webp);base64,[a-z0-9+/=\r\n]+$/i.test(value)) return value;
   try {
     const url = new URL(value, document.baseURI), origin = new URL(document.baseURI).origin;
@@ -141,8 +142,9 @@ function validHighlight(value: TutorialHighlight | undefined): value is Tutorial
   return !!value && [value.x, value.y, value.width, value.height].every(Number.isFinite) && value.x >= 0 && value.y >= 0 && value.width > 0 && value.height > 0 && value.x + value.width <= 100 && value.y + value.height <= 100;
 }
 
-/** Reading these steps never invokes a native action. */
+/** The API guide opens Connections; other guides open tools through their shortcuts. */
 export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: TutorialFeature, options: FeatureTutorialOptions) {
+  if (feature === 'connections') return openConnectionTutorial(ctx, featureTutorials.connections.scenes, options);
   const tutorial = featureTutorials[feature], previousFocus = document.activeElement as HTMLElement | null;
   const modal = ctx.ui.showModal({ title: tutorial.title, width: 780, maxHeight: 700 });
   const root = modal.root; root.classList.add('jb-feature-tutorial'); root.dataset.feature = feature;

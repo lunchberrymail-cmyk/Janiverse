@@ -17,6 +17,7 @@ import welcomeCSS from './welcome.css' with { type: 'text' };
 import visualCSS from './visual-style.css' with { type: 'text' };
 import characterProfileCSS from './character-profile.css' with { type: 'text' };
 import guidedSetupCSS from './guided-setup.css' with { type: 'text' };
+import connectionTutorialCSS from './connection-tutorial.css' with { type: 'text' };
 import { mountProfileChats } from './profile-chats';
 import frauncesFont from '../assets/fonts/fraunces-latin.woff2';
 import juraFont from '../assets/fonts/jura-latin.woff2';
@@ -169,6 +170,7 @@ export function setup(ctx: SpindleFrontendContext) {
   cleanups.push(ctx.dom.addStyle(visualCSS.replace('__JB_FRAUNCES__', frauncesFont).replace('__JB_JURA__', juraFont)));
   cleanups.push(ctx.dom.addStyle(characterProfileCSS));
   cleanups.push(ctx.dom.addStyle(guidedSetupCSS));
+  cleanups.push(ctx.dom.addStyle(connectionTutorialCSS));
   const status = el('p', 'jb-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   const navButtons: Array<{ node: HTMLButtonElement; view: View }> = [];
   async function invoke(ref: SpindleHostSurfaceRef, params?: Record<string, string>) {

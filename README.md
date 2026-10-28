@@ -20,6 +20,8 @@ Preview updates are published on **staging**. In the installed extension's contr
 
 In a chat, **Playing as**, **Model**, and **Prompt** show the current selections. Each opens its existing settings control. The prompt label identifies whether its native binding comes from this chat, persona, character, connection, or preset defaults. Chat-pinned connections and model overrides are respected; a deleted pin falls back to the native active/default connection. Raw temporary chats explicitly show no persona/preset. Unavailable details offer **Refresh setup** rather than claiming setup is complete. Preview changes stay on the test branch until reviewed.
 
+**API connection guide:** the test preview opens a small companion below the native Connections form. Its instruction and expected result stay visible while you work; example screenshots expand with their numbered explanations. Minimize it to make room, or close and reopen **API connection guide** on Home to resume your saved step. The guide follows one explicitly chosen saved profile (or the single new profile you just created). **Saved** and **Active** reflect native state. **Test selected connection** uses Lumiverse’s credential test only when clicked; **Finish guide** requires a saved, active profile and a successful test in this guide session. Editing connections clears that verification. Progress stores only the step and profile identifier, never form fields or keys. Other feature tutorials retain their existing presentation.
+
 Upgrading from **Janitor Bridge**? Janiverse keeps the `janitor_bridge` identifier so existing installation settings and saved styles remain compatible.
 
 ## Features
