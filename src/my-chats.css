@@ -120,16 +120,33 @@
 .jb-my-chats .jb-mc-conversations-heading select { width: auto; min-width: 150px; max-width: 250px; height: 42px; font-size: 13px; }
 .jb-my-chats .jb-mc-date-heading { display: flex; align-items: center; gap: 14px; margin: 14px 0 9px; color: #b3aec2; font-size: 13px; font-weight: 600; }
 .jb-my-chats .jb-mc-conversation-card {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; column-gap: 18px;
-  width: 100%; margin: 0 0 10px; padding: 17px 20px; border: 1px solid #6a6873; border-left: 3px solid #9b83b5; border-radius: 15px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+  width: 100%; margin: 0 0 10px; padding: 0; border: 1px solid #6a6873; border-radius: 16px;
   background: linear-gradient(180deg, #48484f, #3c3d44); color: var(--jb-mc-text); text-align: left; font: inherit; box-shadow: inset 0 1px 1px #ffffff1f;
 }
 .jb-my-chats .jb-mc-conversation-card:hover { border-color: #a49aad; background: #4a4852; }
+.jb-my-chats .jb-mc-conversation-open { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 18px; align-items: start; min-width: 0; width: 100%; padding: 18px 22px; border: 0; border-radius: 15px; background: transparent; color: inherit; text-align: left; font: inherit; }
+.jb-my-chats .jb-mc-row-actions { display: flex; align-items: center; gap: 8px; padding: 0 12px 0 0; }
+.jb-my-chats .jb-mc-row-action { display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 44px; padding: 10px; border: 0; border-radius: 8px; background: transparent; color: #b8b7bf; }
+.jb-my-chats .jb-mc-row-action svg { width: 19px; height: 19px; }
+.jb-my-chats .jb-mc-row-action:hover { background: #ffffff10; color: #e8ddff; }
+.jb-my-chats .jb-mc-trash { color: #ed868e; }
+.jb-my-chats .jb-mc-trash:hover { background: #ee77771c; color: #ff9da5; }
+.jb-my-chats .jb-mc-conversation-editor { grid-column: 1 / -1; min-width: 0; padding: 16px 20px; border-top: 1px solid #ffffff24; }
+.jb-my-chats .jb-mc-editor-label { display: grid; gap: 8px; color: #ded9e7; font-size: 14px; }
+.jb-my-chats .jb-mc-editor-label input { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid #8e7eaa; border-radius: 8px; background: #2e2e34; color: #f0edf5; font: inherit; font-size: 16px; }
+.jb-my-chats .jb-mc-editor-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+.jb-my-chats .jb-mc-editor-actions button { min-height: 40px; padding: 8px 14px; border: 1px solid #ffffff30; border-radius: 7px; background: #414148; color: #eee9f6; font: inherit; font-size: 14px; }
+.jb-my-chats .jb-mc-editor-actions .jb-mc-save-name { background: #b49bea; color: #21152f; border-color: #cbb2ff; }
+.jb-my-chats .jb-mc-editor-actions .jb-mc-delete-confirm { background: #672e39; border-color: #ca7184; color: #ffe0e6; }
+.jb-my-chats .jb-mc-delete-warning, .jb-my-chats .jb-mc-editor-status { margin: 0 0 14px; color: #ddd6e8; font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
+.jb-my-chats .jb-mc-editor-status:empty { display: none; }
 .jb-my-chats .jb-mc-conversation-name { grid-column: 1; margin: 0 0 4px; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .jb-my-chats .jb-mc-conversation-meta { display: flex; grid-column: 1; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 0 0 7px; }
 .jb-my-chats .jb-mc-conversation-date { grid-column: 1; color: #b3b6c6; font-size: 12px; }
-.jb-my-chats .jb-mc-conversation-preview { display: -webkit-box; grid-column: 1; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; margin: 7px 0 0; color: #e9eaf1; font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
-.jb-my-chats .jb-mc-conversation-count { grid-column: 2; grid-row: 1 / 4; align-self: center; color: #c0bccd; font-size: 12px; white-space: nowrap; }
+.jb-my-chats .jb-mc-conversation-preview { display: -webkit-box; grid-column: 1; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; margin: 0; color: #e9eaf1; font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
+.jb-my-chats .jb-mc-conversation-count { display: inline-flex; align-items: center; gap: 6px; grid-column: 2; grid-row: 1 / 4; align-self: center; color: #c0bccd; font-size: 14px; white-space: nowrap; }
+.jb-my-chats .jb-mc-conversation-count svg { width: 18px; height: 18px; }
 .jb-my-chats .jb-mc-conversation-card .jb-mc-persona { margin-top: 0; }
 .jb-my-chats .jb-mc-status { margin: 16px 0; color: #bfc0cb; font-size: 14px; line-height: 1.6; }
 .jb-my-chats .jb-mc-status:empty { display: none; }
@@ -181,7 +198,12 @@
   .jb-my-chats .jb-mc-profile { padding: 14px; }
   .jb-my-chats .jb-mc-description { font-size: 14px; }
   .jb-my-chats .jb-mc-description[data-expanded='false'] { max-height: 240px; }
-  .jb-my-chats .jb-mc-conversation-card { padding: 14px 12px; column-gap: 10px; }
+  .jb-my-chats .jb-mc-conversation-open { padding: 14px 12px; column-gap: 10px; }
+  .jb-my-chats .jb-mc-row-actions { gap: 0; padding-right: 4px; }
+  .jb-my-chats .jb-mc-row-action { flex-basis: 44px; width: 44px; }
+  .jb-my-chats .jb-mc-conversation-name { font-size: 14px; }
+  .jb-my-chats .jb-mc-conversation-editor { padding: 14px 12px; }
+  .jb-my-chats .jb-mc-editor-actions button { min-height: 44px; }
   .jb-my-chats .jb-mc-conversation-preview { font-size: 14px; }
 }
 @media (max-width: 480px) {

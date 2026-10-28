@@ -1,5 +1,7 @@
-type IconName = 'settings' | 'memory' | 'customize' | 'new-chat' | 'all-chats' | 'prompt' | 'persona' | 'tools' | 'menu' | 'import' | 'arrow' | 'embeddings' | 'extension' | 'camera' | 'lorebook' | 'group' | 'voice';
+type IconName = 'settings' | 'memory' | 'customize' | 'new-chat' | 'all-chats' | 'prompt' | 'persona' | 'tools' | 'menu' | 'import' | 'arrow' | 'embeddings' | 'extension' | 'camera' | 'lorebook' | 'group' | 'voice' | 'edit' | 'trash';
 const paths: Record<IconName, string[]> = {
+  edit: ['m16 3 5 5-13 13-6 1 1-6L16 3Z', 'm13 6 5 5'],
+  trash: ['M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15', 'M10 10v7M14 10v7'],
   lorebook: ['M12 5v16M12 5C9 3 5 3 2 4v15c3-1 7-1 10 2 3-3 7-3 10-2V4c-3-1-7-1-10 1Z', 'M5 8h4M5 12h4M15 8h4M15 12h4'],
   group: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M22 21v-2a4 4 0 0 0-3-3.87', 'M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM16 3.13a4 4 0 0 1 0 7.75'],
   voice: ['M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z', 'M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8'],

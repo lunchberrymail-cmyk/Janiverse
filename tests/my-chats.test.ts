@@ -156,6 +156,90 @@ describe('My Chats reads native conversations without changing them', () => {
   });
 });
 
+describe('My Chats native rename and delete actions', () => {
+  test('renames only the selected chat, preserves its expanded character and never navigates', async () => {
+    const writes: unknown[] = []; ctx.permissions.getGranted = async () => ['chats'];
+    ctx.chats.update = async (id: string, input: unknown) => { writes.push({ id, input }); return { id, ...input as object }; };
+    setup().activate(); await flush(); btn('Ada, 4 chats').click(); await flush();
+    const detail = root().querySelector('.jb-mc-expanded');
+    btn('Rename chat: Yesterday conversation').click();
+    const input = root().querySelector<HTMLInputElement>('input[aria-label="Chat name"]')!;
+    expect(input.value).toBe('Yesterday conversation'); input.value = '  A name I chose  ';
+    btn('Save name').click(); await flush(); await flush();
+    expect(writes).toEqual([{ id: 'ada-yesterday', input: { name: 'A name I chose' } }]);
+    expect(btn('Continue A name I chose')).toBeDefined(); expect(root().querySelector('.jb-mc-expanded')).toBe(detail);
+    expect(btn('Ada, 4 chats').getAttribute('aria-expanded')).toBe('true'); expect(invoked).toHaveLength(0); expect(started).toHaveLength(0);
+  });
+  test('Cancel and Escape discard a draft, while blank names never reach the native API', async () => {
+    setup().activate(); await flush(); btn('Ada, 4 chats').click(); await flush();
+    btn('Rename chat: Today conversation').click(); btn('Cancel').click();
+    expect((root().querySelector('.jb-mc-conversation-editor') as HTMLElement).hidden).toBe(true);
+    btn('Rename chat: Today conversation').click();
+    const input = root().querySelector<HTMLInputElement>('input[aria-label="Chat name"]')!; input.value = '   ';
+    input.closest('form')!.dispatchEvent(new dom.window.Event('submit', { cancelable: true, bubbles: true })); await flush();
+    expect(root().textContent).toContain('Enter a chat name.'); expect(mutations).toHaveLength(0);
+    input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect((root().querySelector('.jb-mc-conversation-editor') as HTMLElement).hidden).toBe(true);
+    expect(document.activeElement).toBe(btn('Rename chat: Today conversation')); expect(invoked).toHaveLength(0);
+  });
+  test('delete requires confirmation, removes the exact conversation and refreshes counts without deleting its character', async () => {
+    const deleted: string[] = []; ctx.permissions.getGranted = async () => ['chats'];
+    ctx.chats.delete = async (id: string) => { deleted.push(id); groupedResult = async () => ({ data: [{ ...groups[0], chat_count: 3 }], total: 1 }); recentResult = async () => ({ data: [], total: 2 }); };
+    setup().activate(); await flush(); btn('Ada, 4 chats').click(); await flush();
+    btn('Delete chat: Yesterday conversation').click(); expect(deleted).toHaveLength(0); expect(invoked).toHaveLength(0);
+    expect(root().textContent).toContain('permanently deletes this conversation and its messages'); btn('Cancel').click(); expect(deleted).toHaveLength(0);
+    btn('Delete chat: Yesterday conversation').click(); btn('Delete chat').click(); await flush(); await flush();
+    expect(deleted).toEqual(['ada-yesterday']); expect(root().querySelectorAll('.jb-mc-conversation-card')).toHaveLength(2);
+    expect(root().textContent).not.toContain('Yesterday conversation'); expect(root().querySelector('.jb-mc-summary')?.textContent).toBe('1 character or group · 2 chats');
+    expect(btn('Ada, 3 chats').getAttribute('aria-expanded')).toBe('true'); expect(document.querySelector('#native')?.textContent).toBe('Native chat remains mounted');
+  });
+  test('permission is requested only by the explicit enable action and enabling alone does not submit a write', async () => {
+    let allowed = false; const writes: string[] = []; const requests: unknown[] = [];
+    ctx.permissions.getGranted = async () => allowed ? ['chats'] : [];
+    ctx.permissions.request = async (...args: unknown[]) => { requests.push(args); allowed = true; };
+    ctx.chats.update = async (id: string, input: { name: string }) => { writes.push(id); return { id, ...input }; };
+    setup().activate(); await flush(); btn('Ada, 4 chats').click(); await flush(); btn('Rename chat: Today conversation').click();
+    btn('Save name').click(); await flush(); expect(writes).toHaveLength(0); expect(requests).toHaveLength(0);
+    btn('Enable Chats permission').click(); await flush(); expect(requests).toHaveLength(1); expect(writes).toHaveLength(0);
+    btn('Save name').click(); await flush(); expect(writes).toEqual(['ada-today']);
+  });
+  test('pending deletion blocks duplicate submissions and background events preserve the confirmation', async () => {
+    const pending = deferred<void>(); const writes: string[] = []; ctx.permissions.getGranted = async () => ['chats'];
+    ctx.chats.delete = (id: string) => { writes.push(id); return pending.promise; };
+    setup().activate(); await flush(); btn('Ada, 4 chats').click(); await flush(); btn('Delete chat: Today conversation').click();
+    const confirm = btn('Delete chat'); confirm.click(); confirm.click(); await flush();
+    subscriptions.get('CHAT_CHANGED')?.forEach(callback => callback()); await new Promise(resolve => setTimeout(resolve, 325));
+    expect(writes).toEqual(['ada-today']); expect(btn('Delete chat')).toBe(confirm); expect(confirm.disabled).toBe(true); expect(btn('Cancel').disabled).toBe(true);
+    pending.resolve(); await flush(); await flush(); expect(root().querySelectorAll('.jb-mc-conversation-card')).toHaveLength(2);
+  });
+  test('an unconfirmed write retains the conversation and offers a read refresh without automatically retrying', async () => {
+    let attempts = 0; ctx.permissions.getGranted = async () => ['chats']; ctx.chats.delete = async () => { attempts++; throw new Error('Lost response'); };
+    setup().activate(); await flush(); btn('Ada, 4 chats').click(); await flush(); btn('Delete chat: Today conversation').click(); btn('Delete chat').click(); await flush();
+    expect(attempts).toBe(1); expect(root().querySelectorAll('.jb-mc-conversation-card')).toHaveLength(3); expect(root().textContent).toContain('Could not confirm the change.');
+    btn('Refresh chats').click(); await flush(); expect(attempts).toBe(1); expect(root().querySelectorAll('.jb-mc-character')).toHaveLength(3);
+  });
+  test('navigation away during permission checking prevents a stale form from changing a chat', async () => {
+    const pending = deferred<string[]>(); ctx.permissions.getGranted = () => pending.promise;
+    const browser = setup(); browser.activate(); await flush(); btn('Ada, 4 chats').click(); await flush(); btn('Delete chat: Today conversation').click(); btn('Delete chat').click(); browser.deactivate();
+    pending.resolve(['chats']); await flush(); expect(mutations).toHaveLength(0); expect(root().hidden).toBe(true);
+  });
+  test('late optional persona reads cannot erase a rename draft', async () => {
+    const pending = deferred<any>(); metadataResult = () => pending.promise;
+    setup().activate(); await flush(); btn('Ada, 4 chats').click(); await flush(); btn('Rename chat: Today conversation').click();
+    const input = root().querySelector<HTMLInputElement>('input[aria-label="Chat name"]')!; input.value = 'My unsaved name';
+    pending.resolve({ data: [], total: 0 }); await flush(); expect(input.isConnected).toBe(true); expect(input.value).toBe('My unsaved name');
+  });
+  test('group conversations expose the same native rename and delete controls', async () => {
+    const renamed: unknown[] = [], deleted: string[] = []; ctx.permissions.getGranted = async () => ['chats'];
+    ctx.chats.update = async (id: string, input: { name: string }) => { renamed.push({ id, input }); return { id, ...input }; };
+    ctx.chats.delete = async (id: string) => { deleted.push(id); };
+    setup().activate(); await flush(); btn('The crew, 3 chats').click(); await flush(); btn('Rename chat: The crew').click();
+    root().querySelector<HTMLInputElement>('input[aria-label="Chat name"]')!.value = 'Weekend adventure'; btn('Save name').click(); await flush(); await flush();
+    expect(renamed).toEqual([{ id: 'crew-latest', input: { name: 'Weekend adventure' } }]); expect(btn('Continue group chat')).toBeDefined();
+    btn('Delete chat: Weekend adventure').click(); btn('Delete chat').click(); await flush(); expect(deleted).toEqual(['crew-latest']); expect(invoked).toHaveLength(0);
+  });
+});
+
 describe('My Chats filters and asynchronous lifecycle', () => {
   test('search and sort reset pagination and send the native sort/query values', async () => {
     groupedResult = async () => ({ data: structuredClone(groups), total: 36 }); setup().activate(); await flush(); btn('Next →').click(); await flush(); expect(groupedReads.at(-1)?.offset).toBe(12);

@@ -1,5 +1,6 @@
 import type { SpindleFrontendContext, SpindleHostSurfaceRef, SpindleGroupedRecentChat, SpindleRecentChat, SpindleRecentChatsQuery } from 'lumiverse-spindle-types';
 import { icon } from './icons';
+import { addChatRowActions } from './chat-row';
 
 type Summary = { id: string; name: string; message_count: number; created_at: number; updated_at: number; last_message_preview: string; metadata?: Record<string, unknown> };
 type Page<T> = { data: T[]; total: number };
@@ -109,7 +110,7 @@ export function profileMarkup(source: string): string {
   return holder.innerHTML;
 }
 
-/** A read-only conversation browser. Opening a row never creates or changes a chat. */
+/** Opening a row is read-only; edits require the row's explicit actions. */
 export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptions) {
   let disposed = false, active = false, offset = 0, query = '', request = 0, detailRequest = 0;
   let groupedTotal = 0, chatTotal = 0, expanded = '';
@@ -117,6 +118,8 @@ export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptio
   let pageAbort: AbortController | undefined, detailAbort: AbortController | undefined;
   let profileInjection: Element | undefined;
   let profileCleanup: (() => void) | undefined;
+  let refreshPending = false;
+  const rowViews = new Map<string, { row: SpindleGroupedRecentChat; article: HTMLElement; header: HTMLButtonElement }>();
   const personaNames = new Map<string, string>();
   const cleanups: Array<() => void> = [];
   const root = el('section', 'jb-my-chats'); root.hidden = true; root.setAttribute('aria-label', 'My Chats');
@@ -221,16 +224,24 @@ export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptio
   }
   function rowKey(row: SpindleGroupedRecentChat) { return row.is_group ? `group:${row.latest_chat_id}` : `character:${row.character_id}`; }
   function renderRows(rows: SpindleGroupedRecentChat[]) {
-    list.replaceChildren();
-    if (!rows.length) { list.append(el('p', 'jb-mc-empty', query ? 'No characters match your search.' : 'Your conversations will appear here.')); return; }
+    const oldViews = new Map(rowViews); rowViews.clear(); const nodes: HTMLElement[] = [];
+    if (!rows.length) { stopDetail(); list.replaceChildren(el('p', 'jb-mc-empty', query ? 'No characters match your search.' : 'Your conversations will appear here.')); return; }
     for (const row of rows) {
       const name = row.is_group ? text(row.group_name) || text(row.latest_chat_name) || 'Group chat' : text(row.character_name) || 'Unnamed character';
+      const key = rowKey(row), old = oldViews.get(key);
+      if (expanded === key && old) {
+        Object.assign(old.row, row); old.header.setAttribute('aria-label', `${name}, ${count(row.chat_count)} chats`);
+        old.header.querySelector('.jb-mc-character-name')!.textContent = name;
+        old.header.querySelector('.jb-mc-chat-count')!.textContent = `${row.is_group ? 'group chats' : 'chats'}: ${count(row.chat_count)}`;
+        rowViews.set(key, old); nodes.push(old.article); continue;
+      }
       const article = el('article', 'jb-mc-character'); const header = button('', () => { void expand(row, article, header, body); }, 'jb-mc-character-header');
       header.setAttribute('aria-expanded', 'false'); header.setAttribute('aria-label', `${name}, ${count(row.chat_count)} chats`);
       const info = el('span', 'jb-mc-character-text'); info.append(el('strong', 'jb-mc-character-name', name), el('span', 'jb-mc-chat-count', `${row.is_group ? 'group chats' : 'chats'}: ${count(row.chat_count)}`));
       header.append(avatar(row.character_id, row.character_image_id, name, 'jb-mc-character-avatar'), info, el('span', 'jb-mc-chevron', '⌄'));
-      const body = el('div', 'jb-mc-expanded'); body.hidden = true; article.append(header, body); list.append(article);
+      const body = el('div', 'jb-mc-expanded'); body.hidden = true; article.append(header, body); nodes.push(article); rowViews.set(key, { row, article, header });
     }
+    list.replaceChildren(...nodes); if (expanded && !rowViews.has(expanded)) stopDetail();
   }
   function localError(body: HTMLElement, retry: () => void, message = 'Could not load this character’s chats.') {
     body.replaceChildren(el('p', 'jb-mc-status', message), button('Retry', retry));
@@ -245,7 +256,13 @@ export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptio
     const generation = detailRequest; const abort = new AbortController(); detailAbort = abort;
     const current = () => active && !disposed && generation === detailRequest && expanded === key && article.parentElement === list;
     if (row.is_group) {
-      body.replaceChildren(el('p', 'jb-mc-status', 'This is a Lumiverse group conversation.'), button('Continue group chat', () => openChat(row.latest_chat_id), 'jb-button jb-primary'));
+      const chat = { id: row.latest_chat_id, name: text(row.latest_chat_name) || 'Group chat' };
+      const card = el('article', 'jb-mc-conversation-card'); const open = button('', () => openChat(chat.id), 'jb-mc-conversation-open'); open.setAttribute('aria-label', 'Continue group chat');
+      const title = el('strong', 'jb-mc-conversation-name', chat.name); open.append(el('time', 'jb-mc-conversation-date', dateLabel(row.updated_at)), title); card.append(open);
+      addChatRowActions(ctx, card, chat, { current,
+        renamed(name) { chat.name = name; title.textContent = name; void load(true); },
+        deleted() { void load(); }, refresh: () => { void load(); }, closed: resumeRefresh });
+      body.replaceChildren(el('p', 'jb-mc-status', 'This is a Lumiverse group conversation.'), card);
       return;
     }
     try {
@@ -312,9 +329,15 @@ export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptio
           const grouped = group ? sorted.filter(chat => dateGroup(chat.updated_at) === group) : sorted; if (!grouped.length) continue;
           if (group) conversationList.append(el('h4', 'jb-mc-date-heading', group));
           for (const chat of grouped) {
-          const card = button('', () => openChat(chat.id), 'jb-mc-conversation-card'); card.setAttribute('aria-label', `Continue ${text(chat.name) || 'Untitled chat'}`);
+          const card = el('article', 'jb-mc-conversation-card'); const open = button('', () => openChat(chat.id), 'jb-mc-conversation-open'); open.setAttribute('aria-label', `Continue ${text(chat.name) || 'Untitled chat'}`);
           const meta = el('span', 'jb-mc-conversation-meta'); meta.append(el('time', 'jb-mc-conversation-date', dateLabel(chat.updated_at))); addPersona(meta, chat);
-            const messageCount = count(chat.message_count); card.append(meta, el('strong', 'jb-mc-conversation-name', text(chat.name) || 'Untitled chat'), el('p', 'jb-mc-conversation-preview', plain(chat.last_message_preview) || 'No messages yet.'), el('span', 'jb-mc-conversation-count', `${messageCount} ${messageCount === 1 ? 'message' : 'messages'}`)); conversationList.append(card);
+            const messageCount = count(chat.message_count); const messages = el('span', 'jb-mc-conversation-count'); messages.title = `${messageCount} ${messageCount === 1 ? 'message' : 'messages'}`; messages.setAttribute('aria-label', messages.title); messages.append(icon('new-chat'), String(messageCount));
+            open.append(meta, el('strong', 'jb-mc-conversation-name', text(chat.name) || 'Untitled chat'), el('p', 'jb-mc-conversation-preview', plain(chat.last_message_preview) || 'No messages yet.'), messages); card.append(open);
+            addChatRowActions(ctx, card, chat, { current,
+              renamed(name) { chat.name = name; renderConversations(); void load(true); },
+              deleted() { const index = chats.findIndex(item => item.id === chat.id); if (index >= 0) chats.splice(index, 1); renderConversations(); void load(true); },
+              refresh: () => { void load(); }, closed: resumeRefresh });
+            conversationList.append(card);
           }
         }
         if (!chats.length) conversationList.append(el('p', 'jb-mc-empty', 'No visible chats for this character.'));
@@ -325,15 +348,15 @@ export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptio
       void readChatMetadata(row.character_id, abort.signal).then(async metadata => {
         if (!current()) return;
         for (const chat of chats) chat.metadata = metadata.get(chat.id);
-        await resolvePersonas(chats, abort.signal); if (current()) renderConversations();
+        await resolvePersonas(chats, abort.signal); if (current() && !conversationList.querySelector('.jb-mc-conversation-editor:not([hidden])')) renderConversations();
       }).catch(() => { /* Missing optional identity must leave the badge absent. */ });
     } catch {
       if (current()) localError(body, () => { expanded = ''; void expand(row, article, header, body); });
     }
   }
-  async function load() {
+  async function load(keepDetail = false) {
     if (!active || disposed) return;
-    const generation = ++request; pageAbort?.abort(); const abort = new AbortController(); pageAbort = abort; stopDetail();
+    const generation = ++request; pageAbort?.abort(); const abort = new AbortController(); pageAbort = abort; if (!keepDetail) stopDetail();
     root.setAttribute('aria-busy', 'true'); status.textContent = 'Loading chats…'; previous.disabled = next.disabled = true;
     const current = () => active && !disposed && generation === request;
     const options: SpindleRecentChatsQuery = { limit: PAGE_SIZE, offset, ...(query ? { search: query } : {}), sort: sort.value === 'name' ? 'name' : 'recent', direction: sort.value === 'oldest' || sort.value === 'name' ? 'asc' : 'desc' };
@@ -355,7 +378,7 @@ export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptio
       renderRows(rows); previous.disabled = offset === 0; next.disabled = offset + PAGE_SIZE >= groupedTotal;
       pageLabel.textContent = groupedTotal ? `${offset + 1}–${Math.min(offset + PAGE_SIZE, groupedTotal)} of ${groupedTotal}` : '';
       pagination.hidden = groupedTotal <= PAGE_SIZE;
-    } else { list.replaceChildren(); pagination.hidden = true; status.append(el('p', '', 'Could not load your chats.'), button('Retry', () => { void load(); })); }
+    } else { stopDetail(); rowViews.clear(); list.replaceChildren(); pagination.hidden = true; status.append(el('p', '', 'Could not load your chats.'), button('Retry', () => { void load(); })); }
     updateSummary();
   }
   function setSearch(value: string) {
@@ -363,7 +386,12 @@ export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptio
   }
   search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => setSearch(search.value), 200); });
   sort.addEventListener('change', () => { offset = 0; void load(); });
-  function refresh() { if (!disposed && active) void load(); }
+  function refresh() {
+    if (disposed || !active) return;
+    if (list.querySelector('.jb-mc-conversation-editor:not([hidden])')) { refreshPending = true; return; }
+    refreshPending = false; void load(true);
+  }
+  function resumeRefresh() { if (refreshPending) { clearTimeout(refreshTimer); refreshTimer = setTimeout(refresh, 300); } }
   if (ctx.events?.on) for (const event of ['CHAT_CREATED', 'CHAT_CHANGED', 'CHAT_DELETED', 'MESSAGE_SENT', 'MESSAGE_EDITED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'CHARACTER_EDITED', 'CHARACTER_DELETED', 'CHARACTER_AVATAR_CHANGED', 'PERSONA_CHANGED', 'jar_bridge:imported', 'jar_bridge:chat_imported']) {
     cleanups.push(ctx.events.on(event, () => { if (event.startsWith('PERSONA_')) personaNames.clear(); clearTimeout(refreshTimer); refreshTimer = setTimeout(refresh, 300); }));
   }
