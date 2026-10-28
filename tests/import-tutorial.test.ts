@@ -55,6 +55,7 @@ for (const uncertain of [false, true]) test(`a ${uncertain ? 'lost response' : '
 test('reopening resumes instructions with a fresh queue, without persisting files, links, results or invented completion', async () => {
   let view = start(); await settle(); choose(); button('Next', view.root).click(); await settle(); button('Close', roots[0]).click(); expect(view.root.isConnected).toBe(false);
   view = start(); await settle(); expect(view.root.dataset.scene).toBe('3'); expect(roots[1].querySelectorAll('.jb-import-item')).toHaveLength(0);
+  expect(view.root.querySelector('.jb-api-guide-status')!.textContent).toContain('Queue is empty'); expect(view.root.querySelector('.jb-api-guide-status')!.textContent).toContain('Already saved? Find it on Home.');
   expect(writes.at(-1)).toEqual({ key: CARD_GUIDE_KEY, value: { step: 2 } }); expect(JSON.stringify(writes)).not.toMatch(/private-original|Mira|card-one|success|https/);
   button('Next', view.root).click(); expect(button('Finish guide', view.root).disabled).toBe(true); expect(closed).toBe(1);
 });
