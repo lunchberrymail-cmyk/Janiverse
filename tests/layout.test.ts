@@ -256,7 +256,7 @@ test('chat API Settings opens native Connections, preserves chat settings, and r
   expect(document.querySelector('.jb-customize')).not.toBeNull();
   expect(calls.some(call => call.ref.kind === 'settings_tab' && call.ref.id === 'display')).toBe(false);
   findButton('×', document.querySelector('.jb-customize')!).click();
-  header.querySelector<HTMLButtonElement>('.jb-chat-help-button')!.click(); findButton('Manage personas', document.querySelector('.jb-chat-help')!).click(); await flush(); expect(calls.at(-1)!.ref).toEqual({ kind: 'drawer_tab', id: 'personas' });
+  header.querySelector<HTMLButtonElement>('.jb-chat-help-button')!.click(); findButton('Story tools', document.querySelector('.jb-chat-help')!).click(); findButton('Manage personas', document.querySelector('.jb-chat-help')!).click(); await flush(); expect(calls.at(-1)!.ref).toEqual({ kind: 'drawer_tab', id: 'personas' });
   connectionProjection = { activeProfileId: null, provider: null, model: null };
   subscriptions.get('connections.active')!.forEach(handler => handler());
   expect(api.textContent).toBe('API not ready · Set up'); expect(api.classList.contains('jb-api-missing')).toBe(true);
@@ -420,7 +420,7 @@ test('leaving a chat unloads its SoundCloud frame even when the native active ch
 test('chat menu keeps the reference order and icons while extra shortcuts live in Help', async () => {
   start(); await flush();
   const menu = roots.get('chat_header_left')!.querySelector('.jb-chat-menu')!;
-  const labels = ['Settings', 'Chat Memory', 'Customize', 'New Chat', 'All Chats'];
+  const labels = ['Settings', 'Generation settings', 'Chat Memory', 'Customize', 'New Chat', 'All Chats'];
   expect([...menu.querySelectorAll('button')].map(button => button.textContent)).toEqual(labels);
   for (const label of labels) {
     expect(findButton(label, menu).querySelector('svg[aria-hidden="true"]')).not.toBeNull();
@@ -442,6 +442,21 @@ test('chat menu keyboard navigation stays within supported actions and Escape sh
   expect(menu.open).toBe(false); expect(stops).toBe(0); expect(document.activeElement).toBe(summary); document.removeEventListener('keydown', host);
 });
 
+test('chat help and the chat menu open the generation panel directly', async () => {
+  start(); await flush(); const header = roots.get('chat_header_left')!;
+  header.querySelector<HTMLButtonElement>('.jb-chat-help-button')!.click();
+  findButton('AI settings', document.querySelector('.jb-chat-help')!).click();
+  findButton('Open generation settings', document.querySelector('.jb-chat-help')!).click(); await flush();
+  expect(document.querySelector('.jb-chat-help')).toBeNull();
+  expect(document.querySelector('.jb-settings [role="tab"][aria-selected="true"]')!.textContent).toBe('Generation');
+  expect(document.querySelector<HTMLElement>('.jb-settings-panel[id$="-generation"]')!.hidden).toBe(false);
+  expect(document.querySelector<HTMLElement>('.jb-settings-panel[id$="-prompt"]')!.hidden).toBe(true);
+  findButton('×', document.querySelector('.jb-settings-window-root')!).click();
+  findButton('Generation settings', header).click(); await flush();
+  expect(document.querySelector('.jb-settings [role="tab"][aria-selected="true"]')!.textContent).toBe('Generation');
+  expect(native.outerHTML).toBe(nativeMarkup); expect(calls).toEqual([]);
+});
+
 test('native chat tools are the default and the home menu or chat Help can open the optional familiar layout', async () => {
   start(); await flush(); expect(document.documentElement.getAttribute('data-jb-tools')).toBe('true');
   expect(document.documentElement.getAttribute('data-jb-composer')).toBe('false');
@@ -449,12 +464,14 @@ test('native chat tools are the default and the home menu or chat Help can open 
   expect(header.querySelector('.jb-memory-button')).toBeNull();
   expect([...header.querySelectorAll('button')].filter(button => button.textContent === 'Chat Memory')).toHaveLength(1);
   findButton('Chat tools & help', roots.get('landing_header')!).click();
+  findButton('Extras', document.querySelector('.jb-chat-help')!).click();
   document.querySelector<HTMLInputElement>('input[value="janitorai"]')!.click();
   expect(document.documentElement.getAttribute('data-jb-tools')).toBe('false');
   expect(document.documentElement.getAttribute('data-jb-composer')).toBe('true');
   findButton('Close', document.querySelector('.jb-chat-help')!).click();
   expect(header.querySelector('.jb-chat-help-button')!.getAttribute('aria-label')).toBe('Chat tools & help');
   header.querySelector<HTMLButtonElement>('.jb-chat-help-button')!.click();
+  findButton('Extras', document.querySelector('.jb-chat-help')!).click();
   document.querySelector<HTMLInputElement>('input[value="lumiverse"]')!.click();
   expect(document.documentElement.getAttribute('data-jb-tools')).toBe('true');
   expect(document.documentElement.getAttribute('data-jb-composer')).toBe('false');
@@ -467,6 +484,7 @@ test('familiar composer opens extension discovery without requesting generation 
   ctx.composer = { getState: () => ({ mounted: true, chatId: 'chat-1', text: 'An unsent draft' }), onChange: () => () => {}, focus() {} };
   ctx.sendToBackend = (payload: unknown) => sent.push(payload);
   start(); await flush(); roots.get('chat_header_left')!.querySelector<HTMLButtonElement>('.jb-chat-help-button')!.click();
+  findButton('Extras', document.querySelector('.jb-chat-help')!).click();
   document.querySelector<HTMLInputElement>('input[value="janitorai"]')!.click(); findButton('Close', document.querySelector('.jb-chat-help')!).click();
   document.querySelector<HTMLButtonElement>('.jb-assist-toggle')!.click(); await flush();
   const guide = document.querySelector('.jb-chat-help')!;

@@ -10,11 +10,11 @@ function deferred<T>() { let resolve!: (value: T) => void; const promise = new P
 const settle = async () => { for (let n = 0; n < 20; n++) await Promise.resolve(); };
 function setup() {
   tools = createChatTools(ctx, { onLayoutChange: layout => layouts.push(layout),
-    openSettings: () => { actions.push('settings'); }, openMemory: () => { actions.push('memory'); },
+    openSettings: () => { actions.push('settings'); }, openGeneration: () => { actions.push('generation'); }, openMemory: () => { actions.push('memory'); },
     openPersonas: () => { actions.push('personas'); }, invoke: async ref => { actions.push(ref.kind + ':' + ref.id); return true; },
   }); return tools;
 }
-function choose(value: ComposerLayout) { document.querySelector<HTMLDetailsElement>('.jb-chat-layout-preferences')!.open = true; document.querySelector<HTMLInputElement>(`input[value="${value}"]`)!.click(); }
+function choose(value: ComposerLayout) { button('Extras').click(); document.querySelector<HTMLDetailsElement>('.jb-chat-layout-preferences')!.open = true; document.querySelector<HTMLInputElement>(`input[value="${value}"]`)!.click(); }
 function button(text: string) { return [...document.querySelectorAll('button')].find(button => button.textContent === text)!; }
 beforeEach(() => {
   dom = new JSDOM('<!doctype html><html data-jb-tools="previous"><body><button id="help">Help</button><textarea id="draft">Unsent story draft</textarea></body></html>');
@@ -78,11 +78,12 @@ test('a save failure is visible and retry preserves the chosen layout and draft'
 test('native helper opens real Summary and Cortex setup surfaces only on request', async () => {
   setup(); await tools!.ready; tools!.openHelp();
   expect(document.querySelector('.jb-toolbar-tips')!.textContent).toContain('Regenerate');
+  button('Story tools').click(); document.querySelector<HTMLDetailsElement>('.jb-chat-more-memory')!.open = true;
   button('Open Summary').click(); await settle();
   expect(actions).toEqual(['drawer_tab:summary']); expect(document.querySelector('.jb-chat-help')).toBeNull();
-  tools!.openHelp(); button('Set up Memory Cortex').click(); await settle();
+  tools!.openHelp('story'); document.querySelector<HTMLDetailsElement>('.jb-chat-more-memory')!.open = true; button('Set up Memory Cortex').click(); await settle();
   expect(actions).toEqual(['drawer_tab:summary', 'settings_tab:memoryCortex']);
-  ctx.getActiveChat = () => ({ chatId: null }); tools!.openHelp();
+  ctx.getActiveChat = () => ({ chatId: null }); tools!.openHelp('story');
   expect(button('Open Summary').disabled).toBe(true); expect(button('Open memory').disabled).toBe(true);
   expect(button('Set up Memory Cortex').disabled).toBe(false);
 });
@@ -106,7 +107,7 @@ test.each([
 });
 
 test('unavailable extension manager keeps the recommendation and allows retry', async () => {
-  tools = createChatTools(ctx, { onLayoutChange() {}, openSettings() {}, openMemory() {}, openPersonas() {}, invoke: async () => false });
+  tools = createChatTools(ctx, { onLayoutChange() {}, openSettings() {}, openGeneration() {}, openMemory() {}, openPersonas() {}, invoke: async () => false });
   tools.openHelp('extensions'); button('Polish my writing').click(); button('Open Extensions').click(); await settle();
   expect(document.querySelector('.jb-extension-result h3')!.textContent).toBe('Hone');
   expect(document.querySelector('.jb-chat-guide-status')!.textContent).toContain('unavailable');
@@ -119,4 +120,38 @@ test('Escape closes help before the host generation shortcut and returns focus t
   document.activeElement!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
   expect(document.querySelector('.jb-chat-help')).toBeNull(); expect(stops).toBe(0); expect(document.activeElement).toBe(opener);
   document.removeEventListener('keydown', host);
+});
+
+test('help topics show one compact panel and leave the draft and settings untouched', async () => {
+  setup(); await tools!.ready; tools!.openHelp();
+  expect(document.querySelector<HTMLElement>('.jb-native-guide')!.hidden).toBe(false);
+  expect(document.querySelector<HTMLElement>('.jb-generation-guide')!.hidden).toBe(true);
+  expect(document.querySelector<HTMLElement>('.jb-chat-layout-preferences')!.hidden).toBe(true);
+  expect(document.querySelectorAll('.jb-chat-guide-card svg')).toHaveLength(4);
+  expect(document.querySelectorAll('.jb-chat-guide-card button')).toHaveLength(0);
+  for (const topic of ['AI settings', 'Story tools', 'Extras', 'Replies']) button(topic).click();
+  const panels = ['.jb-native-guide', '.jb-generation-guide', '.jb-story-guide', '.jb-extension-guide'];
+  expect(panels.filter(selector => !document.querySelector<HTMLElement>(selector)!.hidden)).toEqual(['.jb-native-guide']);
+  expect(actions).toEqual([]); expect(saves).toEqual([]);
+  expect(document.querySelector<HTMLTextAreaElement>('#draft')!.value).toBe('Unsent story draft');
+});
+
+test('sampler help opens generation directly, while prompt and Loom have distinct destinations', async () => {
+  setup(); await tools!.ready; tools!.openHelp('generation');
+  expect(document.querySelector('.jb-sampler-terms')!.textContent).toContain('Context size');
+  button('Open generation settings').click(); await settle();
+  expect(actions).toEqual(['generation']); expect(document.querySelector('.jb-chat-help')).toBeNull();
+  tools!.openHelp('generation'); button('Open prompt').click(); await settle();
+  expect(actions).toEqual(['generation', 'settings']);
+  tools!.openHelp('generation'); button('Open preset editor').click(); await settle();
+  expect(actions).toEqual(['generation', 'settings', 'drawer_tab:loom']); expect(saves).toEqual([]);
+});
+
+test('simple-layout users can restore the reply toolbar explicitly without generating or replacing the draft', async () => {
+  ctx.settings.get = async () => 'janitorai'; setup(); await tools!.ready; tools!.openHelp();
+  expect(document.querySelector<HTMLElement>('.jb-chat-toolbar-notice')!.hidden).toBe(false);
+  expect(saves).toEqual([]); button('Show reply toolbar').click(); await settle();
+  expect(tools!.getLayout()).toBe('lumiverse'); expect(document.querySelector<HTMLElement>('.jb-chat-toolbar-notice')!.hidden).toBe(true);
+  expect(saves).toEqual([[COMPOSER_LAYOUT_KEY, 'lumiverse']]); expect(actions).toEqual([]);
+  expect(document.querySelector<HTMLTextAreaElement>('#draft')!.value).toBe('Unsent story draft');
 });

@@ -1,5 +1,9 @@
-type IconName = 'settings' | 'memory' | 'customize' | 'new-chat' | 'all-chats' | 'prompt' | 'persona' | 'tools' | 'menu' | 'import' | 'arrow' | 'embeddings' | 'extension' | 'camera' | 'lorebook' | 'group' | 'voice' | 'edit' | 'trash';
+type IconName = 'settings' | 'memory' | 'customize' | 'new-chat' | 'all-chats' | 'prompt' | 'persona' | 'tools' | 'menu' | 'import' | 'arrow' | 'embeddings' | 'extension' | 'camera' | 'lorebook' | 'group' | 'voice' | 'edit' | 'trash' | 'regenerate' | 'continue' | 'message' | 'swipes';
 const paths: Record<IconName, string[]> = {
+  regenerate: ['M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8', 'M21 3v5h-5'],
+  continue: ['M9 10l-5 5 5 5', 'M20 4v7a4 4 0 0 1-4 4H4'],
+  message: ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'],
+  swipes: ['m8 5-7 7 7 7', 'm16 5 7 7-7 7'],
   edit: ['m16 3 5 5-13 13-6 1 1-6L16 3Z', 'm13 6 5 5'],
   trash: ['M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15', 'M10 10v7M14 10v7'],
   lorebook: ['M12 5v16M12 5C9 3 5 3 2 4v15c3-1 7-1 10 2 3-3 7-3 10-2V4c-3-1-7-1-10 1Z', 'M5 8h4M5 12h4M15 8h4M15 12h4'],

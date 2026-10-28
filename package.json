@@ -1,6 +1,6 @@
 {
   "name": "janiverse",
-  "version": "0.8.42-test.5",
+  "version": "0.8.42-test.6",
   "private": true,
   "type": "module",
   "engines": { "bun": ">=1.4.4" },

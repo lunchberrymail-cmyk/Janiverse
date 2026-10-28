@@ -99,7 +99,8 @@ export function setup(ctx: SpindleFrontendContext) {
   });
   const chatTools = createChatTools(ctx, {
     onLayoutChange: layout => composer.setEnabled(layout === 'janitorai'),
-    openSettings,
+    openSettings: () => openPrompt('prompt'),
+    openGeneration: () => openPrompt('generation'),
     openMemory: () => { const chatId = ctx.getActiveChat()?.chatId; if (chatId) openMemory(chatId); },
     openPersonas: () => invoke({ kind: 'drawer_tab', id: 'personas' }),
     invoke,
@@ -240,7 +241,7 @@ export function setup(ctx: SpindleFrontendContext) {
   const chatBar = el('div', 'jb-chat-bar'); const chatRight = el('div', 'jb-chat-right');
   const back = button('‹ Back', () => setView('chats'), 'jb-back');
   const api = button('API Settings', openConnections, 'jb-api-status'); api.setAttribute('aria-label', 'API Settings');
-  const helpButton = button('?', () => { chatMenu.open = false; chatTools.openHelp(); }, 'jb-chat-help-button'); helpButton.setAttribute('aria-label', 'Chat tools & help'); helpButton.title = 'Chat tools & help';
+  const helpButton = button('Help', () => { chatMenu.open = false; chatTools.openHelp(); }, 'jb-chat-help-button'); helpButton.setAttribute('aria-label', 'Chat tools & help'); helpButton.title = 'Chat tools & help';
   const chatMenu = el('details', 'jb-more jb-chat-menu'); const chatMenuLabel = el('summary', '', '☰'); chatMenuLabel.setAttribute('aria-label', 'Chat menu');
   chatMenuLabel.replaceChildren(icon('menu'));
   const chatMenuItems = el('div', 'jb-more-menu'); chatMenuItems.setAttribute('role', 'menu'); chatMenuItems.setAttribute('aria-label', 'Chat actions');
@@ -248,6 +249,7 @@ export function setup(ctx: SpindleFrontendContext) {
     const item = button(label, () => { chatMenu.open = false; action(); }, 'jb-menu-link'); item.setAttribute('role', 'menuitem'); item.prepend(icon(picture)); chatMenuItems.append(item); return item;
   };
   chatAction('Settings', openSettings, 'settings');
+  chatAction('Generation settings', () => openPrompt('generation'), 'prompt');
   const memoryMenuItem = chatAction('Chat Memory', () => { const chatId = ctx.getActiveChat()?.chatId; if (chatId) openMemory(chatId); }, 'memory');
   chatAction('Customize', openCustomize, 'customize');
   chatAction('New Chat', () => { const characterId = ctx.getActiveChat()?.characterId; if (characterId) void invoke({ kind: 'entity_action', id: 'character_chat' }, { characterId, mode: 'new' }); }, 'new-chat');

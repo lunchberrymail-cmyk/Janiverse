@@ -1,12 +1,14 @@
 import type { SpindleFrontendContext, SpindleHostSurfaceRef, SpindleModalHandle } from 'lumiverse-spindle-types';
 import { lunchPicks, type LunchPick } from './lunch-picks';
+import { icon } from './icons';
 
 export type ComposerLayout = 'lumiverse' | 'janitorai';
-type GuideView = 'lumiverse' | 'extensions';
+type GuideView = 'lumiverse' | 'generation' | 'story' | 'extensions';
 export const COMPOSER_LAYOUT_KEY = 'chat:composer_layout_v1';
 type Options = {
   onLayoutChange(layout: ComposerLayout): void;
   openSettings(): void;
+  openGeneration(): void;
   openMemory(): void;
   openPersonas(): void | Promise<boolean>;
   invoke(ref: SpindleHostSurfaceRef): Promise<boolean>;
@@ -54,20 +56,24 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
     if (disposed) return;
     if (modal) { selectView?.(view); return; }
     const previousFocus = document.activeElement as HTMLElement | null;
-    const current = ctx.ui.showModal({ title: 'Chat tools & help', width: 620, maxHeight: 800 }); modal = current;
+    const current = ctx.ui.showModal({ title: 'Chat help', width: 600, maxHeight: 760 }); modal = current;
     const root = current.root; root.classList.add('jb-settings', 'jb-chat-help');
-    root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Chat tools & help');
+    root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Chat help');
     const active = () => !disposed && modal === current;
-    const heading = node('h2', '', 'What are you looking for?');
+    const heading = node('p', 'jb-chat-guide-intro', 'Coming from JanitorAI? Find your familiar controls here.');
     const tabs = node('nav', 'jb-chat-guide-tabs'); tabs.setAttribute('aria-label', 'Chat help topics');
-    const native = node('section', 'jb-native-guide'), extensions = node('section', 'jb-extension-guide');
+    const native = node('section', 'jb-native-guide'), generation = node('section', 'jb-generation-guide'), story = node('section', 'jb-story-guide'), extensions = node('section', 'jb-extension-guide');
+    const sections = new Map<GuideView, HTMLElement>([['lumiverse', native], ['generation', generation], ['story', story], ['extensions', extensions]]);
+    const preferences = node('details', 'jb-chat-layout-preferences');
     const viewButtons = new Map<GuideView, HTMLButtonElement>();
     selectView = value => {
-      native.hidden = value !== 'lumiverse'; extensions.hidden = value !== 'extensions';
+      for (const [key, section] of sections) section.hidden = value !== key;
+      preferences.hidden = value !== 'extensions';
+      actionStatus.textContent = '';
       for (const [key, button] of viewButtons) button.setAttribute('aria-pressed', String(value === key));
       viewButtons.get(value)?.focus({ preventScroll: true });
     };
-    for (const [value, title] of [['lumiverse', 'Lumiverse tools'], ['extensions', 'Find extensions']] as const) {
+    for (const [value, title] of [['lumiverse', 'Replies'], ['generation', 'AI settings'], ['story', 'Story tools'], ['extensions', 'Extras']] as const) {
       const button = node('button', 'jb-button', title); button.type = 'button'; button.addEventListener('click', () => selectView?.(value));
       viewButtons.set(value, button); tabs.append(button);
     }
@@ -87,25 +93,44 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
       });
       return button;
     }
-    native.append(node('p', 'jb-settings-help', 'Start with these useful built-in tools. Each toolbar icon also has a name in its tooltip.'));
-    const tips = node('dl', 'jb-toolbar-tips');
-    for (const [title, detail] of [
-      ['Regenerate', 'Try a different reply to the same message.'],
-      ['Continue', 'Ask the character to keep going from the last reply.'],
-      ['Impersonate', 'Ask the model to write as your persona. Check the selected mode before using it.'],
-      ['Extras', 'Find additional actions from your installed extensions.'],
-    ]) tips.append(node('dt', '', title), node('dd', '', detail));
-    native.append(tips);
-    function row(title: string, detail: string, label: string, action: () => void | boolean | Promise<void | boolean>, needsChat = false) {
-      const row = node('div', 'jb-chat-help-row'), text = node('div'); text.append(node('h4', '', title), node('p', '', detail));
-      row.append(text, actionButton(label, action, needsChat)); native.append(row);
+    native.append(node('p', 'jb-chat-guide-location', 'Look for these icons in the toolbar above your message box.'));
+    const tips = node('div', 'jb-toolbar-tips');
+    for (const [picture, title, detail, location] of [
+      ['regenerate', 'Regenerate', 'Try another version of the last AI reply.', 'Message toolbar · circular arrow'],
+      ['continue', 'Continue', 'Extend the last AI reply without sending a new message.', 'Message toolbar · bent arrow'],
+      ['message', 'Impersonate', 'Let the AI draft your reply as your persona. Review it in the message box before sending.', 'Message toolbar · speech bubble'],
+      ['swipes', 'Browse reply versions', 'Use ‹ and › to choose a version. At the newest version, › can generate another.', 'On the AI reply · ‹ 1 / 2 ›'],
+    ] as const) {
+      const card = node('article', 'jb-chat-guide-card'), titleRow = node('h3'); titleRow.append(icon(picture), node('span', '', title));
+      card.append(titleRow, node('p', '', detail), node('small', '', location)); tips.append(card);
     }
-    row('Prompt & generation', 'Choose your instructions and reply settings.', 'Open settings', options.openSettings);
-    row('Summary', 'Keep a running recap. Configure and edit it in the native Summary window.', 'Open Summary', () => options.invoke({ kind: 'drawer_tab', id: 'summary' }), true);
-    row('Memory Cortex', 'Set up automatic recall of people, relationships, and events.', 'Set up Memory Cortex', () => options.invoke({ kind: 'settings_tab', id: 'memoryCortex' }));
-    row('Chat Memory', 'Write important facts to include in this chat’s prompt.', 'Open memory', options.openMemory, true);
-    row('Your persona', 'Choose who you play in the conversation.', 'Manage personas', options.openPersonas);
-    row('Lorebooks', 'Bring world details into context with matching keywords.', 'Open Lorebooks', () => options.invoke({ kind: 'drawer_tab', id: 'lorebook' }));
+    const editing = node('p', 'jb-chat-guide-editing'); editing.append(node('span', '', 'On a message:'), icon('edit'), node('span', '', 'Edit'), icon('trash'), node('span', '', 'Remove'));
+    native.append(tips, editing);
+    const hiddenToolbar = node('div', 'jb-chat-toolbar-notice');
+    const showToolbar = node('button', 'jb-button', 'Show reply toolbar'); showToolbar.type = 'button'; showToolbar.addEventListener('click', () => { void setLayout('lumiverse'); });
+    hiddenToolbar.append(node('p', '', 'Your simple layout hides this toolbar.'), showToolbar); native.append(hiddenToolbar);
+    native.append(node('p', 'jb-settings-help', 'Missing an icon? Open Customize composer (sliders) above the message box to show hidden actions.'));
+    function row(target: HTMLElement, title: string, detail: string, label: string, action: () => void | boolean | Promise<void | boolean>, needsChat = false) {
+      const row = node('div', 'jb-chat-help-row'), text = node('div'); text.append(node('h4', '', title), node('p', '', detail));
+      row.append(text, actionButton(label, action, needsChat)); target.append(row);
+    }
+    const settingsPath = node('p', 'jb-chat-guide-location'); settingsPath.append(icon('menu'), node('span', '', 'Chat menu → Generation settings'));
+    const samplerTerms = node('dl', 'jb-sampler-terms');
+    for (const [name, detail] of [
+      ['Temperature', 'Lower is steadier; higher adds variety.'],
+      ['Context size', 'The token budget for the prompt and conversation sent to the AI.'],
+      ['Max new tokens', 'The maximum length of one AI reply.'],
+    ]) samplerTerms.append(node('dt', '', name), node('dd', '', detail));
+    const samplerActions = node('div', 'jb-chat-guide-shortcuts'); samplerActions.append(actionButton('Open generation settings', options.openGeneration));
+    generation.append(settingsPath, samplerTerms, samplerActions, node('p', 'jb-settings-help', 'Turn on “Use these generation controls”, adjust the values, then save. Advanced controls include Top P, Top K and penalties; support depends on your provider.'));
+    row(generation, 'Preset & prompt', 'Choose a preset in Instructions. Customize a copy unlocks its prompt and sampler controls.', 'Open prompt', options.openSettings);
+    row(generation, 'Advanced Presets', 'Lumiverse calls its full preset editor Loom. Find block order and its sampler controls here.', 'Open preset editor', () => options.invoke({ kind: 'drawer_tab', id: 'loom' }));
+    row(story, 'Your persona', 'Choose who you play in the conversation.', 'Manage personas', options.openPersonas);
+    row(story, 'Chat Memory', 'Like a pinned note: facts you want included in this chat’s prompt.', 'Open memory', options.openMemory, true);
+    row(story, 'Lorebooks', 'World details that can be recalled through matching keywords.', 'Open Lorebooks', () => options.invoke({ kind: 'drawer_tab', id: 'lorebook' }));
+    const moreMemory = node('details', 'jb-chat-more-memory'); moreMemory.append(node('summary', '', 'Summaries & automatic memory'));
+    row(moreMemory, 'Summary', 'Review or update a recap of the conversation.', 'Open Summary', () => options.invoke({ kind: 'drawer_tab', id: 'summary' }), true);
+    row(moreMemory, 'Memory Cortex', 'Set up automatic recall of people, relationships, and events.', 'Set up Memory Cortex', () => options.invoke({ kind: 'settings_tab', id: 'memoryCortex' })); story.append(moreMemory);
 
     extensions.append(node('p', 'jb-settings-help', 'Choose what you want to add. These optional extensions each have their own setup.'));
     const goals = node('div', 'jb-extension-goals'); goals.setAttribute('aria-label', 'What would you like to add?');
@@ -134,7 +159,7 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
       goals.append(button);
     }
     extensions.append(goals, result);
-    const preferences = node('details', 'jb-chat-layout-preferences'); preferences.append(node('summary', '', 'Choose your chat layout'));
+    preferences.append(node('summary', '', 'Choose your chat layout'));
     const choices = node('fieldset', 'jb-chat-layouts'); choices.append(node('legend', '', 'Chat composer'));
     const inputs = new Map<ComposerLayout, HTMLInputElement>();
     for (const [value, title, detail] of [
@@ -146,11 +171,11 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
       input.addEventListener('change', () => { if (input.checked) void setLayout(value); });
     }
     const status = node('p', 'jb-settings-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
-    render = () => { for (const [value, input] of inputs) { input.checked = value === layout; input.closest('label')?.classList.toggle('jb-selected', input.checked); } status.textContent = notice; };
-    render(); preferences.append(choices, status);
+    render = () => { for (const [value, input] of inputs) { input.checked = value === layout; input.closest('label')?.classList.toggle('jb-selected', input.checked); } status.textContent = notice; hiddenToolbar.hidden = layout !== 'janitorai'; };
+    render(); preferences.append(choices);
     const close = node('button', 'jb-button jb-chat-help-close', 'Close'); close.type = 'button'; close.addEventListener('click', () => current.dismiss());
     const actions = node('div', 'jb-settings-actions'); actions.append(close);
-    root.append(heading, tabs, native, extensions, actionStatus, preferences, actions); selectView(view);
+    root.append(heading, tabs, native, generation, story, extensions, actionStatus, status, preferences, actions); selectView(view);
     const keys = (event: KeyboardEvent) => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); current.dismiss(); return; }
       if (event.key !== 'Tab') return;
