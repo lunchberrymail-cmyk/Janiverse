@@ -96,13 +96,13 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
     native.append(node('p', 'jb-chat-guide-location', 'Look for these icons in the toolbar above your message box.'));
     const tips = node('div', 'jb-toolbar-tips');
     for (const [picture, title, detail, location] of [
-      ['regenerate', 'Regenerate', 'Try another version of the last AI reply.', 'Message toolbar · circular arrow'],
-      ['continue', 'Continue', 'Extend the last AI reply without sending a new message.', 'Message toolbar · bent arrow'],
-      ['message', 'Impersonate', 'Let the AI draft your reply as your persona. Review it in the message box before sending.', 'Message toolbar · speech bubble'],
+      ['regenerate', 'Regenerate', 'Try another version of the last AI reply.', ''],
+      ['continue', 'Continue', 'Extend the last AI reply without sending a new message.', ''],
+      ['message', 'Impersonate', 'Let the AI draft your reply as your persona. Review it in the message box before sending.', ''],
       ['swipes', 'Browse reply versions', 'Use ‹ and › to choose a version. At the newest version, › can generate another.', 'On the AI reply · ‹ 1 / 2 ›'],
     ] as const) {
       const card = node('article', 'jb-chat-guide-card'), titleRow = node('h3'); titleRow.append(icon(picture), node('span', '', title));
-      card.append(titleRow, node('p', '', detail), node('small', '', location)); tips.append(card);
+      card.append(titleRow, node('p', '', detail)); if (location) card.append(node('small', '', location)); tips.append(card);
     }
     const editing = node('p', 'jb-chat-guide-editing'); editing.append(node('span', '', 'On a message:'), icon('edit'), node('span', '', 'Edit'), icon('trash'), node('span', '', 'Remove'));
     native.append(tips, editing);
@@ -124,7 +124,8 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
     const samplerActions = node('div', 'jb-chat-guide-shortcuts'); samplerActions.append(actionButton('Open generation settings', options.openGeneration));
     generation.append(settingsPath, samplerTerms, samplerActions, node('p', 'jb-settings-help', 'Turn on “Use these generation controls”, adjust the values, then save. Advanced controls include Top P, Top K and penalties; support depends on your provider.'));
     row(generation, 'Preset & prompt', 'Choose a preset in Instructions. Customize a copy unlocks its prompt and sampler controls.', 'Open prompt', options.openSettings);
-    row(generation, 'Advanced Presets', 'Lumiverse calls its full preset editor Loom. Find block order and its sampler controls here.', 'Open preset editor', () => options.invoke({ kind: 'drawer_tab', id: 'loom' }));
+    const presetEditor = node('details', 'jb-chat-more-memory jb-chat-preset-editor'); presetEditor.append(node('summary', '', 'Full preset editor (Loom)'));
+    row(presetEditor, 'Advanced Presets', 'Edit block order and the preset’s sampler controls.', 'Open preset editor', () => options.invoke({ kind: 'drawer_tab', id: 'loom' })); generation.append(presetEditor);
     row(story, 'Your persona', 'Choose who you play in the conversation.', 'Manage personas', options.openPersonas);
     row(story, 'Chat Memory', 'Like a pinned note: facts you want included in this chat’s prompt.', 'Open memory', options.openMemory, true);
     row(story, 'Lorebooks', 'World details that can be recalled through matching keywords.', 'Open Lorebooks', () => options.invoke({ kind: 'drawer_tab', id: 'lorebook' }));

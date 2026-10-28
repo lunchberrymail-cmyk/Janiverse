@@ -143,7 +143,7 @@ test('sampler help opens generation directly, while prompt and Loom have distinc
   expect(actions).toEqual(['generation']); expect(document.querySelector('.jb-chat-help')).toBeNull();
   tools!.openHelp('generation'); button('Open prompt').click(); await settle();
   expect(actions).toEqual(['generation', 'settings']);
-  tools!.openHelp('generation'); button('Open preset editor').click(); await settle();
+  tools!.openHelp('generation'); document.querySelector<HTMLDetailsElement>('.jb-chat-preset-editor')!.open = true; button('Open preset editor').click(); await settle();
   expect(actions).toEqual(['generation', 'settings', 'drawer_tab:loom']); expect(saves).toEqual([]);
 });
 

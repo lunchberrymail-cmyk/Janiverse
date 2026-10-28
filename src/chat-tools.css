@@ -2,7 +2,7 @@
 .jb-chat-help-button:hover { background: #aa82bd22; }
 .jb-chat-help [hidden] { display: none !important; }
 .jb-chat-guide-tabs, .jb-extension-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-.jb-chat-guide-tabs button { flex: 1; min-width: 0; min-height: 44px; padding: 8px 6px; font-size: 13px; white-space: normal; }
+.jb-chat-help .jb-chat-guide-tabs button { flex: 1; min-width: 0; min-height: 44px; padding: 8px 4px; font-size: 13px; white-space: normal; }
 .jb-chat-help button[aria-pressed="true"] { border-color: #b993d1; background: #ad83c024; }
 .jb-chat-guide-intro { margin: 0; color: #c1bcc8; font-size: 13px; line-height: 1.5; }
 .jb-chat-guide-location { display: flex; align-items: center; gap: 8px; margin: 14px 0 10px; color: #d9cae7; font-size: 13px; line-height: 1.5; }
@@ -59,7 +59,7 @@
   .jb-chat-guide-card p { margin: 5px 0; }
   .jb-sampler-terms { gap: 10px 12px; padding: 12px; }
   .jb-chat-guide-tabs { gap: 5px; }
-  .jb-chat-guide-tabs button { font-size: 12px; }
+  .jb-chat-help .jb-chat-guide-tabs button { font-size: 12px; }
   .jb-chat-toolbar-notice { flex-wrap: wrap; }
   .jb-extension-goals { grid-template-columns: 1fr; }
   .jb-chat-help-row { flex-wrap: wrap; gap: 10px; }
