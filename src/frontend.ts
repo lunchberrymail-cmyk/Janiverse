@@ -67,6 +67,7 @@ export function setup(ctx: SpindleFrontendContext) {
   let searchTimer: ReturnType<typeof setTimeout> | undefined, controller: AbortController | undefined;
   let libraryRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   let modal: SpindleModalHandle | undefined;
+  let homeHelp: SpindleModalHandle | undefined;
   let tutorialWindow: ReturnType<typeof openFeatureTutorial> | undefined;
   let tutorialRequest = 0;
   const cleanups: Array<() => void> = [];
@@ -209,6 +210,23 @@ export function setup(ctx: SpindleFrontendContext) {
       onClose: () => { if (request === tutorialRequest) tutorialWindow = undefined; },
     });
   }
+  function openHomeHelp() {
+    if (disposed) return;
+    cardSetup.close(); homeHelp?.dismiss();
+    const panel = ctx.ui.showModal({ title: 'Help', width: 420, maxHeight: 580 }); homeHelp = panel;
+    panel.root.classList.add('jb-home-help'); panel.root.setAttribute('aria-label', 'Home help');
+    panel.onDismiss(() => { if (homeHelp === panel) homeHelp = undefined; });
+    for (const [label, picture, action] of [
+      ['Setup checklist', 'tools', () => { setView('browse'); homeBanner.reviewSetup(); }],
+      ['API connection guide', 'settings', () => openTutorial('connections')],
+      ['Card import guide', 'import', () => openTutorial('import')],
+      ['Old chat import guide', 'all-chats', () => openTutorial('history')],
+      ['Chat controls', 'message', () => chatTools.openHelp()],
+    ] as const) {
+      const item = button(label, () => { if (disposed || homeHelp !== panel) return; panel.dismiss(); action(); }, 'jb-button');
+      item.prepend(icon(picture)); panel.root.append(item);
+    }
+  }
   function setView(next: View, navigate = true) {
     soundCloud.close();
     view = next; document.documentElement.setAttribute('data-janitor-bridge-view', view);
@@ -228,24 +246,16 @@ export function setup(ctx: SpindleFrontendContext) {
   const more = el('details', 'jb-more'); const moreLabel = el('summary', '', 'More'); const menu = el('div', 'jb-more-menu');
   let importMenuItem: HTMLButtonElement | undefined;
   for (const [label, action] of [
-    ['Start here', () => welcome.open()],
-    ['Setup checklist', () => { setView('browse'); homeBanner.reviewSetup(); }],
-    ['Card import guide', () => openTutorial('import')],
-    ['Old chat import guide', () => openTutorial('history')],
     ['Import characters', openImport],
-    ['Import old chats (JAR Bridge)', () => { void openHistory().catch(() => false).then(opened => { if (!opened && !disposed) openTutorial('history'); }); }],
+    ['Import old chats', () => { void openHistory().catch(() => false).then(opened => { if (!opened && !disposed) openTutorial('history'); }); }],
     ['API Settings', openConnections],
-    ['Prompt', () => openPrompt('prompt')],
-    ['Generation Settings', () => openPrompt('generation')],
+    ['Prompt & generation', () => openPrompt('prompt')],
+    ['Help', openHomeHelp],
   ] as const) {
     const item = button(label, () => { more.open = false; action(); }, 'jb-menu-link');
     if (label === 'Import characters') { importMenuItem = item; item.setAttribute('aria-label', label); }
     menu.append(item);
   }
-  for (const [label, id] of [['My Personas', 'personas'], ['Advanced Presets', 'loom'], ['Lorebooks', 'lorebook'], ['Extensions', 'spindle']]) {
-    menu.append(button(label, () => { more.open = false; void invoke({ kind: 'drawer_tab', id }); }, 'jb-menu-link'));
-  }
-  menu.append(button('Chat tools & help', () => { more.open = false; chatTools.openHelp(); }, 'jb-menu-link'));
   more.append(moreLabel, menu);
   const cardSetup = createCardSetup(ctx, {
     showImportMenu: () => { setView('browse'); moreLabel.scrollIntoView({ block: 'nearest', inline: 'nearest' }); more.open = true; importMenuItem?.classList.add('jb-card-import-target'); importMenuItem?.focus({ preventScroll: true }); },
@@ -668,7 +678,7 @@ export function setup(ctx: SpindleFrontendContext) {
   try { if (consumePersonaSetupHandoff(window.sessionStorage)) void invoke({ kind: 'drawer_tab', id: 'personas' }); }
   catch { /* Storage can be unavailable; ordinary setup still works. */ }
   return () => {
-    disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); tutorialWindow?.destroy(); cardSetup.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); chatSetup.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
+    disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); homeHelp?.dismiss(); tutorialWindow?.destroy(); cardSetup.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); chatSetup.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
     cleanups.reverse().forEach(cleanup => cleanup()); mounts.forEach(root => root.replaceChildren());
     if (oldView === null) document.documentElement.removeAttribute('data-janitor-bridge-view'); else document.documentElement.setAttribute('data-janitor-bridge-view', oldView);
     chatTools.destroy();

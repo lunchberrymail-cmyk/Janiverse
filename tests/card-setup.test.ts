@@ -30,14 +30,15 @@ beforeEach(() => {
 });
 afterEach(() => { guide.destroy(); dom.window.close(); globalThis.document = oldDocument; globalThis.fetch = oldFetch; });
 
-test('Basics offers both real menu paths without launching an importer or drawer', async () => {
+test('Basics teaches the real menu immediately without a branded chooser or launching an importer', async () => {
   guide.open(); await settle();
-  expect(document.body.textContent).toContain('More → Import characters'); expect(document.body.textContent).toContain('Chars → + → Import File / Import URLs');
-  expect(importers + menus + characters + calls).toBe(0); expect(guide.consumeMenuImport()).toBe(false);
+  expect(document.body.textContent).toContain('More → Import characters'); expect(button('Use Chars → + instead')).not.toBeNull();
+  expect(document.body.textContent).not.toMatch(/Janiverse way|Lumiverse way/); expect(document.querySelector('.jb-card-methods')).toBeNull();
+  expect(menus).toBe(1); expect(importers + characters + calls).toBe(0);
 });
 
 test('Janiverse guide waits for the actual Import characters menu action before opening the importer', async () => {
-  guide.open(); button('Learn the Janiverse way').click(); await settle();
+  guide.open(); await settle();
   expect(document.querySelector('.jb-card-methods')).toBeNull(); expect(highlighted).toBe(true); expect(menus).toBe(1); expect(importers).toBe(0);
   button('Show More menu').click(); expect(menus).toBe(2);
   expect(guide.consumeMenuImport()).toBe(true); expect(importers).toBe(1); expect(highlighted).toBe(false); expect(document.querySelector('.jb-card-menu-guide')).toBeNull();
@@ -45,29 +46,30 @@ test('Janiverse guide waits for the actual Import characters menu action before 
 });
 
 test('closing menu guidance removes its highlight and leaves later imports ordinary', () => {
-  guide.open(); button('Learn the Janiverse way').click(); button('Close card guide').click();
+  guide.open(); button('Close card guide').click();
   expect(highlighted).toBe(false); expect(guide.consumeMenuImport()).toBe(false); expect(importers).toBe(0);
 });
 
 test('traditional guide lives beside Characters and describes native saving without marking setup complete', async () => {
-  guide.open(); button('Learn the Lumiverse way').click(); await settle();
+  guide.open(); button('Use Chars → + instead').click(); await settle();
   const panel = mount.querySelector<HTMLElement>('.jb-card-menu-guide')!;
-  expect(panel).not.toBeNull(); expect(characters).toBe(1); expect(importers + menus + calls).toBe(0); expect(button('Back', panel).disabled).toBe(true);
+  expect(panel).not.toBeNull(); expect(characters).toBe(1); expect(importers + calls).toBe(0); expect(button('Back', panel).disabled).toBe(true); expect(highlighted).toBe(false);
   button('Next', panel).click(); expect(panel.textContent).toContain('One file imports immediately'); expect(panel.textContent).toContain('then choose Import');
   button('Next', panel).click(); expect(panel.textContent).toContain('Already there? Use that copy'); button('Close guide', panel).click();
   expect(panel.isConnected).toBe(false); expect(calls).toBe(0);
 });
 
 test('switching methods cancels a pending menu handoff; minimizing leaves controls accessible', async () => {
-  guide.open(); button('Learn the Janiverse way').click(); button('Other method').click();
+  guide.open(); button('Use Chars → + instead').click();
   expect(highlighted).toBe(false); expect(guide.consumeMenuImport()).toBe(false);
-  button('Learn the Lumiverse way').click(); await settle(); button('Minimize card guide').click();
+  await settle(); button('Minimize card guide').click();
   expect(document.querySelector<HTMLElement>('.jb-api-guide-body')!.hidden).toBe(true);
   button('Resume card guide').click(); expect(document.querySelector<HTMLElement>('.jb-api-guide-body')!.hidden).toBe(false); expect(importers).toBe(0);
+  button('Use More → Import instead').click(); expect(highlighted).toBe(true); expect(guide.consumeMenuImport()).toBe(true); expect(importers).toBe(1);
 });
 
 test('unavailable native shortcuts offer the sidebar path and a retry', async () => {
-  openCharacters = async () => false; guide.open(); button('Learn the Lumiverse way').click(); await settle();
+  openCharacters = async () => false; guide.open(); button('Use Chars → + instead').click(); await settle();
   expect(document.querySelector('[role=status]')!.textContent).toContain('Open Chars in Lumiverse’s sidebar');
   openCharacters = async () => true; button('Open Characters').click(); await settle();
   expect(document.querySelector('[role=status]')!.textContent).toBe(''); expect(characters).toBe(2); expect(calls).toBe(0);
@@ -75,14 +77,14 @@ test('unavailable native shortcuts offer the sidebar path and a retry', async ()
 
 test('late drawer failure cannot resurrect dismissed guidance or affect a new method', async () => {
   let reject!: (error: Error) => void; openCharacters = () => new Promise((_resolve, fail) => { reject = fail; });
-  guide.open(); button('Learn the Lumiverse way').click(); button('Other method').click(); button('Learn the Janiverse way').click();
+  guide.open(); button('Use Chars → + instead').click(); button('Use More → Import instead').click();
   reject(new Error('Late failure')); await settle(); expect(document.body.textContent).not.toContain('Couldn’t open Characters');
   expect(highlighted).toBe(true); guide.destroy(); expect(highlighted).toBe(false); expect(guide.consumeMenuImport()).toBe(false); guide.open();
   expect(document.querySelector('.jb-card-methods')).toBeNull(); expect(calls).toBe(0);
 });
 
 test('older hosts without a footer keep readable traditional guidance and clean up on Escape', async () => {
-  ctx.ui.mount = () => { throw new Error('Unavailable'); }; guide.open(); button('Learn the Lumiverse way').click(); await settle();
+  ctx.ui.mount = () => { throw new Error('Unavailable'); }; guide.open(); button('Use Chars → + instead').click(); await settle();
   const panel = document.querySelector<HTMLElement>('.jb-card-menu-guide')!; expect(panel.classList.contains('jb-api-guide-fallback')).toBe(true);
   panel.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); expect(panel.isConnected).toBe(false); expect(calls).toBe(0);
 });

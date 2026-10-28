@@ -10,3 +10,6 @@
 .jb-welcome .jb-welcome-actions > button:first-child { flex-basis: 100%; }
 .jb-welcome .jb-welcome-actions > button:last-child { margin-left: auto; }
 .jb-welcome button:focus-visible { outline: 2px solid #d4acf0; outline-offset: 3px; }
+.jb-home-help{display:flex;flex-direction:column;gap:8px;padding:4px 0}
+.jb-home-help .jb-button{display:flex;align-items:center;gap:12px;min-height:48px;text-align:left;padding:12px 14px}
+.jb-home-help .jb-menu-icon{width:20px;height:20px;flex-shrink:0;color:#d4acf0}

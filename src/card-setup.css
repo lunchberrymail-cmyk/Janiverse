@@ -1,9 +1,4 @@
-.jb-card-methods{color:var(--jb-text,#eee6fa);padding:4px 0;font:14px/1.5 system-ui,sans-serif}
-.jb-card-methods-intro{margin:0 0 14px;color:var(--jb-muted,#c3b6d2)}
-.jb-card-method{padding:14px 16px;margin:10px 0;border:1px solid #65566f;border-radius:12px;background:#35303e}
-.jb-card-method h3{margin:0 0 6px;font-size:17px}
 .jb-card-menu-path{margin:6px 0 10px;font-weight:650;color:#e5cdff;overflow-wrap:anywhere}
-.jb-card-method .jb-button{width:100%;min-height:44px;white-space:normal}
 .jb-card-menu-note{margin:10px 0 0;font-size:12px;line-height:1.5;color:#bfb2cd}
 .jb-menu-link.jb-card-import-target{outline:2px solid #d2abfa;outline-offset:-3px;background:#574365;color:#fff}
 .jb-menu-link.jb-card-import-target::before{content:'→';margin-right:8px;color:#f0caff}
@@ -11,4 +6,4 @@
 .jb-card-menu-guide .jb-api-guide-actions button{flex:1;min-width:110px}
 .jb-card-menu-guide .jb-api-guide-instruction{margin-bottom:8px}
 .jb-card-menu-guide .jb-card-menu-path{font-size:13px;margin:4px 0 8px}
-@media(max-width:480px){.jb-card-method{padding:12px;margin:8px 0}.jb-card-menu-guide .jb-api-guide-nav button{min-height:40px}.jb-card-menu-guide .jb-card-menu-note{font-size:11px}}
+@media(max-width:480px){.jb-card-menu-guide .jb-api-guide-nav button{min-height:40px}.jb-card-menu-guide .jb-card-menu-note{font-size:11px}}
