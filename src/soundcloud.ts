@@ -128,8 +128,9 @@ function loadWidgetApi(doc: Document): Promise<WidgetFactory> {
 }
 
 /** Compact controls for the official audio engine. No popup, waveform, or playback polling. */
-export function createSoundCloud(ctx: SpindleFrontendContext) {
+export function createSoundCloud(ctx: SpindleFrontendContext, options: { characterId?: string; character?: unknown } = {}) {
   let disposed = false, request = 0, playerRequest = 0;
+  let initialCharacter = options.character;
   let source: { chatId: string; characterId: string; track: string; url: string; name: string } | undefined;
   let frame: HTMLIFrameElement | undefined, headerBlocked = false;
   let widget: Widget | undefined, api: WidgetFactory | undefined;
@@ -170,7 +171,10 @@ export function createSoundCloud(ctx: SpindleFrontendContext) {
     closePlayer(); source = undefined; headerBlocked = false; root.hidden = true;
     root.removeAttribute('title'); open.removeAttribute('href'); label.textContent = 'SoundCloud track'; label.removeAttribute('title'); message('');
   }
-  function active() { try { return ctx.getActiveChat(); } catch { return { chatId: null, characterId: null }; } }
+  function active() {
+    if (options.characterId) return { chatId: `profile:${options.characterId}`, characterId: options.characterId };
+    try { return ctx.getActiveChat(); } catch { return { chatId: null, characterId: null }; }
+  }
   function sourceCurrent() { const snapshot = active(); return !disposed && !!source && snapshot.chatId === source.chatId && snapshot.characterId === source.characterId; }
   function playbackFailed(text: string) { closePlayer(); message(text); }
   function requestPlayback(wantPlay: boolean) {
@@ -251,7 +255,8 @@ export function createSoundCloud(ctx: SpindleFrontendContext) {
     if (!snapshot.chatId || !snapshot.characterId) { clear(); return; }
     const current = () => !disposed && generation === request && active().chatId === snapshot.chatId && active().characterId === snapshot.characterId;
     try {
-      const character = record(await ctx.characters.get(snapshot.characterId));
+      const supplied = initialCharacter; initialCharacter = undefined;
+      const character = record(supplied ?? await ctx.characters.get(snapshot.characterId));
       if (!current()) return;
       if (typeof character.id === 'string' && character.id !== snapshot.characterId) { clear(); return; }
       const track = characterSoundCloudTrack(character); const url = soundCloudWidgetUrl(track); if (!track || !url) { clear(); return; }
@@ -264,7 +269,7 @@ export function createSoundCloud(ctx: SpindleFrontendContext) {
       root.setAttribute('aria-label', name ? `${name} soundtrack` : 'Character soundtrack'); root.hidden = false; updatePolicy();
     } catch { if (current()) clear(); }
   }
-  if (ctx.state?.subscribe) {
+  if (!options.characterId && ctx.state?.subscribe) {
     try { cleanups.push(ctx.state.subscribe('chat.active', () => { void load(); })); } catch { /* Older host: explicit refresh remains available. */ }
   }
   if (ctx.events?.on) {

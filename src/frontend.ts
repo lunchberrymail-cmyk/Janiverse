@@ -30,6 +30,7 @@ import { createCardImport } from './card-import';
 import { createMyChats } from './my-chats';
 import { createSoundCloud } from './soundcloud';
 import { mountCharacterProfile } from './character-profile';
+import { mountCharacterDelete } from './character-delete';
 import { createCustomize } from './customize';
 import { createSettingsWindow } from './settings-window';
 import { creatorAttribution, type CreatorAttribution } from './creator-attribution';
@@ -530,6 +531,7 @@ export function setup(ctx: SpindleFrontendContext) {
     render(); return toggle;
   }
   function openProfile(characterId: string, name = 'Character profile', copies: Character[] = []) {
+    soundCloud.close();
     modal?.dismiss(); modal = ctx.ui.showModal({ title: name, width: 1120, maxHeight: 1000 });
     const current = modal; current.root.classList.add('jb-preview', 'jb-profile-window');
     const actions = el('div', 'jb-preview-actions'); const localStatus = el('p', 'jb-status'); localStatus.setAttribute('role', 'status');
@@ -553,6 +555,13 @@ export function setup(ctx: SpindleFrontendContext) {
     });
     edit.disabled = !ctx.host.surfaces?.list(['modal']).some(s => s.id === 'character_editor' && s.invocable !== false);
     actions.append(favoriteControl(characterId, { isCurrent: () => modal === current, onDispose: cleanup => { current.onDismiss(cleanup); } }, localStatus), edit, button('Close', () => current.dismiss()));
+    const removal = el('div', 'jb-profile-removal');
+    const stopRemoval = mountCharacterDelete(ctx, removal, { id: characterId, name }, () => {
+      libraryCache = undefined; signatures.delete(characterId); notePreviews.delete(characterId);
+      if (modal === current) current.dismiss();
+      if (!disposed) { void loadCharacters(); void loadRecent(); }
+    });
+    current.onDismiss(stopRemoval);
     if (copies.length > 1) {
       const picker = el('div', 'jb-profile-copies'); const label = el('label', '', 'Saved copy');
       const select = el('select', 'jb-profile-copy-select'); select.setAttribute('aria-label', 'Saved copy');
@@ -574,7 +583,7 @@ export function setup(ctx: SpindleFrontendContext) {
       if (ok && !disposed && modal === current) current.dismiss();
       return ok;
     } });
-    const controls = el('div', 'jb-profile-controls'); controls.append(chatActions, actions, localStatus);
+    const controls = el('div', 'jb-profile-controls'); controls.append(chatActions, actions, removal, localStatus);
     current.root.append(body);
     const cleanup = mountCharacterProfile(ctx, body, characterId, { controls });
     current.onDismiss(() => { stopHistory(); cleanup(); if (modal === current) modal = undefined; });

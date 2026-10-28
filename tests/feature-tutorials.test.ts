@@ -96,8 +96,8 @@ test('closing immediately cancels a shortcut before deferred dispatch and old co
 test('keyboard close restores launcher focus and Tab stays inside visible controls', () => {
   const launcher = document.createElement('button'); launcher.textContent = 'Full tutorial'; document.body.append(launcher); launcher.focus();
   const tutorial = openFeatureTutorial(ctx, 'group', options()); expect(document.activeElement?.textContent).toBe('Close tutorial');
-  find('Close tutorial').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })); expect(document.activeElement?.textContent).toBe('Back to banner');
-  find('Back to banner').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })); expect(document.activeElement?.textContent).toBe('Close tutorial');
+  find('Close tutorial').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })); expect(document.activeElement?.textContent).toBe('Instructions & help');
+  document.activeElement!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })); expect(document.activeElement?.textContent).toBe('Close tutorial');
   tutorial.root.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); expect(document.activeElement === launcher).toBe(true); expect(tutorial.root.isConnected).toBe(false);
 });
 
@@ -157,6 +157,16 @@ test('guides stay on the chosen screenshot until Back or Next is selected', () =
   document.dispatchEvent(new dom.window.Event('visibilitychange')); expect(tutorial.root.dataset.scene).toBe('1');
   find('Next').click(); expect(tutorial.root.dataset.scene).toBe('2'); expect(clock.pending.size).toBe(0);
   const oldNext=find('Next'); tutorial.destroy(); oldNext.click(); expect(tutorial.root.dataset.scene).toBe('2'); expect(invoked).toEqual([]);
+});
+
+test('the compact guide keeps its picture and navigation outside optional instructions', () => {
+  const tutorial = openFeatureTutorial(ctx, 'connections', { ...options(), screenshots: { 'api-connection-open': { src: pixel, alt: 'Connections' } } });
+  expect(handles[0].request.width).toBe(780);
+  const reading = tutorial.root.querySelector<HTMLDetailsElement>('.jb-tutorial-reading')!;
+  expect(reading.open).toBe(false); expect(reading.querySelector('.jb-tutorial-instruction')).not.toBeNull();
+  expect(tutorial.root.querySelector('.jb-tutorial-figure')!.closest('details')).toBeNull();
+  expect(find('Next').closest('details')).toBeNull();
+  find('Next').click(); expect(find('Back').disabled).toBe(false); expect(reading.open).toBe(false);
 });
 
 test('numbered arrows match readable instructions, reject invalid coordinates, and never run native actions', () => {

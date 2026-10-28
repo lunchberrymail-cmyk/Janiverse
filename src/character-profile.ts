@@ -2,6 +2,7 @@ import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
 import { profileMarkup } from './my-chats';
 import { creatorAttribution } from './creator-attribution';
 import { mountProfileLorebooks } from './profile-lorebooks';
+import { createSoundCloud } from './soundcloud';
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') {
   const node = document.createElement(tag); node.className = cls; node.textContent = text; return node;
@@ -13,10 +14,12 @@ export function mountCharacterProfile(ctx: SpindleFrontendContext, root: HTMLEle
   let disposed = false, request = 0, injection: Element | undefined;
   let stopNotes: (() => void) | undefined;
   let stopLorebooks: (() => void) | undefined;
+  let soundtrack: ReturnType<typeof createSoundCloud> | undefined;
   root.classList.add('jb-character-profile');
   function clear() {
     stopNotes?.(); stopNotes = undefined;
     stopLorebooks?.(); stopLorebooks = undefined;
+    soundtrack?.destroy(); soundtrack = undefined;
     if (injection) {
       try { ctx.dom.uninject(injection); } catch { injection.remove(); }
       injection = undefined;
@@ -83,6 +86,7 @@ export function mountCharacterProfile(ctx: SpindleFrontendContext, root: HTMLEle
       }
       if (tags.childElementCount) meta.append(tags);
       if (meta.childElementCount) card.append(meta);
+      soundtrack = createSoundCloud(ctx, { characterId, character }); sidebar.append(soundtrack.root);
       if (options.controls) sidebar.append(options.controls);
       const lorebooks = el('section', 'jb-profile-lorebooks'); sidebar.append(lorebooks);
       stopLorebooks = mountProfileLorebooks(lorebooks, character.extensions);

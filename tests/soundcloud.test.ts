@@ -143,6 +143,14 @@ describe('compact official playback controls', () => {
 });
 
 describe('native lifecycle isolation', () => {
+  test('a profile soundtrack uses its own card without selecting or creating a chat, and releases playback on close', async () => {
+    policy(allowedPolicy); current = { chatId: null, characterId: null };
+    player = createSoundCloud({ characters: { get: async id => { reads.push(id); return card(id); } } } as any, { characterId: 'profile-card', character: card('profile-card') });
+    document.body.append(player.root); await settle();
+    expect(reads).toEqual([]); expect(player.root.hidden).toBe(false); expect(document.querySelector('iframe')).toBeNull();
+    const engine = await loadEngine(); expect(engine.commands).toEqual(['play']); expect(current).toEqual({ chatId: null, characterId: null });
+    player.destroy(); player = undefined; expect(engine.frame.isConnected).toBe(false); expect(engine.listeners.size).toBe(0);
+  });
   test('blocked frame policy does not load a controller or attempt audio', async () => {
     setApi(undefined); setup(); await settle(); node<HTMLButtonElement>('.jb-soundcloud-play').click(); expect(document.querySelector('script,iframe')).toBeNull(); expect(node<HTMLMetaElement>('meta').content).toBe(blockedPolicy); expect(node('.jb-soundcloud-status').textContent).toContain('blocked');
     policy(allowedPolicy); player!.refresh(); await settle(); expect(node<HTMLButtonElement>('.jb-soundcloud-play').disabled).toBe(false); expect(node<HTMLParagraphElement>('.jb-soundcloud-status').hidden).toBe(true);

@@ -106,3 +106,11 @@
   .jb-profile-window .jb-button, .jb-profile-field > summary, .jb-profile-notes > summary { min-height: 44px; }
   .jb-profile-notes > summary { display: flex; align-items: center; }
 }
+.jb-profile-removal{margin-top:10px}
+.jb-profile-window .jb-delete-card{background:transparent;border-color:#c784984d;color:#e5b4c0}
+.jb-delete-confirmation{margin-top:10px;padding:12px;border:1px solid #b773865e;border-radius:8px;background:#a4475c0a}
+.jb-delete-confirmation p{margin:0 0 10px;font-size:13px;line-height:1.5}
+.jb-delete-confirmation small{display:block;overflow-wrap:anywhere;margin-bottom:12px;color:#b5a6b6;font-size:11px}
+.jb-delete-confirmation button+button{margin-left:8px}
+.jb-delete-confirmation[hidden],.jb-profile-removal button[hidden]{display:none!important}
+.jb-profile-sidebar>.jb-soundcloud{margin-bottom:14px}

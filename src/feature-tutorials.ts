@@ -144,7 +144,7 @@ function validHighlight(value: TutorialHighlight | undefined): value is Tutorial
 /** Reading these steps never invokes a native action. */
 export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: TutorialFeature, options: FeatureTutorialOptions) {
   const tutorial = featureTutorials[feature], previousFocus = document.activeElement as HTMLElement | null;
-  const modal = ctx.ui.showModal({ title: tutorial.title, width: 1000, maxHeight: 900 });
+  const modal = ctx.ui.showModal({ title: tutorial.title, width: 780, maxHeight: 700 });
   const root = modal.root; root.classList.add('jb-feature-tutorial'); root.dataset.feature = feature;
   root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', tutorial.title); root.setAttribute('aria-modal', 'true');
   let disposed = false, opening = false, restoreFocus = true, index = 0, renderedIndex = 0;
@@ -157,15 +157,20 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
   const sceneHeading = make('h3', 'jb-tutorial-scene-title'), instruction = make('p', 'jb-tutorial-instruction'), outcome = make('p', 'jb-tutorial-result');
   const figure = make('figure', 'jb-tutorial-figure'), actions = make('div', 'jb-tutorial-actions');
   const status = make('p', 'jb-tutorial-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
-  const sceneAction = make('button', 'jb-tutorial-action'); sceneAction.type = 'button'; actions.append(sceneAction, status); scene.append(sceneHeading, instruction, figure, outcome, actions);
+  const sceneAction = make('button', 'jb-tutorial-action'); sceneAction.type = 'button'; actions.append(sceneAction, status); scene.append(sceneHeading, figure, actions);
   const controls = make('nav', 'jb-tutorial-controls'); controls.setAttribute('aria-label', 'Walkthrough steps');
   const previous = make('button', 'jb-tutorial-previous', 'Back'), next = make('button', 'jb-tutorial-next', 'Next'); previous.type = next.type = 'button';
   const progress = make('span', 'jb-tutorial-progress'); controls.append(previous, progress, next);
   const before = make('details', 'jb-tutorial-before'), checklist = make('ul'); before.append(make('summary', '', 'Before you start')); tutorial.prerequisites.forEach(text => checklist.append(make('li', '', text))); before.append(checklist);
   const setup = tutorial.setup && make('button', 'jb-tutorial-setup', tutorial.setup.label); if (setup) { setup.type = 'button'; before.append(setup); }
   const help = make('details', 'jb-tutorial-help'), tips = make('ul'); help.append(make('summary', '', 'Help & troubleshooting')); tutorial.help.forEach(text => tips.append(make('li', '', text))); help.append(tips);
-  const back = make('button', 'jb-tutorial-back', 'Back to banner'); back.type = 'button'; back.addEventListener('click', () => { if (!disposed) modal.dismiss(); }); root.append(header, intro, scene, controls, before, help, back);
-  if (historyGuide) { historyGuide.type = 'button'; intro.after(historyGuide); }
+  const back = make('button', 'jb-tutorial-back', 'Back to banner'); back.hidden = true; back.type = 'button'; back.addEventListener('click', () => { if (!disposed) modal.dismiss(); });
+  const reading = make('details', 'jb-tutorial-reading'); reading.append(make('summary', '', 'Instructions & help'), intro, instruction, outcome, before, help);
+  const footer = make('footer', 'jb-tutorial-footer'); footer.append(controls, reading);
+  root.append(header, scene, footer, back);
+  if (historyGuide) { historyGuide.type = 'button'; footer.append(historyGuide); }
+  // The host already supplies the window title. Keep one accessible close control.
+  title.classList.add('jb-tutorial-sr-only');
 
   function render() {
     const changed = renderedIndex !== index;
@@ -181,10 +186,10 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
     progress.textContent = `${index + 1} / ${tutorial.scenes.length}`; progress.setAttribute('aria-label', `Scene ${index + 1} of ${tutorial.scenes.length}`);
     previous.disabled = index === 0 || opening; next.disabled = index === tutorial.scenes.length - 1 || opening;
     sceneAction.hidden = !current.action; sceneAction.textContent = current.action?.label ?? ''; sceneAction.disabled = opening; if (setup) setup.disabled = opening;
-    status.textContent = ''; figure.replaceChildren();
+    status.textContent = ''; figure.replaceChildren(); reading.querySelector('.jb-tutorial-callouts')?.remove();
     const exact = options.screenshots?.[current.screenshot], fallback = current.fallbackScreenshot && options.screenshots?.[current.fallbackScreenshot];
     const screenshot = exact ?? fallback, source = screenshot && screenshotSource(screenshot.src);
-    if (!screenshot || !source) { figure.append(make('p', 'jb-tutorial-image-error', 'Follow the instruction in Lumiverse. A screenshot for this scene is not available.')); return; }
+    if (!screenshot || !source) { figure.append(make('p', 'jb-tutorial-image-error', current.instruction)); return; }
     if (exact?.instruction) instruction.textContent = exact.instruction; if (exact?.result) outcome.textContent = `Then: ${exact.result}`;
     const viewport = make('div', 'jb-tutorial-image-box'); viewport.tabIndex = 0; viewport.setAttribute('aria-label', 'Screenshot; enlarge to read small controls');
     const shot = make('div', 'jb-tutorial-shot'), image = make('img'); image.src = source; image.alt = screenshot.alt; image.decoding = 'async'; image.referrerPolicy = 'no-referrer'; shot.append(image);
@@ -202,8 +207,10 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
     const enlarge = make('button', 'jb-tutorial-image-toggle', 'Enlarge screenshot'); enlarge.type = 'button'; enlarge.setAttribute('aria-pressed', 'false');
     enlarge.addEventListener('click', () => { if (disposed) return; const expanded = viewport.classList.toggle('jb-tutorial-image-expanded'); enlarge.textContent = expanded ? 'Fit screenshot' : 'Enlarge screenshot'; enlarge.setAttribute('aria-pressed', String(expanded)); });
     const failed = make('p', 'jb-tutorial-image-error', 'This screenshot could not load. Follow the instruction above in Lumiverse.'); failed.hidden = true;
-    image.addEventListener('error', () => { if (!disposed && figure.contains(image)) { viewport.hidden = true; enlarge.hidden = true; if (legend) legend.hidden = true; failed.hidden = false; } });
-    figure.append(viewport); if (legend) figure.append(legend); figure.append(caption, enlarge, failed);
+    image.addEventListener('error', () => { if (!disposed && figure.contains(image)) { viewport.hidden = true; enlarge.hidden = true; if (legend) legend.hidden = true; failed.hidden = false; reading.open = true; } });
+    if (legend) reading.insertBefore(legend, outcome);
+    caption.classList.add('jb-tutorial-sr-only');
+    figure.append(viewport, caption, enlarge, failed);
   }
   function chooseScene(target: number) { if (disposed || opening) return; index = Math.max(0, Math.min(tutorial.scenes.length - 1, target)); render(); }
   previous.addEventListener('click', () => chooseScene(index - 1)); next.addEventListener('click', () => chooseScene(index + 1));
@@ -219,8 +226,11 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
   const keydown = (event: KeyboardEvent) => {
     if (disposed) return; if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); modal.dismiss(); return; } if (event.key !== 'Tab') return;
     const focusable = [...root.querySelectorAll<HTMLElement>('*')].filter(node => {
-      const closed = node.closest('details:not([open])');
-      return node.matches('button:not(:disabled),a[href],summary,[tabindex="0"]') && !node.hidden && !node.closest('[hidden]') && (!closed || (node.tagName === 'SUMMARY' && node.parentElement === closed));
+      if (!node.matches('button:not(:disabled),a[href],summary,[tabindex="0"]') || node.hidden || node.closest('[hidden]')) return false;
+      for (let parent = node.parentElement; parent && parent !== root; parent = parent.parentElement) {
+        if (parent.matches('details:not([open])') && !parent.querySelector(':scope > summary')?.contains(node)) return false;
+      }
+      return true;
     });
     const first = focusable[0], last = focusable.at(-1); if (!first || !last) return;
     if (event.shiftKey && (document.activeElement === first || !root.contains(document.activeElement))) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && (document.activeElement === last || !root.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
