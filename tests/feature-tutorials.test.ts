@@ -62,9 +62,9 @@ test('native controls open only on the explicit shortcut and successful opening 
 
 test('voice connection setup remains optional and opens the native Connections drawer only when chosen', async () => {
   const tutorial = openFeatureTutorial(ctx, 'voice', options());
-  const before = tutorial.root.querySelector<HTMLDetailsElement>('.jb-tutorial-before')!;
-  expect(before.open).toBe(false); expect(invoked).toEqual([]);
-  before.open = true; find('Open Connections').click(); await flush();
+  const reading = tutorial.root.querySelector<HTMLDetailsElement>('.jb-tutorial-reading')!;
+  expect(reading.open).toBe(false); expect(reading.querySelector('details')).toBeNull(); expect(invoked).toEqual([]);
+  reading.open = true; find('Open Connections').click(); await flush();
   expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'connections' }]); expect(tutorial.root.isConnected).toBe(false);
 });
 
@@ -131,7 +131,7 @@ test('every feature has a short navigable path; memory retains prompt placement 
     while (true) { instructions.push(tutorial.root.querySelector('.jb-tutorial-instruction')!.textContent!); if (find('Next').disabled) break; find('Next').click(); }
     expect(instructions.length).toBeGreaterThanOrEqual(3);
     if (feature === 'memory') { expect(instructions.join(' ')).toContain('{{loomSummary}}'); expect(instructions.join(' ')).toContain('Vectorize chat messages'); expect(instructions.join(' ')).toContain('Recompile Memories'); expect(tutorial.root.querySelector('.jb-tutorial-help')!.textContent).toContain('{{memories}}'); }
-    find('Back to banner').click(); expect(tutorial.root.isConnected).toBe(false);
+    find('Close tutorial').click(); expect(tutorial.root.isConnected).toBe(false);
   }
   expect(invoked).toEqual([]); expect(imports).toBe(0);
 });
@@ -215,12 +215,12 @@ test('the card guide opens its ordinary importer without adding a second modal a
 test('card guidance does not require JAR and its history guide is a separate explicit action', async () => {
   let histories = 0;
   const tutorial = openFeatureTutorial(ctx, 'import', { ...options(), openHistoryTutorial: () => histories++ });
-  expect(tutorial.root.textContent).toContain('You do not need JAR or JAR Bridge');
+  expect(tutorial.root.textContent).toContain('Cards do not need JAR or JAR Bridge');
   expect(tutorial.root.querySelector('.jb-tutorial-play')).toBeNull();
   find('Next').click(); expect(tutorial.root.textContent).toContain('Ready to import');
   find('Next').click(); expect(tutorial.root.textContent).toContain('Imported to your library');
   expect(imports).toBe(0); expect(histories).toBe(0); expect(invoked).toEqual([]);
-  find('Need your old messages too?').click(); expect(histories).toBe(1);
+  tutorial.root.querySelector<HTMLDetailsElement>('.jb-api-guide-help')!.open = true; find('Need your old messages too?').click(); expect(histories).toBe(1);
 });
 
 test('history uses only its explicit callback and explains missing JAR separately', async () => {
@@ -250,5 +250,6 @@ test('opening history import saves the next reading step without loading a file 
 test('late history preferences cannot override navigation, and the card path closes history before opening its own guide', async () => {
   let complete!: (value: unknown) => void, cards = 0; ctx.settings = { get: () => new Promise(resolve => { complete = resolve; }) };
   const tutorial = openFeatureTutorial(ctx, 'history', { ...options(), openCardTutorial: () => { expect(tutorial.root.isConnected).toBe(false); cards++; } }); await flush(); find('Next').click(); complete({ step: 3 }); await flush(); expect(tutorial.root.dataset.scene).toBe('2');
+  const reading = tutorial.root.querySelector<HTMLDetailsElement>('.jb-tutorial-reading')!; expect(reading.querySelector('details')).toBeNull(); expect(find('Need the character card first?').closest('details')).toBe(reading); reading.open = true;
   find('Need the character card first?').click(); expect(cards).toBe(1); expect(imports).toBe(0);
 });

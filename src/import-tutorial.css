@@ -1,4 +1,4 @@
-.jb-card-import.jb-card-import-guided { display: flex; flex-direction: column; min-height: 0; height: min(700px, calc(100dvh - 130px)); padding: 0; overflow: hidden; }
+.jb-card-import.jb-card-import-guided { display: flex; flex-direction: column; min-height: 0; max-height: min(700px, calc(100dvh - 130px)); padding: 0; overflow: hidden; }
 .jb-import-workspace { flex: 1 1 auto; min-height: 0; padding: 18px; overflow-y: auto; overscroll-behavior: contain; overflow-anchor: none; }
 .jb-card-import-guided .jb-import-workspace > .jb-settings-tabs { margin-bottom: 12px; }
 .jb-card-import-guided .jb-import-workspace > :is(h2, .jb-settings-intro) { display: none; }
@@ -14,7 +14,7 @@
 .jb-import-guide .jb-api-guide-nav > :last-child { margin-left: auto; }
 .jb-import-guide .jb-api-guide-figure .jb-tutorial-shot img { max-height: 190px; }
 @media (max-width: 600px) {
-  .jb-card-import.jb-card-import-guided { height: calc(100dvh - 115px); }
+  .jb-card-import.jb-card-import-guided { max-height: calc(100dvh - 115px); }
   .jb-import-workspace { padding: 12px; }
   .jb-card-import-guided .jb-import-drop { padding: 10px; gap: 6px; }
   .jb-card-import-guided .jb-import-drop strong { display: none; }

@@ -37,11 +37,11 @@ export function openConnectionTutorial(ctx: SpindleFrontendContext, scenes: read
   const actions = make('div', 'jb-api-guide-actions');
   const reopen = make('button', '', 'Open Connections'), test = make('button', 'jb-api-guide-primary', 'Test selected connection'), finish = make('button', 'jb-api-guide-primary', 'Finish guide');
   for (const button of [reopen, test, finish]) button.type = 'button'; actions.append(reopen, test, finish);
-  const picture = make('details', 'jb-api-guide-picture'); picture.append(make('summary', '', 'Show example screenshot'));
+  const picture = make('details', 'jb-api-guide-picture'); picture.append(make('summary', '', 'Example screenshot'));
   const figure = make('figure', 'jb-api-guide-figure'); picture.append(figure);
   const navigation = make('nav', 'jb-api-guide-nav'); navigation.setAttribute('aria-label', 'Walkthrough steps');
   const back = make('button', '', 'Back'), next = make('button', '', 'Next'); back.type = next.type = 'button'; navigation.append(back, next);
-  const help = make('details', 'jb-api-guide-help'); help.append(make('summary', '', 'Before you start / Need help?'));
+  const help = make('details', 'jb-api-guide-help'); help.append(make('summary', '', 'Help'));
   help.append(make('p', '', 'Use your own provider key. These screenshots use OpenRouter; choose your own provider and model in the form.'));
   help.append(make('p', '', 'No models? Check your provider, key, and URL, then refresh models. A supported model ID can also be entered directly.'));
   help.append(make('p', '', 'A failed test: Edit this saved connection, check its provider and key, then save and test again. The same test is in its More actions (⋮) menu.'));

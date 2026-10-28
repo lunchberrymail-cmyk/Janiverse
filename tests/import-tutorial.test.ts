@@ -27,7 +27,7 @@ afterEach(() => { guide?.destroy(); importer.destroy(); guide = undefined; dom.w
 
 test('opens one ordinary importer with visible companion guidance and no uploads or permission requests', async () => {
   const view = start(); await settle(); expect(roots).toHaveLength(1); expect(document.querySelectorAll('[role=dialog]')).toHaveLength(1);
-  expect(view.root.closest('.jb-card-import')).toBe(roots[0]); expect(view.root.getAttribute('role')).toBe('complementary'); expect(view.root.textContent).toContain('You do not need JAR or JAR Bridge');
+  expect(view.root.closest('.jb-card-import')).toBe(roots[0]); expect(view.root.getAttribute('role')).toBe('complementary'); expect(view.root.textContent).toContain('Cards do not need JAR or JAR Bridge');
   expect(view.root.querySelector('.jb-api-guide-instruction')!.closest('details')).toBeNull(); expect(view.root.querySelector('details')!.open).toBe(false); expect(requests).toEqual([]); expect(permissions).toBe(0);
 });
 
@@ -67,7 +67,7 @@ test('late stored progress cannot replace either native form interaction or a qu
 });
 
 test('old messages are a separate explicit path, and handing off closes the unsent card workspace exactly once', async () => {
-  const view = start(); await settle(); choose(); const history = button('Need your old messages too?', view.root); history.click(); history.click(); await settle();
+  const view = start(); await settle(); choose(); const history = button('Need your old messages too?', view.root), help = history.closest('details')!; expect(help.open).toBe(false); help.open = true; history.click(); history.click(); await settle();
   expect(histories).toBe(1); expect(closed).toBe(1); expect(roots[0].isConnected).toBe(false); expect(requests).toEqual([]); expect(permissions).toBe(0);
 });
 

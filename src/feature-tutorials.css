@@ -37,11 +37,10 @@
 .jb-history-picture .jb-tutorial-figure{margin-top:8px}
 .jb-feature-tutorial[data-feature="history"] button{min-height:44px}
 .jb-tutorial-before,.jb-tutorial-help{margin:8px 0;border:1px solid #a698b130;border-radius:7px;padding:8px 10px;font-size:12px}
-.jb-tutorial-before summary,.jb-tutorial-help summary{cursor:pointer;font-weight:600}
+.jb-tutorial-before h4,.jb-tutorial-help h4{margin:0;font-size:12px;font-weight:600}
 .jb-tutorial-before ul,.jb-tutorial-help ul{margin:8px 0 0;padding-left:18px}
 .jb-tutorial-before li+li,.jb-tutorial-help li+li{margin-top:7px}
 .jb-tutorial-setup{margin-top:8px}
-.jb-feature-tutorial .jb-tutorial-back{display:none}
 .jb-feature-tutorial .jb-tutorial-history-guide{display:flex;margin:8px auto 0;background:transparent;border:0;color:#cbb6d9;min-height:25px;padding:3px 8px;font-size:11px}
 .jb-feature-tutorial [hidden]{display:none!important}
 .jb-tutorial-arrows{position:absolute;inset:0;width:100%;height:100%;z-index:2;overflow:visible;pointer-events:none;filter:drop-shadow(0 1px 2px #000)}

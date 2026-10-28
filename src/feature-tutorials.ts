@@ -27,7 +27,7 @@ export type FeatureTutorialOptions = {
   screenshots?: TutorialScreenshots;
   onClose?: () => void;
 };
-type Action = { label: string; destination: SpindleHostSurfaceRef | 'import' | 'history'; fallback: string };
+type Action = { label: string; destination: SpindleHostSurfaceRef | 'history'; fallback: string };
 export type Scene = { title: string; instruction: string; result: string; screenshot: string; fallbackScreenshot?: string; action?: Action };
 type Tutorial = { title: string; intro: string; prerequisites: readonly string[]; scenes: readonly Scene[]; help: readonly string[]; setup?: Action };
 const drawer = (id: string): SpindleHostSurfaceRef => ({ kind: 'drawer_tab', id });
@@ -116,7 +116,7 @@ export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
     prerequisites: ['A real PNG, JSON or CHARX character card, or a supported public character link.', 'A portrait alone is not a character card. A card does not include your old conversations.'],
     scenes: [
       { title: 'Choose a character card', instruction: 'Choose card files above for a PNG, JSON or CHARX export. For a public character link, use Link → Add link.', result: 'Your selection appears in the queue. You do not need JAR or JAR Bridge.', screenshot: 'card-import-open' },
-      { title: 'Check your queue', instruction: 'Check the filename or public link in the queue. Remove anything you do not want to import.', result: 'Ready to import means the card is queued, not saved yet.', screenshot: 'card-import-queue' },
+      { title: 'Check your queue', instruction: 'Check the queued filename or link. Remove anything you do not want.', result: 'Ready to import means queued, not saved.', screenshot: 'card-import-queue' },
       { title: 'Save the card', instruction: 'Choose Import at the bottom of this window, then wait for the result.', result: 'Imported to your library confirms a saved card. A problem appears on its queue row.', screenshot: 'card-import-saved' },
       { title: 'Review the saved character', instruction: 'Choose Open character on the saved queue row to review its profile. Start new chat creates a fresh conversation.', result: 'The card stays in your normal library. Old messages are a separate, optional import.', screenshot: 'card-import-saved' },
     ],
@@ -159,8 +159,8 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
   let disposed = false, opening = false, restoreFocus = true, index = 0, renderedIndex = 0, interacted = false;
   let writes = Promise.resolve();
   function persist(step = index) { if (feature === 'history' && ctx.settings?.set) writes = writes.then(() => ctx.settings.set(HISTORY_GUIDE_KEY, { step })).catch(() => {}); }
-  const header = make('header', 'jb-tutorial-header'), title = make('h2', '', tutorial.title);
-  const close = make('button', 'jb-tutorial-close', 'Close tutorial'); close.type = 'button'; close.addEventListener('click', () => { if (!disposed) modal.dismiss(); }); header.append(title, close);
+  const header = make('header', 'jb-tutorial-header');
+  const close = make('button', 'jb-tutorial-close', 'Close tutorial'); close.type = 'button'; close.addEventListener('click', () => { if (!disposed) modal.dismiss(); }); header.append(close);
   const intro = make('p', 'jb-tutorial-intro', tutorial.intro);
   const cardGuide = feature === 'history' && options.openCardTutorial ? make('button', 'jb-tutorial-history-guide', 'Need the character card first?') : undefined;
   cardGuide?.addEventListener('click', () => { if (disposed || opening) return; restoreFocus = false; modal.dismiss(); options.openCardTutorial?.(); });
@@ -170,24 +170,21 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
   const status = make('p', 'jb-tutorial-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   const sceneAction = make('button', 'jb-tutorial-action'); sceneAction.type = 'button'; actions.append(sceneAction, status);
   const illustration = feature === 'history' ? make('details', 'jb-history-picture') : undefined;
-  if (illustration) { illustration.append(make('summary', '', 'Show example screenshot'), figure); scene.append(sceneHeading, intro, instruction, outcome, illustration, actions); }
+  if (illustration) { illustration.append(make('summary', '', 'Example screenshot'), figure); scene.append(sceneHeading, instruction, outcome, illustration, actions); }
   else scene.append(sceneHeading, figure, actions);
   const controls = make('nav', 'jb-tutorial-controls'); controls.setAttribute('aria-label', 'Walkthrough steps');
   const previous = make('button', 'jb-tutorial-previous', 'Back'), next = make('button', 'jb-tutorial-next', 'Next'); previous.type = next.type = 'button';
   const progress = make('span', 'jb-tutorial-progress'); controls.append(previous, progress, next);
-  const before = make('details', 'jb-tutorial-before'), checklist = make('ul'); before.append(make('summary', '', 'Before you start')); tutorial.prerequisites.forEach(text => checklist.append(make('li', '', text))); before.append(checklist);
+  const before = make('section', 'jb-tutorial-before'), checklist = make('ul'); before.append(make('h4', '', 'Before you start')); tutorial.prerequisites.forEach(text => checklist.append(make('li', '', text))); before.append(checklist);
   const setup = tutorial.setup && make('button', 'jb-tutorial-setup', tutorial.setup.label); if (setup) { setup.type = 'button'; before.append(setup); }
-  const help = make('details', 'jb-tutorial-help'), tips = make('ul'); help.append(make('summary', '', 'Help & troubleshooting')); tutorial.help.forEach(text => tips.append(make('li', '', text))); help.append(tips);
-  const back = make('button', 'jb-tutorial-back', 'Back to banner'); back.hidden = true; back.type = 'button'; back.addEventListener('click', () => { if (!disposed) modal.dismiss(); });
-  const reading = make('details', 'jb-tutorial-reading'); reading.append(make('summary', '', feature === 'history' ? 'Before you start / Need help?' : 'Instructions & help'));
-  if (feature !== 'history') reading.append(intro, instruction, outcome);
+  const help = make('section', 'jb-tutorial-help'), tips = make('ul'); help.append(make('h4', '', 'Troubleshooting')); tutorial.help.forEach(text => tips.append(make('li', '', text))); help.append(tips);
+  const reading = make('details', 'jb-tutorial-reading'); reading.append(make('summary', '', feature === 'history' ? 'Help' : 'Instructions & help'), intro);
+  if (feature !== 'history') reading.append(instruction, outcome);
   reading.append(before, help);
   if (feature === 'history') { const restart = make('button', '', 'Restart guide'); restart.type = 'button'; restart.addEventListener('click', () => chooseScene(0)); reading.append(restart); }
   const footer = make('footer', 'jb-tutorial-footer'); footer.append(controls, reading);
-  root.append(header, scene, footer, back);
-  if (cardGuide) { cardGuide.type = 'button'; footer.append(cardGuide); }
-  // The host already supplies the window title. Keep one accessible close control.
-  title.classList.add('jb-tutorial-sr-only');
+  root.append(header, scene, footer);
+  if (cardGuide) { cardGuide.type = 'button'; reading.append(cardGuide); }
 
   function render() {
     const changed = renderedIndex !== index;
@@ -235,7 +232,7 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
   previous.addEventListener('click', () => chooseScene(index - 1)); next.addEventListener('click', () => chooseScene(index + 1));
   function openAction(action: Action | undefined) {
     if (!action || disposed || opening) return; opening = true; render();
-    void Promise.resolve().then(async () => { if (disposed) return false; return action.destination === 'import' ? options.openImport ? (await options.openImport(), true) : false : action.destination === 'history' ? options.openHistory ? await options.openHistory() : false : options.invoke(action.destination); }).then(ok => {
+    void Promise.resolve().then(async () => { if (disposed) return false; return action.destination === 'history' ? options.openHistory ? await options.openHistory() : false : options.invoke(action.destination); }).then(ok => {
       if (disposed) return; if (ok) { if (feature === 'history') persist(Math.max(1, index)); restoreFocus = false; modal.dismiss(); } else status.textContent = `This shortcut is unavailable. ${action.fallback}`;
     }).catch(() => { if (!disposed) status.textContent = `Could not open that tool. ${action.fallback}`; }).finally(() => {
       opening = false; if (!disposed) { previous.disabled = index === 0; next.disabled = index === tutorial.scenes.length - 1; sceneAction.disabled = false; if (setup) setup.disabled = false; }
