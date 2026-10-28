@@ -1112,7 +1112,8 @@ test('Home More keeps five everyday actions and moves setup guides into Help', a
   const more = roots.get('landing_header')!.querySelector<HTMLDetailsElement>('.jb-more')!; more.open = true;
   expect([...more.querySelectorAll('button')].map(node => node.textContent)).toEqual(['Import characters', 'Import old chats', 'API Settings', 'Prompt & generation', 'Help']);
   findButton('Help', more).click(); await flush(); const help = document.querySelector('.jb-home-help')!;
-  expect([...help.querySelectorAll('button')].map(node => node.textContent)).toEqual(['Setup checklist', 'API connection guide', 'Card import guide', 'Old chat import guide', 'Chat controls']);
+  expect([...help.querySelectorAll(':scope > button')].map(node => node.textContent)).toEqual(['Setup checklist', 'API connection guide', 'Card import guide', 'Old chat import guide', 'Create a persona', 'Preset & generation guide', 'Chat controls']);
+  expect(help.querySelector<HTMLDetailsElement>('.jb-home-help-optional')!.open).toBe(false);
   expect(more.open).toBe(false); expect(calls).toHaveLength(0); expect(requests).toHaveLength(beforeRequests);
   findButton('Card import guide', help).click(); await flush();
   expect(help.isConnected).toBe(false); expect(more.open).toBe(true); expect(document.querySelector('.jb-card-menu-guide')).not.toBeNull();
@@ -1126,6 +1127,19 @@ test('Help restores the hidden checklist without repeating first-run orientation
   expect(document.querySelector('.jb-home-help')).toBeNull(); expect(document.querySelector('.jb-welcome')).toBeNull();
   expect(roots.get('landing_hero')!.querySelector('h2')!.textContent).toBe('Let’s do the basics.');
   expect(document.querySelector<HTMLElement>('.jb-setup-checklist')!.hidden).toBe(false); expect(calls).toHaveLength(0);
+});
+
+test('Home Help hands off to persistent task guides and replaces an old guide without adding native writes', async () => {
+  let permissionRequests = 0; ctx.permissions.request = async () => { permissionRequests++; return []; };
+  start(); await flush(); const header = roots.get('landing_header')!;
+  findButton('Help', header).click(); await flush(); findButton('Preset & generation guide', document.querySelector('.jb-home-help')!).click(); await flush();
+  const presetGuide = document.querySelector<HTMLElement>('.jb-tutorial-companion')!; expect(presetGuide.dataset.feature).toBe('presets'); expect(calls).toHaveLength(0);
+  findButton('Open preset editor', presetGuide).click(); await flush(); expect(calls.at(-1)).toEqual({ ref: { kind: 'drawer_tab', id: 'loom' }, params: undefined }); expect(presetGuide.isConnected).toBe(true);
+  findButton('Help', header).click(); await flush(); expect(presetGuide.isConnected).toBe(false);
+  const help = document.querySelector('.jb-home-help')!; help.querySelector<HTMLDetailsElement>('.jb-home-help-optional')!.open = true;
+  findButton('Add world details', help).click(); await flush(); const bookGuide = document.querySelector<HTMLElement>('.jb-tutorial-companion')!; expect(bookGuide.dataset.feature).toBe('lorebooks');
+  findButton('Open Lorebooks', bookGuide).click(); await flush(); expect(calls.at(-1)).toEqual({ ref: { kind: 'drawer_tab', id: 'lorebook' }, params: undefined }); expect(bookGuide.isConnected).toBe(true);
+  expect(requests.every(request => !request.options.method || request.options.method === 'GET')).toBe(true); expect(permissionRequests).toBe(0);
 });
 
 test('one Home prompt entry opens both instructions and generation without saving', async () => {

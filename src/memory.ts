@@ -47,10 +47,10 @@ export function createChatMemory(ctx: SpindleFrontendContext, options: MemoryOpt
     const suffix = `jb-memory-${++nextId}`;
     const heading = element('h2', 'jb-memory-heading', 'Chat Memory');
     const help = element('p', 'jb-memory-help jb-settings-intro', draft === undefined
-      ? 'Keep important facts, relationships, and events for this conversation.'
+      ? 'Write the facts the AI should keep in mind. Save applies them to this chat’s Author’s Note.'
       : 'Review this suggested summary before saving it to this conversation.');
     help.id = `${suffix}-help`;
-    const label = element('label', 'jb-memory-label', 'Summary of this chat');
+    const label = element('label', 'jb-memory-label', 'Pinned facts for this chat');
     const text = element('textarea', 'jb-memory-textarea');
     text.id = `${suffix}-text`;
     text.name = 'chat-memory';

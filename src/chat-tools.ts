@@ -1,6 +1,7 @@
 import type { SpindleFrontendContext, SpindleHostSurfaceRef, SpindleModalHandle } from 'lumiverse-spindle-types';
 import { lunchPicks, type LunchPick } from './lunch-picks';
 import { icon } from './icons';
+import type { TutorialFeature } from './feature-tutorials';
 
 export type ComposerLayout = 'lumiverse' | 'janitorai';
 type GuideView = 'lumiverse' | 'generation' | 'story' | 'extensions';
@@ -11,6 +12,8 @@ type Options = {
   openGeneration(): void;
   openMemory(): void;
   openPersonas(): void | Promise<boolean>;
+  openTutorial?(feature: TutorialFeature): void;
+  beforeOpenHelp?(): void;
   invoke(ref: SpindleHostSurfaceRef): Promise<boolean>;
 };
 const recommendations: Array<{ goal: string; pick: LunchPick }> = [
@@ -54,6 +57,7 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
 
   function openHelp(view: GuideView = 'lumiverse') {
     if (disposed) return;
+    options.beforeOpenHelp?.();
     if (modal) { selectView?.(view); return; }
     const previousFocus = document.activeElement as HTMLElement | null;
     const current = ctx.ui.showModal({ title: 'Chat help', width: 600, maxHeight: 760 }); modal = current;
@@ -123,15 +127,17 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
     ]) samplerTerms.append(node('dt', '', name), node('dd', '', detail));
     const samplerActions = node('div', 'jb-chat-guide-shortcuts'); samplerActions.append(actionButton('Open generation settings', options.openGeneration));
     generation.append(settingsPath, samplerTerms, samplerActions, node('p', 'jb-settings-help', 'Turn on “Use these generation controls”, adjust the values, then save. Advanced controls include Top P, Top K and penalties; support depends on your provider.'));
-    row(generation, 'Preset & prompt', 'Grayed-out values belong to the saved preset. In Generation, Edit preset samplers guides you through Preset → Samplers. Customize a copy here unlocks a separate copy; adjust it, then save. Preset-linked regex stays with the original.', 'Open prompt', options.openSettings);
+    row(generation, 'Preset & prompt', 'A preset supplies instructions and generation values. Grayed-out fields? Generation offers Edit preset samplers or Customize a copy here, with guidance for each.', 'Open prompt', options.openSettings);
+    if (options.openTutorial) generation.append(actionButton('Preset guide', () => options.openTutorial?.('presets')));
     const presetEditor = node('details', 'jb-chat-more-memory jb-chat-preset-editor'); presetEditor.append(node('summary', '', 'Full preset editor (Loom)'));
     row(presetEditor, 'Advanced Presets', 'Edit block order and the preset’s sampler controls.', 'Open preset editor', () => options.invoke({ kind: 'drawer_tab', id: 'loom' })); generation.append(presetEditor);
     row(story, 'Your persona', 'Choose who you play in the conversation.', 'Manage personas', options.openPersonas);
-    row(story, 'Chat Memory', 'Like a pinned note: facts you want included in this chat’s prompt.', 'Open memory', options.openMemory, true);
-    row(story, 'Lorebooks', 'World details that can be recalled through matching keywords.', 'Open Lorebooks', () => options.invoke({ kind: 'drawer_tab', id: 'lorebook' }));
+    row(story, 'Chat Memory', 'Write pinned facts, then Save for this chat. This edits Author’s Note; Summary and automatic recall are separate.', 'Open memory', options.openMemory, true);
+    row(story, 'Lorebooks', 'Add world facts, give them keywords, then attach the book to your chat.', options.openTutorial ? 'Set up a Lorebook' : 'Open Lorebooks', () => options.openTutorial ? options.openTutorial('lorebooks') : options.invoke({ kind: 'drawer_tab', id: 'lorebook' }));
     const moreMemory = node('details', 'jb-chat-more-memory'); moreMemory.append(node('summary', '', 'Summaries & automatic memory'));
     row(moreMemory, 'Summary', 'Review or update a recap of the conversation.', 'Open Summary', () => options.invoke({ kind: 'drawer_tab', id: 'summary' }), true);
     row(moreMemory, 'Memory Cortex', 'Set up automatic recall of people, relationships, and events.', 'Set up Memory Cortex', () => options.invoke({ kind: 'settings_tab', id: 'memoryCortex' })); story.append(moreMemory);
+    if (options.openTutorial) moreMemory.append(actionButton('Memory guide', () => options.openTutorial?.('memory'), true));
 
     extensions.append(node('p', 'jb-settings-help', 'Choose what you want to add. These optional extensions each have their own setup.'));
     const goals = node('div', 'jb-extension-goals'); goals.setAttribute('aria-label', 'What would you like to add?');
@@ -160,6 +166,7 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
       goals.append(button);
     }
     extensions.append(goals, result);
+    if (options.openTutorial) extensions.append(actionButton('Voices & dictation guide', () => options.openTutorial?.('voice')));
     preferences.append(node('summary', '', 'Choose your chat layout'));
     const choices = node('fieldset', 'jb-chat-layouts'); choices.append(node('legend', '', 'Chat composer'));
     const inputs = new Map<ComposerLayout, HTMLInputElement>();

@@ -107,6 +107,8 @@ export function setup(ctx: SpindleFrontendContext) {
     openGeneration: () => openPrompt('generation'),
     openMemory: () => { const chatId = ctx.getActiveChat()?.chatId; if (chatId) openMemory(chatId); },
     openPersonas: () => invoke({ kind: 'drawer_tab', id: 'personas' }),
+    openTutorial,
+    beforeOpenHelp: () => { tutorialWindow?.destroy(); cardSetup.close(); },
     invoke,
   });
   const promptSettings = createPromptSettings(settingsWindow.context('settings'), {
@@ -119,7 +121,7 @@ export function setup(ctx: SpindleFrontendContext) {
     },
     openPresetManager: () => {
       void invoke({ kind: 'drawer_tab', id: 'loom' }).then(opened => {
-        if (opened) settingsWindow.close();
+        if (opened) { settingsWindow.close(); openTutorial('presets'); }
       });
     },
     openIllarinSettings: () => {
@@ -214,13 +216,13 @@ export function setup(ctx: SpindleFrontendContext) {
   function launchTutorial(feature: TutorialFeature) {
     tutorialWindow?.destroy();
     const request = ++tutorialRequest;
-    tutorialWindow = openFeatureTutorial(ctx, feature, { invoke, openImport, openHistory, openHistoryTutorial: () => openTutorial('history'), openCardTutorial: () => openTutorial('import'), screenshots: tutorialScreenshots,
+    tutorialWindow = openFeatureTutorial(ctx, feature, { invoke, openImport, openHistory, openHistoryTutorial: () => openTutorial('history'), openCardTutorial: () => openTutorial('import'), showReplyToolbar: () => chatTools.setLayout('lumiverse'), screenshots: tutorialScreenshots,
       onClose: () => { if (request === tutorialRequest) tutorialWindow = undefined; },
     });
   }
   function openHomeHelp() {
     if (disposed) return;
-    cardSetup.close(); homeHelp?.dismiss();
+    cardSetup.close(); tutorialWindow?.destroy(); homeHelp?.dismiss();
     const panel = ctx.ui.showModal({ title: 'Help', width: 420, maxHeight: 580 }); homeHelp = panel;
     panel.root.classList.add('jb-home-help'); panel.root.setAttribute('aria-label', 'Home help');
     panel.onDismiss(() => { if (homeHelp === panel) homeHelp = undefined; });
@@ -229,11 +231,18 @@ export function setup(ctx: SpindleFrontendContext) {
       ['API connection guide', 'settings', () => openTutorial('connections')],
       ['Card import guide', 'import', () => openTutorial('import')],
       ['Old chat import guide', 'all-chats', () => openTutorial('history')],
+      ['Create a persona', 'persona', () => personaCreate.open()],
+      ['Preset & generation guide', 'prompt', () => openTutorial('presets')],
       ['Chat controls', 'message', () => chatTools.openHelp()],
     ] as const) {
       const item = button(label, () => { if (disposed || homeHelp !== panel) return; panel.dismiss(); action(); }, 'jb-button');
       item.prepend(icon(picture)); panel.root.append(item);
     }
+    const optional = el('details', 'jb-home-help-optional'); optional.append(el('summary', '', 'More guides'));
+    for (const [label, feature] of [['Remember my story', 'memory'], ['Add world details', 'lorebooks'], ['Create a group chat', 'group'], ['Voices & dictation', 'voice'], ['Install an extension', 'extensions']] as const) {
+      optional.append(button(label, () => { if (disposed || homeHelp !== panel) return; panel.dismiss(); openTutorial(feature); }, 'jb-button'));
+    }
+    panel.root.append(optional);
   }
   function setView(next: View, navigate = true) {
     soundCloud.close();

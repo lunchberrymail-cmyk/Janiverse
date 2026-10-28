@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
-import { HISTORY_GUIDE_KEY, openFeatureTutorial, type TutorialFeature } from '../src/feature-tutorials';
+import { featureTutorials, HISTORY_GUIDE_KEY, openFeatureTutorial, type TutorialFeature } from '../src/feature-tutorials';
 
 let dom: any, oldDocument: any, ctx: any, handles: any[], invoked: unknown[], imports: number;
 let result: (ref: unknown) => Promise<boolean>;
@@ -13,7 +13,7 @@ beforeEach(() => {
   oldDocument = globalThis.document; dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost:7860/', pretendToBeVisual: true }); globalThis.document = dom.window.document;
   oldSetTimeout = globalThis.setTimeout; oldClearTimeout = globalThis.clearTimeout;
   handles = []; invoked = []; imports = 0; result = async () => true;
-  ctx = { ui: { showModal: (request: unknown) => {
+  ctx = { getActiveChat: () => ({ chatId: 'chat-1' }), ui: { showModal: (request: unknown) => {
     const root = document.createElement('div'); document.body.append(root);
     const callbacks = new Set<() => void>(); let closed = false;
     const handle = { request, root, dismiss() { if (closed) return; closed = true; root.remove(); for (const callback of callbacks) callback(); callbacks.clear(); }, onDismiss(callback: () => void) { callbacks.add(callback); return () => callbacks.delete(callback); } };
@@ -34,7 +34,7 @@ function demoClock() {
 test('the group demo shows the entry point then one cast, greeting, settings or chat scene at a time', () => {
   const screenshots = Object.fromEntries(['group-start', 'group-select', 'group-greeting', 'group-settings', 'group-chat', 'group-mention', 'group-member-menu'].map(key => [key, { src: pixel, alt: key }]));
   const tutorial = openFeatureTutorial(ctx, 'group', { ...options(), screenshots });
-  expect(tutorial.root.getAttribute('role')).toBe('dialog'); expect(tutorial.root.getAttribute('aria-label')).toBe('Your first group chat');
+  expect(tutorial.root.getAttribute('role')).toBe('complementary'); expect(tutorial.root.getAttribute('aria-label')).toBe('Your first group chat'); expect(handles).toHaveLength(0);
   expect(tutorial.root.querySelectorAll('.jb-tutorial-scene')).toHaveLength(1);
   expect(tutorial.root.querySelectorAll('details[open]')).toHaveLength(0);
   expect(tutorial.root.querySelector('.jb-tutorial-instruction')!.textContent).toContain('New Group Chat');
@@ -53,11 +53,11 @@ test('the group demo shows the entry point then one cast, greeting, settings or 
   expect(invoked).toEqual([]); expect(imports).toBe(0);
 });
 
-test('native controls open only on the explicit shortcut and successful opening closes the demo', async () => {
+test('native controls open only on the explicit shortcut and the companion stays beside the real workspace', async () => {
   const tutorial = openFeatureTutorial(ctx, 'group', options());
   find('Next').click(); find('Back').click(); expect(invoked).toEqual([]);
   find('Open Character Browser').click(); await flush();
-  expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'characters' }]); expect(tutorial.root.isConnected).toBe(false);
+  expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'characters' }]); expect(tutorial.root.isConnected).toBe(true); expect(tutorial.root.querySelector('.jb-tutorial-instruction')!.closest('details')).toBeNull(); tutorial.destroy();
 });
 
 test('voice connection setup remains optional and opens the native Connections drawer only when chosen', async () => {
@@ -65,7 +65,7 @@ test('voice connection setup remains optional and opens the native Connections d
   const reading = tutorial.root.querySelector<HTMLDetailsElement>('.jb-tutorial-reading')!;
   expect(reading.open).toBe(false); expect(reading.querySelector('details')).toBeNull(); expect(invoked).toEqual([]);
   reading.open = true; find('Open Connections').click(); await flush();
-  expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'connections' }]); expect(tutorial.root.isConnected).toBe(false);
+  expect(invoked).toEqual([{ kind: 'drawer_tab', id: 'connections' }]); expect(tutorial.root.isConnected).toBe(true); tutorial.destroy();
 });
 
 test('unavailable or rejected shortcuts retain the scene and show actionable recovery', async () => {
@@ -93,11 +93,11 @@ test('closing immediately cancels a shortcut before deferred dispatch and old co
   action.click(); tutorial.destroy(); action.click(); next.click(); await flush(); expect(invoked).toEqual([]); expect(tutorial.root.dataset.scene).toBe('1');
 });
 
-test('keyboard close restores launcher focus and Tab stays inside visible controls', () => {
+test('a companion permits keyboard access to the real workspace and Escape returns to its launcher', () => {
   const launcher = document.createElement('button'); launcher.textContent = 'Full tutorial'; document.body.append(launcher); launcher.focus();
   const tutorial = openFeatureTutorial(ctx, 'group', options()); expect(document.activeElement?.textContent).toBe('Close tutorial');
-  find('Close tutorial').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })); expect(document.activeElement?.textContent).toBe('Instructions & help');
-  document.activeElement!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })); expect(document.activeElement?.textContent).toBe('Close tutorial');
+  const tab = new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+  find('Close tutorial').dispatchEvent(tab); expect(tab.defaultPrevented).toBe(false);
   tutorial.root.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); expect(document.activeElement === launcher).toBe(true); expect(tutorial.root.isConnected).toBe(false);
 });
 
@@ -125,12 +125,12 @@ test('overview fallbacks never reuse a different scene’s pointer or instructio
 });
 
 test('every feature has a short navigable path; memory retains prompt placement and optional help', () => {
-  for (const feature of ['history', 'memory', 'lorebooks', 'group', 'voice', 'extensions'] satisfies TutorialFeature[]) {
+  for (const feature of ['history', 'presets', 'memory', 'lorebooks', 'group', 'voice', 'extensions'] satisfies TutorialFeature[]) {
     const tutorial = openFeatureTutorial(ctx, feature, options()); const instructions: string[] = [];
     expect(tutorial.root.querySelectorAll('details[open]')).toHaveLength(0);
     while (true) { instructions.push(tutorial.root.querySelector('.jb-tutorial-instruction')!.textContent!); if (find('Next').disabled) break; find('Next').click(); }
     expect(instructions.length).toBeGreaterThanOrEqual(3);
-    if (feature === 'memory') { expect(instructions.join(' ')).toContain('{{loomSummary}}'); expect(instructions.join(' ')).toContain('Vectorize chat messages'); expect(instructions.join(' ')).toContain('Recompile Memories'); expect(tutorial.root.querySelector('.jb-tutorial-help')!.textContent).toContain('{{memories}}'); }
+    if (feature === 'memory') { expect(instructions.join(' ')).toContain('{{loomSummary}}'); expect(instructions.join(' ')).toContain('Vectorize chat messages'); expect(instructions.join(' ')).toContain('Memory in the sidebar → Stats'); expect(tutorial.root.querySelector('.jb-tutorial-help')!.textContent).toContain('{{memories}}'); }
     find('Close tutorial').click(); expect(tutorial.root.isConnected).toBe(false);
   }
   expect(invoked).toEqual([]); expect(imports).toBe(0);
@@ -169,6 +169,55 @@ test('the API companion keeps instructions and navigation visible while its exam
   find('Next').click(); expect(find('Back').disabled).toBe(false); expect(picture.open).toBe(false); tutorial.destroy();
 });
 
+test('every native feature keeps its instruction and outcome outside Help and optional screenshots', () => {
+  for (const feature of ['presets', 'memory', 'lorebooks', 'group', 'voice', 'extensions'] as const) {
+    const tutorial = openFeatureTutorial(ctx, feature, options());
+    expect(handles).toHaveLength(0); expect(tutorial.root.hasAttribute('aria-modal')).toBe(false);
+    do {
+      for (const selector of ['.jb-tutorial-instruction', '.jb-tutorial-result', '.jb-tutorial-controls']) expect(tutorial.root.querySelector(selector)!.closest('details')).toBeNull();
+      expect(tutorial.root.querySelector<HTMLDetailsElement>('.jb-history-picture')!.open).toBe(false);
+      if (find('Next').disabled) break; find('Next').click();
+    } while (true);
+    tutorial.destroy();
+  }
+  expect(invoked).toEqual([]);
+});
+
+test('native companions minimize without losing the step and remember navigation rather than claiming completion', async () => {
+  let saved: unknown, key = ''; ctx.settings = { get: async () => saved, set: async (name: string, value: unknown) => { key = name; saved = value; } };
+  let tutorial = openFeatureTutorial(ctx, 'lorebooks', options()); await flush(); find('Next').click(); await flush();
+  document.querySelector<HTMLButtonElement>('[aria-label="Minimize guide"]')!.click();
+  expect(tutorial.root.querySelector<HTMLElement>('.jb-tutorial-body')!.hidden).toBe(true);
+  document.querySelector<HTMLButtonElement>('[aria-label="Resume guide"]')!.click(); expect(tutorial.root.dataset.scene).toBe('2'); tutorial.destroy();
+  tutorial = openFeatureTutorial(ctx, 'lorebooks', options()); await flush(); expect(tutorial.root.dataset.scene).toBe('2');
+  expect(key).toBe('onboarding:guide_lorebooks_v1'); expect(saved).toEqual({ step: 1 }); expect(invoked).toEqual([]); tutorial.destroy();
+});
+
+test('late saved progress cannot replace a step the user chose or reopen a closed companion', async () => {
+  let complete!: (value: unknown) => void; let closes = 0;
+  ctx.settings = { get: () => new Promise(resolve => { complete = resolve; }), set: async () => {} };
+  const tutorial = openFeatureTutorial(ctx, 'group', { ...options(), onClose: () => closes++ }); await flush();
+  find('Next').click(); complete({ step: 5 }); await flush(); expect(tutorial.root.dataset.scene).toBe('2');
+  tutorial.destroy(); tutorial.destroy(); expect(closes).toBe(1); expect(tutorial.root.isConnected).toBe(false);
+});
+
+test('a chat-only step explains the missing context and the toolbar changes only on an explicit action', async () => {
+  ctx.getActiveChat = () => null;
+  let tutorial = openFeatureTutorial(ctx, 'memory', options()); find('Open Summary').click(); await flush();
+  expect(invoked).toEqual([]); expect(tutorial.root.textContent).toContain('Open a chat first'); tutorial.destroy();
+  let changes = 0; ctx.getActiveChat = () => ({ chatId: 'chat-1' });
+  tutorial = openFeatureTutorial(ctx, 'voice', { ...options(), showReplyToolbar: async () => { changes++; } });
+  for (let index = 0; index < 3; index++) find('Next').click(); expect(changes).toBe(0);
+  find('Show reply toolbar').click(); await flush(); expect(changes).toBe(1); expect(invoked).toEqual([]); expect(tutorial.root.isConnected).toBe(true); tutorial.destroy();
+});
+
+test('guide paths use current entry points and explain distinct native saving behavior', () => {
+  const content = JSON.stringify(featureTutorials);
+  for (const removed of ['More → Lorebooks', 'More → Extensions', 'Reveal Lumiverse tools', 'choose Lumiverse tools', 'Save & Use for This chat', 'Import Legacy JSON']) expect(content).not.toContain(removed);
+  const preset = JSON.stringify(featureTutorials.presets); expect(preset).toContain('Import Legacy Preset'); expect(preset).toContain('Samplers save automatically'); expect(preset).toContain('prompt block uses its Save button');
+  expect(preset).toContain('bindings can take priority'); expect(preset).toContain('Preset-linked regex stays with the original');
+});
+
 test('numbered arrows match readable instructions, reject invalid coordinates, and never run native actions', () => {
   const tutorial=openFeatureTutorial(ctx, 'group', { ...options(), screenshots: { 'group-start': { src:pixel, width: 800, height: 600, alt:'Native controls', callouts:[
     {label:'Choose New Group Chat',x:10,y:15,targetX:80,targetY:60},
@@ -196,7 +245,7 @@ test('changed scenes reveal their start without stealing focus or resetting same
   const tutorial = openFeatureTutorial(ctx, 'group', { ...options(), screenshots: { 'group-start': { src: pixel, alt: 'Native character browser' } } });
   expect(scrolls).toHaveLength(0);
   const next = find('Next'); next.focus(); next.click();
-  expect(scrolls.at(-1)).toEqual({ scene: '2', options: { block: 'start', inline: 'nearest', behavior: 'instant' } });
+  expect(scrolls.at(-1)).toEqual({ scene: '2', options: { block: 'nearest', inline: 'nearest', behavior: 'instant' } });
   expect(document.activeElement === next).toBe(true);
   find('Back').click(); expect(scrolls.at(-1)?.scene).toBe('1');
   const beforeSameScene = scrolls.length; result = async () => false;

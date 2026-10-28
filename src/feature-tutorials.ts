@@ -6,7 +6,7 @@ import { record } from './setup-data';
 
 export const HISTORY_GUIDE_KEY = 'onboarding:history_guide_v2';
 
-export type TutorialFeature = 'connections' | 'import' | 'history' | 'memory' | 'lorebooks' | 'group' | 'voice' | 'extensions';
+export type TutorialFeature = 'connections' | 'import' | 'history' | 'presets' | 'memory' | 'lorebooks' | 'group' | 'voice' | 'extensions';
 export type TutorialHighlight = { x: number; y: number; width: number; height: number };
 export type TutorialScreenshot = {
   src: string; alt: string; caption?: string;
@@ -24,19 +24,32 @@ export type FeatureTutorialOptions = {
   openHistory?: () => boolean | Promise<boolean>;
   openHistoryTutorial?: () => void;
   openCardTutorial?: () => void;
+  showReplyToolbar?: () => void | Promise<void>;
   screenshots?: TutorialScreenshots;
   onClose?: () => void;
 };
-type Action = { label: string; destination: SpindleHostSurfaceRef | 'history'; fallback: string };
+type Action = { label: string; destination: SpindleHostSurfaceRef | 'history' | 'reply-toolbar'; fallback: string; needsChat?: boolean };
 export type Scene = { title: string; instruction: string; result: string; screenshot: string; fallbackScreenshot?: string; action?: Action };
 type Tutorial = { title: string; intro: string; prerequisites: readonly string[]; scenes: readonly Scene[]; help: readonly string[]; setup?: Action };
 const drawer = (id: string): SpindleHostSurfaceRef => ({ kind: 'drawer_tab', id });
 const settings = (id: string): SpindleHostSurfaceRef => ({ kind: 'settings_tab', id });
 const connections: Action = { label: 'Open Connections', destination: drawer('connections'), fallback: 'Open Connections from Lumiverse’s sidebar.' };
 const loom: Action = { label: 'Open preset editor', destination: drawer('loom'), fallback: 'Open Preset from Lumiverse’s sidebar, or use Settings → Manage / import presets.' };
+const toolbar: Action = { label: 'Show reply toolbar', destination: 'reply-toolbar', fallback: 'Open chat Help → Replies → Show reply toolbar. Use Customize composer (sliders) to reveal individual actions.', needsChat: true };
 
 /** Guides show native controls; actions run only through explicitly chosen shortcuts. */
 export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
+  presets: {
+    title: 'Use and edit a preset', intro: 'A preset contains writing instructions and generation settings. It is separate from your API connection.',
+    prerequisites: ['A compatible preset JSON if you want to import one. You can also start with Default.', 'Editing an original preset can affect other chats using it. Customize a copy in Janiverse settings if you want separate changes. Preset-linked regex stays with the original.'],
+    scenes: [
+      { title: 'Find your presets', instruction: 'Open Preset in the sidebar. The picker at the top lists your saved presets.', result: 'Choosing a preset makes its blocks and settings available in this panel.', screenshot: '', action: loom },
+      { title: 'Import one if needed', instruction: 'Use More options (⋮) beside the picker. Choose Import Loom JSON for a Lumiverse export, or Import Legacy Preset for a compatible older preset.', result: 'After import, select the preset by name. Illarin can send presets separately from its own setup.', screenshot: '' },
+      { title: 'Edit instructions or generation', instruction: 'Expand Samplers for temperature, context and reply length. For writing instructions, open the relevant prompt block and edit its text.', result: 'Samplers save automatically. A prompt block uses its Save button. You are editing the original.', screenshot: '' },
+      { title: 'Check what your chat uses', instruction: 'Return to your chat and check its Prompt chip. To apply a specific preset here, open the chip → Instructions → Saved preset, choose its name, then Save settings.', result: 'The Prompt chip shows the preset and where it comes from. Chat, persona or character bindings can take priority over the active selection.', screenshot: '' },
+    ],
+    help: ['Grayed-out Generation fields in Janiverse belong to the saved original. Edit preset samplers opens the native guide; Customize a copy here prepares a separate editable draft.', 'A model profile or custom request body can override sampler values. If a change has no effect, check those in the full preset editor.', 'Do not import the same preset repeatedly just to change a setting. Choose the existing preset by name.'],
+  },
   connections: {
     title: 'Add an API connection', intro: 'Connect a model provider in Lumiverse’s native Connections drawer. These steps use OpenRouter.',
     prerequisites: ['An API key from your model provider. Use your own key; the example key stays masked.', 'Use New Connection at the top of the drawer for chat models. Decision, embedding, image and speech connections have separate sections.'],
@@ -63,16 +76,16 @@ export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
       { title: 'Address a character', instruction: 'Type @ in the message box, select a member, then write and send your message.', result: 'Direct mentions respond first. Sending requests a reply from your configured API.', screenshot: 'group-mention', fallbackScreenshot: 'group-chat' },
       { title: 'Control the next turn', instruction: 'Right-click a member, or long-press on a phone, to find Mute and other member controls.', result: 'Mute skips ordinary automatic targeting. Clicking a member portrait immediately requests a reply.', screenshot: 'group-member-menu', fallbackScreenshot: 'group-chat' },
     ],
-    help: ['No greeting? Go Back and choose a card with a First Message. At least one greeting is required.', 'No reply? In Janiverse Settings, select a configuration and Save & Use for This chat. Native Group Settings → Connection Profile can pin another connection; an empty pin follows the active one. Check key, model, provider balance, and Mute.', 'Group Settings → Group Scenario → Custom scenario gives everyone a shared scene. Character Card Macros and Group Lorebooks decide which card and book information enters the prompt. Sequential gives predictable member order; Random changes the starting choice.', 'Type several @ mentions to queue several replies. An explicit mention can address a muted member. Force Generate in the member menu needs that member unmuted.', 'Use + in the member bar to add a character. Remove from Group must leave at least two members. Voice… sets a per-chat voice override. Return to the saved conversation through My Chats.'],
+    help: ['No greeting? Go Back and choose a card with a First Message. At least one greeting is required.', 'No reply? Use API Settings to check the active connection and model. Native Group Settings → Connection Profile can pin another connection; an empty pin follows the active one. Check key, model, provider balance, and Mute.', 'Group Settings → Group Scenario → Custom scenario gives everyone a shared scene. Character Card Macros and Group Lorebooks decide which card and book information enters the prompt. Sequential gives predictable member order; Random changes the starting choice.', 'Type several @ mentions to queue several replies. An explicit mention can address a muted member. Force Generate in the member menu needs that member unmuted.', 'Use + in the member bar to add a character. Remove from Group must leave at least two members. Voice… sets a per-chat voice override. Return to the saved conversation through My Chats.'],
   },
   lorebooks: {
     title: 'Build and activate a Lorebook', intro: 'Add one world detail, give it a keyword, then attach the book to a chat.',
     prerequisites: ['Open the chat that should use the book.', 'Start with one small entry and its default injection settings.'],
     scenes: [
-      { title: 'Create a book and entry', instruction: 'Open Lorebook → New Book. Name it, then choose New Entry.', result: 'The entry editor opens. Comment / Label names the entry for you.', screenshot: 'lorebook-entry', action: { label: 'Open Lorebooks', destination: drawer('lorebook'), fallback: 'Open Lorebook from Lumiverse’s sidebar or More → Lorebooks.' } },
+      { title: 'Create a book and entry', instruction: 'Open Lore from the sidebar → New Book. Name it, then choose New Entry.', result: 'The entry editor opens. Comment / Label names the entry for you.', screenshot: 'lorebook-entry', action: { label: 'Open Lorebooks', destination: drawer('lorebook'), fallback: 'Open Lore from Lumiverse’s sidebar.' } },
       { title: 'Write the trigger and facts', instruction: 'Put Lantern Café in Primary Keys and the café facts in Content. Under Activation, set Activation method to Key match and Status to Enabled.', result: 'The keyword can trigger those facts. Changes save automatically; pause briefly before continuing.', screenshot: 'lorebook-entry' },
-      { title: 'Attach it to this chat', instruction: 'Under This Chat Only, choose Add and select your book.', result: 'The book appears in this chat’s attached list. Always Active would apply it globally.', screenshot: 'lorebook-activation' },
-      { title: 'Check the prompt', instruction: 'Reveal Lumiverse tools from the chat menu. Type Lantern Café into the draft, then choose Extras (⋯) → Dry Run.', result: 'In Prompt Dry Run, check World Info for activation and Messages or Raw for the café facts. Leave the draft unsent.', screenshot: 'lorebook-verify', fallbackScreenshot: 'lorebook-activation' },
+      { title: 'Attach it to this chat', instruction: 'With your chat open, under This Chat Only, choose Add and select your book.', result: 'The book appears in this chat’s attached list. Always Active would apply it globally.', screenshot: 'lorebook-activation' },
+      { title: 'Check the prompt', instruction: 'Use the reply toolbar above the message box. Type Lantern Café into the draft, then choose Extras (⋯) → Dry Run. If the toolbar is hidden, use Show reply toolbar below.', result: 'In Prompt Dry Run, check World Info for activation and Messages or Raw for the café facts. Leave the draft unsent.', screenshot: 'lorebook-verify', fallbackScreenshot: 'lorebook-activation', action: toolbar },
     ],
     help: ['Missing entry? Check the attached book, Enabled, exact Primary Keys, Scan Depth, activation conditions, and token budget.', 'Primary Keys accepts comma-separated alternatives. Content supplies model context; Comment / Label is for organizing.', 'Constant entries do not need a keyword. Disabled entries contribute nothing. Keep advanced recursion and vector activation at their defaults for this first test.', 'Import Book accepts compatible lorebook JSON. Always Active attaches a book globally; character-attached books and Group Lorebooks follow the relevant card/group rules.'],
   },
@@ -80,11 +93,11 @@ export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
     title: 'Set up useful chat memory', intro: 'Start with a saved Summary. Embeddings and Cortex are optional next steps.',
     prerequisites: ['Open the conversation you want to improve.', 'Janiverse Chat Memory edits Author’s Note; Summary and recall are separate.'],
     scenes: [
-      { title: 'Save a story recap', instruction: 'Open Summary. Write a short recap in Summary Text and choose Save.', result: 'The recap is stored with this chat. Generate can write it for you using your chosen model.', screenshot: 'summary-editor', action: { label: 'Open Summary', destination: drawer('summary'), fallback: 'Open Summary from Lumiverse’s sidebar with your chat selected.' } },
+      { title: 'Save a story recap', instruction: 'With your conversation open, choose Summary in the sidebar. Write a short recap in Summary Text and choose Save.', result: 'The recap is stored with this chat. Generate can write it for you using your chosen model.', screenshot: 'summary-editor', action: { label: 'Open Summary', destination: drawer('summary'), fallback: 'Open Summary from Lumiverse’s sidebar with your chat selected.', needsChat: true } },
       { title: 'Include it in replies', instruction: 'Open Preset and check for an existing Story Summary block containing {{loomSummary}}. Enable it. If missing, choose Add Prompt → Story Summary.', result: 'Story Summary uses Role: System and Position: Before Chat History. The default preset already includes it; keep one copy. Edits use the block’s Save button.', screenshot: 'summary-preset', action: loom },
       { title: 'Prepare older-message recall', instruction: 'For recall, configure an Embedding Models connection. In Embeddings settings, select it, choose Test Embedding API, and enable Vectorize chat messages (long-term memory).', result: 'An embedding-capable model can prepare chat vectors. Embedding services may charge for usage.', screenshot: 'memory-embeddings', action: { label: 'Open Embeddings settings', destination: settings('embeddings'), fallback: 'Open Lumiverse Settings → Embeddings.' } },
       { title: 'Optionally add Cortex', instruction: 'In Memory Cortex settings, enable Cortex and start with Simple mode.', result: 'Cortex can track entities and relationships. A sidecar LLM is optional and can add model requests.', screenshot: 'memory-cortex', action: { label: 'Open Memory Cortex settings', destination: settings('memoryCortex'), fallback: 'Open Lumiverse Settings → Memory Cortex.' } },
-      { title: 'Inspect what gets recalled', instruction: 'Use Recompile Memories in the chat quick menu. Check Memory → Stats and inspect your resolved prompt.', result: 'Stats shows preparation and the per-chat Cortex toggle. {{memories}} inserts eligible recalled context.', screenshot: 'memory-stats', fallbackScreenshot: 'memory-cortex', action: { label: 'Open this chat’s Memory panel', destination: drawer('cortex'), fallback: 'Open Memory from Lumiverse’s sidebar, then select Stats.' } },
+      { title: 'Inspect what gets recalled', instruction: 'With your chat open, choose Memory in the sidebar → Stats. Review its preparation status and per-chat Cortex toggle. Use the reply toolbar’s Extras (⋯) → Dry Run to inspect the resolved prompt.', result: 'Stored memories are not all inserted into every reply. {{memories}} inserts eligible recalled context.', screenshot: 'memory-stats', fallbackScreenshot: 'memory-cortex', action: { label: 'Open this chat’s Memory panel', destination: drawer('cortex'), fallback: 'Open Memory from Lumiverse’s sidebar, then select Stats.', needsChat: true } },
     ],
     help: ['For recall: Settings → Advanced → Long-Term Chat Memory → Balanced is a starting mode. With Injection Strategy → Macro only, put {{memories}} in a separate enabled system block before Chat History.', 'Cortex needs its global switch and the per-chat Cortex toggle. Stored entities or chunks are not all inserted into every reply; confirm the resolved prompt.', 'Summary can update manually or automatically. API Source selects Active Connection or Dedicated Connection. Check Interval, Context, and Message Lag before enabling automatic updates. Rebuild from scratch can make several model calls.', 'Empty recap? Select the right chat and save Summary Text. Empty recall? Check embedding credentials/model, vectorization, activation, and exclusion window. Short chats or a cold cache may have no eligible older passages.'],
   },
@@ -95,7 +108,7 @@ export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
       { title: 'Set up spoken replies', instruction: 'Open Settings → Voice. Under Text-to-Speech, choose a Connection and turn on Enable text-to-speech. Leave Auto-play responses off.', result: 'Your saved connection supplies the model and voice. If the list is empty, use Before you start → Open Connections, then return here.', screenshot: 'voice-settings', action: { label: 'Open Voice & Speech', destination: settings('voice'), fallback: 'Open Lumiverse Settings → Voice.' } },
       { title: 'Try playback', instruction: 'On an AI message, choose its native Play button (speaker icon). You can also use Test under Settings → Voice → Text-to-Speech.', result: 'The chosen voice reads the text. Adjust Speed and Volume in Voice settings. Cloud TTS may use a billable provider request.', screenshot: 'voice-playback', fallbackScreenshot: 'voice-settings' },
       { title: 'Choose dictation', instruction: 'In Settings → Voice, scroll to Speech-to-Text. Choose a Provider and turn on Show mic button in input bar.', result: 'Whistle prepares its model on this device. STT Connection needs a saved connection; Web Speech API uses browser speech support.', screenshot: 'voice-dictation', fallbackScreenshot: 'voice-settings' },
-      { title: 'Show the microphone', instruction: 'Open the chat menu, then choose Lumiverse tools.', result: 'The native attachments, microphone, and advanced input controls become visible.', screenshot: 'voice-tools' },
+      { title: 'Show the microphone', instruction: 'Use Show reply toolbar below. Above the message box, Customize composer (sliders) lets you reveal hidden actions such as the microphone.', result: 'The native toolbar becomes available. Choose which individual actions to show in Customize composer.', screenshot: '', action: toolbar },
       { title: 'Record and review', instruction: 'Use the microphone in the message box. Allow access, record, stop, and review the transcript before sending.', result: 'Your speech becomes a message draft. Sending the draft is a separate choice.', screenshot: 'voice-compose' },
     ],
     help: ['Playback failure? Check the TTS connection, key, model, voice, output volume and browser audio permissions. Create a connection under Connections → Text-to-Speech → New TTS Connection, then choose it in Settings → Voice. Close Settings before working in the Connections drawer.', 'Dictation failure? Check the microphone device/permission and selected STT provider. Whistle’s status offers preparation progress and Try again; an insecure HTTP phone connection may need HTTPS.', 'Whistle uses your device’s processing power and needs no API key. Cloud transcription and Web Speech API follow their provider/browser behavior.', 'Review Auto-submit after silence if you want to control submission. Group member menu → Voice… sets a voice override for that member in the chat.'],
@@ -104,7 +117,7 @@ export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
     title: 'Add and manage extensions', intro: 'Install from the author’s repository, then choose which tools to enable.',
     prerequisites: ['The extension’s actual GitHub repository URL.', 'Installation access for this Lumiverse account, or help from its administrator.'],
     scenes: [
-      { title: 'Paste the repository', instruction: 'Open Extensions → Add Extension. Paste the GitHub URL under Install from Source.', result: 'Lumiverse can load that extension’s manifest. Keep the default branch unless its author says otherwise.', screenshot: 'extensions-install', action: { label: 'Open Extensions', destination: drawer('spindle'), fallback: 'Open Extensions from Lumiverse’s sidebar or More → Extensions.' } },
+      { title: 'Paste the repository', instruction: 'Open Extend in the sidebar → Add Extension. Paste the GitHub URL under Install from Source.', result: 'Lumiverse can load that extension’s manifest. Keep the default branch unless its author says otherwise.', screenshot: 'extensions-install', action: { label: 'Open Extensions', destination: drawer('spindle'), fallback: 'Open Extend from Lumiverse’s sidebar.' } },
       { title: 'Install and enable', instruction: 'Choose Install from Source. Review its requested permissions, then enable the extension.', result: 'The installed card shows its status. Installation and permissions stay under your control.', screenshot: 'extensions-enabled', fallbackScreenshot: 'extensions-install' },
       { title: 'Find its controls', instruction: 'Follow the extension’s README to its sidebar tab, widget, or Configure control.', result: 'For example, JAR Bridge appears as JAR Import; it still needs the separate JAR app for live links.', screenshot: 'extensions-controls', fallbackScreenshot: 'extensions-enabled' },
       { title: 'Update or switch it off', instruction: 'Use the extension card’s Update control for new versions, or turn its Enable toggle off.', result: 'Disabling removes its active interface. Its own README explains any saved-data behavior.', screenshot: 'extensions-enabled', fallbackScreenshot: 'extensions-install' },
@@ -126,7 +139,7 @@ export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
     title: 'Bring your old chat history', intro: 'Optional: attach an old conversation to the right saved character. This uses JAR Bridge.',
     prerequisites: ['The matching character is already in your Lumiverse library. Use the regular card importer first if needed.', 'JAR Bridge installed and enabled for history import. A JAR JSON or compatible JSONL history file works without the separate JAR app.', 'Only live JanitorAI links need the JAR app running and signed in on the Lumiverse server computer.'],
     scenes: [
-      { title: 'Open history import', instruction: 'Open More → Import old chats (JAR Bridge), then choose Chat history.', result: 'JAR Bridge offers History file for an export, or From JAR for a live conversation link.', screenshot: 'import-history', action: { label: 'Open history importer', destination: 'history', fallback: 'Install and enable JAR Bridge in Extensions, then use More → Import old chats (JAR Bridge). Card-only imports do not need it.' } },
+      { title: 'Open history import', instruction: 'Open More → Import old chats, then choose Chat history in JAR Bridge.', result: 'JAR Bridge offers History file for an export, or From JAR for a live conversation link.', screenshot: 'import-history', action: { label: 'Open history importer', destination: 'history', fallback: 'Install and enable JAR Bridge in Extensions, then use More → Import old chats. Card-only imports do not need it.' } },
       { title: 'Load the conversation', instruction: 'Choose History file and select your JAR JSON or compatible JSONL export. Use From JAR only when the separate JAR app is running and signed in.', result: 'A preview shows the old messages. Loading the file has not saved another chat yet.', screenshot: 'history-file' },
       { title: 'Choose the saved character', instruction: 'Select the matching character from your Lumiverse library. Review the message count, speakers and text.', result: 'The destination is explicit. An existing character does not need to be imported again.', screenshot: 'import-complete' },
       { title: 'Save and continue', instruction: 'Review the destination and messages, choose Import chat, then Continue chat after it succeeds.', result: 'The imported history becomes a normal saved Lumiverse conversation.', screenshot: 'import-complete', fallbackScreenshot: 'import-history' },
@@ -153,44 +166,51 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
   if (feature === 'connections') return openConnectionTutorial(ctx, featureTutorials.connections.scenes, options);
   if (feature === 'import') return openImportTutorial(ctx, featureTutorials.import.scenes, options);
   const tutorial = featureTutorials[feature], previousFocus = document.activeElement as HTMLElement | null;
-  const modal = ctx.ui.showModal({ title: tutorial.title, width: feature === 'history' ? 560 : 780, maxHeight: 700 });
-  const root = modal.root; root.classList.add('jb-feature-tutorial'); root.dataset.feature = feature;
-  root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', tutorial.title); root.setAttribute('aria-modal', 'true');
-  let disposed = false, opening = false, restoreFocus = true, index = 0, renderedIndex = 0, interacted = false;
+  const modal = feature === 'history' ? ctx.ui.showModal({ title: tutorial.title, width: 560, maxHeight: 700 }) : undefined;
+  const root = modal?.root ?? make('section'); root.classList.add('jb-feature-tutorial'); root.dataset.feature = feature;
+  root.setAttribute('role', modal ? 'dialog' : 'complementary'); root.setAttribute('aria-label', tutorial.title);
+  if (modal) root.setAttribute('aria-modal', 'true');
+  else { root.classList.add('jb-tutorial-companion'); document.body.append(root); }
+  let disposed = false, opening = false, minimized = false, restoreFocus = true, index = 0, renderedIndex = 0, interacted = false;
   let writes = Promise.resolve();
-  function persist(step = index) { if (feature === 'history' && ctx.settings?.set) writes = writes.then(() => ctx.settings.set(HISTORY_GUIDE_KEY, { step })).catch(() => {}); }
+  const placeKey = feature === 'history' ? HISTORY_GUIDE_KEY : `onboarding:guide_${feature}_v1`;
+  function persist(step = index) { if (ctx.settings?.set) writes = writes.then(() => ctx.settings.set(placeKey, { step })).catch(() => {}); }
+  function finish() { if (disposed) return; disposed = true; root.removeEventListener('keydown', keydown); if (!modal) root.remove(); if (restoreFocus && previousFocus?.isConnected) previousFocus.focus({ preventScroll: true }); options.onClose?.(); }
+  function dismiss() { if (modal) modal.dismiss(); else finish(); }
   const header = make('header', 'jb-tutorial-header');
-  const close = make('button', 'jb-tutorial-close', 'Close tutorial'); close.type = 'button'; close.addEventListener('click', () => { if (!disposed) modal.dismiss(); }); header.append(close);
+  const close = make('button', 'jb-tutorial-close', 'Close tutorial'); close.type = 'button'; close.addEventListener('click', () => { if (!disposed) dismiss(); });
+  const minimize = make('button', 'jb-tutorial-minimize', '−'); minimize.type = 'button'; minimize.setAttribute('aria-label', 'Minimize guide'); minimize.setAttribute('aria-expanded', 'true');
+  if (!modal) header.append(make('span', 'jb-tutorial-guide-name', tutorial.title), minimize); header.append(close);
+  const body = make('div', 'jb-tutorial-body');
+  minimize.addEventListener('click', () => { if (disposed) return; minimized = !minimized; body.hidden = minimized; minimize.textContent = minimized ? '+' : '−'; minimize.setAttribute('aria-label', minimized ? 'Resume guide' : 'Minimize guide'); minimize.setAttribute('aria-expanded', String(!minimized)); });
   const intro = make('p', 'jb-tutorial-intro', tutorial.intro);
   const cardGuide = feature === 'history' && options.openCardTutorial ? make('button', 'jb-tutorial-history-guide', 'Need the character card first?') : undefined;
-  cardGuide?.addEventListener('click', () => { if (disposed || opening) return; restoreFocus = false; modal.dismiss(); options.openCardTutorial?.(); });
+  cardGuide?.addEventListener('click', () => { if (disposed || opening) return; restoreFocus = false; dismiss(); options.openCardTutorial?.(); });
   const scene = make('section', 'jb-tutorial-scene'); scene.setAttribute('aria-live', 'polite'); scene.setAttribute('aria-atomic', 'true');
   const sceneHeading = make('h3', 'jb-tutorial-scene-title'), instruction = make('p', 'jb-tutorial-instruction'), outcome = make('p', 'jb-tutorial-result');
   const figure = make('figure', 'jb-tutorial-figure'), actions = make('div', 'jb-tutorial-actions');
   const status = make('p', 'jb-tutorial-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   const sceneAction = make('button', 'jb-tutorial-action'); sceneAction.type = 'button'; actions.append(sceneAction, status);
-  const illustration = feature === 'history' ? make('details', 'jb-history-picture') : undefined;
-  if (illustration) { illustration.append(make('summary', '', 'Example screenshot'), figure); scene.append(sceneHeading, instruction, outcome, illustration, actions); }
-  else scene.append(sceneHeading, figure, actions);
+  const illustration = make('details', 'jb-history-picture');
+  illustration.append(make('summary', '', 'Example screenshot'), figure); scene.append(sceneHeading, instruction, outcome, illustration, actions);
   const controls = make('nav', 'jb-tutorial-controls'); controls.setAttribute('aria-label', 'Walkthrough steps');
   const previous = make('button', 'jb-tutorial-previous', 'Back'), next = make('button', 'jb-tutorial-next', 'Next'); previous.type = next.type = 'button';
   const progress = make('span', 'jb-tutorial-progress'); controls.append(previous, progress, next);
   const before = make('section', 'jb-tutorial-before'), checklist = make('ul'); before.append(make('h4', '', 'Before you start')); tutorial.prerequisites.forEach(text => checklist.append(make('li', '', text))); before.append(checklist);
   const setup = tutorial.setup && make('button', 'jb-tutorial-setup', tutorial.setup.label); if (setup) { setup.type = 'button'; before.append(setup); }
   const help = make('section', 'jb-tutorial-help'), tips = make('ul'); help.append(make('h4', '', 'Troubleshooting')); tutorial.help.forEach(text => tips.append(make('li', '', text))); help.append(tips);
-  const reading = make('details', 'jb-tutorial-reading'); reading.append(make('summary', '', feature === 'history' ? 'Help' : 'Instructions & help'), intro);
-  if (feature !== 'history') reading.append(instruction, outcome);
+  const reading = make('details', 'jb-tutorial-reading'); reading.append(make('summary', '', 'Help'), intro);
   reading.append(before, help);
   if (feature === 'history') { const restart = make('button', '', 'Restart guide'); restart.type = 'button'; restart.addEventListener('click', () => chooseScene(0)); reading.append(restart); }
   const footer = make('footer', 'jb-tutorial-footer'); footer.append(controls, reading);
-  root.append(header, scene, footer);
+  body.append(scene, footer); root.append(header, body);
   if (cardGuide) { cardGuide.type = 'button'; reading.append(cardGuide); }
 
   function render() {
     const changed = renderedIndex !== index;
     renderScene(); renderedIndex = index;
     if (changed) {
-      try { scene.scrollIntoView?.({ block: 'start', inline: 'nearest', behavior: 'instant' }); }
+      try { scene.scrollIntoView?.({ block: modal ? 'start' : 'nearest', inline: 'nearest', behavior: 'instant' }); }
       catch { try { scene.scrollIntoView?.({ block: 'start', inline: 'nearest', behavior: 'auto' }); } catch {} }
     }
   }
@@ -205,7 +225,8 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
     if (illustration) { illustration.open = false; illustration.querySelector('.jb-tutorial-callouts')?.remove(); }
     const exact = options.screenshots?.[current.screenshot], fallback = current.fallbackScreenshot && options.screenshots?.[current.fallbackScreenshot];
     const screenshot = exact ?? fallback, source = screenshot && screenshotSource(screenshot.src);
-    if (!screenshot || !source) { figure.append(make('p', 'jb-tutorial-image-error', current.instruction)); return; }
+    illustration.hidden = !screenshot || !source;
+    if (!screenshot || !source) return;
     if (exact?.instruction) instruction.textContent = exact.instruction; if (exact?.result) outcome.textContent = `Then: ${exact.result}`;
     const viewport = make('div', 'jb-tutorial-image-box'); viewport.tabIndex = 0; viewport.setAttribute('aria-label', 'Screenshot; enlarge to read small controls');
     const shot = make('div', 'jb-tutorial-shot'), image = make('img'); image.src = source; image.alt = screenshot.alt; image.decoding = 'async'; image.referrerPolicy = 'no-referrer'; shot.append(image);
@@ -224,23 +245,29 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
     enlarge.addEventListener('click', () => { if (disposed) return; const expanded = viewport.classList.toggle('jb-tutorial-image-expanded'); enlarge.textContent = expanded ? 'Fit screenshot' : 'Enlarge screenshot'; enlarge.setAttribute('aria-pressed', String(expanded)); });
     const failed = make('p', 'jb-tutorial-image-error', 'This screenshot could not load. Follow the instruction above in Lumiverse.'); failed.hidden = true;
     image.addEventListener('error', () => { if (!disposed && figure.contains(image)) { viewport.hidden = true; enlarge.hidden = true; if (legend) legend.hidden = true; failed.hidden = false; reading.open = true; } });
-    if (legend) { if (illustration) illustration.append(legend); else reading.insertBefore(legend, outcome); }
+    if (legend) illustration.append(legend);
     caption.classList.add('jb-tutorial-sr-only');
     figure.append(viewport, caption, enlarge, failed);
   }
   function chooseScene(target: number) { if (disposed || opening) return; interacted = true; index = Math.max(0, Math.min(tutorial.scenes.length - 1, target)); persist(); render(); }
   previous.addEventListener('click', () => chooseScene(index - 1)); next.addEventListener('click', () => chooseScene(index + 1));
   function openAction(action: Action | undefined) {
-    if (!action || disposed || opening) return; opening = true; render();
-    void Promise.resolve().then(async () => { if (disposed) return false; return action.destination === 'history' ? options.openHistory ? await options.openHistory() : false : options.invoke(action.destination); }).then(ok => {
-      if (disposed) return; if (ok) { if (feature === 'history') persist(Math.max(1, index)); restoreFocus = false; modal.dismiss(); } else status.textContent = `This shortcut is unavailable. ${action.fallback}`;
+    if (!action || disposed || opening) return; interacted = true; opening = true; render();
+    void Promise.resolve().then(async () => {
+      if (disposed) return false;
+      if (action.needsChat && !ctx.getActiveChat?.()?.chatId) { status.textContent = 'Open a chat first, then use this step.'; return undefined; }
+      if (action.destination === 'history') return options.openHistory ? await options.openHistory() : false;
+      if (action.destination === 'reply-toolbar') { if (!options.showReplyToolbar) return false; await options.showReplyToolbar(); return true; }
+      return options.invoke(action.destination);
+    }).then(ok => {
+      if (disposed || ok === undefined) return; if (ok) { if (feature === 'history') { persist(Math.max(1, index)); restoreFocus = false; dismiss(); } } else status.textContent = `This shortcut is unavailable. ${action.fallback}`;
     }).catch(() => { if (!disposed) status.textContent = `Could not open that tool. ${action.fallback}`; }).finally(() => {
       opening = false; if (!disposed) { previous.disabled = index === 0; next.disabled = index === tutorial.scenes.length - 1; sceneAction.disabled = false; if (setup) setup.disabled = false; }
     });
   }
   sceneAction.addEventListener('click', () => { interacted = true; openAction(tutorial.scenes[index].action ?? (feature === 'history' ? tutorial.scenes[0].action : undefined)); }); setup?.addEventListener('click', () => openAction(tutorial.setup));
   const keydown = (event: KeyboardEvent) => {
-    if (disposed) return; if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); modal.dismiss(); return; } if (event.key !== 'Tab') return;
+    if (disposed) return; if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); dismiss(); return; } if (!modal || event.key !== 'Tab') return;
     const focusable = [...root.querySelectorAll<HTMLElement>('*')].filter(node => {
       if (!node.matches('button:not(:disabled),a[href],summary,[tabindex="0"]') || node.hidden || node.closest('[hidden]')) return false;
       for (let parent = node.parentElement; parent && parent !== root; parent = parent.parentElement) {
@@ -252,8 +279,8 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
     if (event.shiftKey && (document.activeElement === first || !root.contains(document.activeElement))) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && (document.activeElement === last || !root.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
   };
   root.addEventListener('keydown', keydown);
-  modal.onDismiss(() => { if (disposed) return; disposed = true; root.removeEventListener('keydown', keydown); if (restoreFocus && previousFocus?.isConnected) previousFocus.focus(); options.onClose?.(); });
-  render(); close.focus();
-  if (feature === 'history' && ctx.settings?.get) void Promise.resolve().then(() => ctx.settings.get(HISTORY_GUIDE_KEY)).then(value => { if (disposed || interacted) return; const saved = record(value); if (typeof saved.step === 'number' && Number.isInteger(saved.step) && saved.step >= 0 && saved.step < tutorial.scenes.length) { index = saved.step; render(); } }).catch(() => {});
-  return { root, destroy() { if (!disposed) modal.dismiss(); } };
+  modal?.onDismiss(finish);
+  render(); close.focus({ preventScroll: true });
+  if (ctx.settings?.get) void Promise.resolve().then(() => ctx.settings.get(placeKey)).then(value => { if (disposed || interacted) return; const saved = record(value); if (typeof saved.step === 'number' && Number.isInteger(saved.step) && saved.step >= 0 && saved.step < tutorial.scenes.length) { index = saved.step; render(); } }).catch(() => {});
+  return { root, destroy() { if (!disposed) dismiss(); } };
 }

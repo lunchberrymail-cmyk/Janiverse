@@ -13,3 +13,5 @@
 .jb-home-help{display:flex;flex-direction:column;gap:8px;padding:4px 0}
 .jb-home-help .jb-button{display:flex;align-items:center;gap:12px;min-height:48px;text-align:left;padding:12px 14px}
 .jb-home-help .jb-menu-icon{width:20px;height:20px;flex-shrink:0;color:#d4acf0}
+.jb-home-help-optional>summary{cursor:pointer;padding:8px 2px;color:#cdb6df}
+.jb-home-help-optional>.jb-button{width:100%;margin-top:6px}
