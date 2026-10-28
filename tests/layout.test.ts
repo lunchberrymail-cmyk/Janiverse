@@ -51,6 +51,7 @@ beforeEach(() => {
   originalDocument = globalThis.document; originalLocation = globalThis.location; originalFetch = globalThis.fetch; originalDOMParser = globalThis.DOMParser;
   dom = new JSDOM('<!doctype html><html data-janitor-bridge-view="previous" data-jb-tools="saved"><head></head><body><main id="native"><h1>Native Lumiverse</h1><button id="native-send">Native send</button><section id="native-chat">The native chat and its controls remain mounted.</section></main><div id="slot-landing_header"></div><div id="slot-chat_header_left"></div><div id="slot-landing_hero"></div><div id="slot-landing_chats"></div><div id="slot-chat_input_tools_left"></div><div id="slot-chat_composer_above"></div></body></html>', { url: 'http://localhost:7860/' });
   globalThis.document = dom.window.document; globalThis.location = dom.window.location; globalThis.DOMParser = dom.window.DOMParser;
+  dom.window.HTMLElement.prototype.scrollIntoView = () => {};
   native = document.querySelector('#native')!; nativeMarkup = native.outerHTML; nativeClicks = 0;
   document.querySelector('#native-send')!.addEventListener('click', () => { nativeClicks++; });
   calls = []; requests = []; roots = new Map(); subscriptions = new Map(); favoriteIds = ['char_0', 'char_4'];
@@ -997,7 +998,10 @@ test('card import stays regular with JAR installed; only the explicit history sh
   findButton('2. Add a card').click(); await flush();
   expect(document.querySelector('.jb-card-methods')).not.toBeNull();
   expect(document.querySelector('.jb-card-import')).toBeNull();
+  const summary = document.querySelector('.jb-more > summary')!; let menuScrolled = false;
+  summary.scrollIntoView = () => { menuScrolled = true; };
   findButton('Learn the Janiverse way').click(); await flush();
+  expect(menuScrolled).toBe(true);
   expect(document.querySelector<HTMLDetailsElement>('.jb-more')!.open).toBe(true);
   expect(findButton('Import characters', roots.get('landing_header')!).classList.contains('jb-card-import-target')).toBe(true);
   expect(document.querySelector('.jb-card-import')).toBeNull();

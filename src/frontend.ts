@@ -239,7 +239,7 @@ export function setup(ctx: SpindleFrontendContext) {
     ['Generation Settings', () => openPrompt('generation')],
   ] as const) {
     const item = button(label, () => { more.open = false; action(); }, 'jb-menu-link');
-    if (label === 'Import characters') importMenuItem = item;
+    if (label === 'Import characters') { importMenuItem = item; item.setAttribute('aria-label', label); }
     menu.append(item);
   }
   for (const [label, id] of [['My Personas', 'personas'], ['Advanced Presets', 'loom'], ['Lorebooks', 'lorebook'], ['Extensions', 'spindle']]) {
@@ -248,7 +248,7 @@ export function setup(ctx: SpindleFrontendContext) {
   menu.append(button('Chat tools & help', () => { more.open = false; chatTools.openHelp(); }, 'jb-menu-link'));
   more.append(moreLabel, menu);
   const cardSetup = createCardSetup(ctx, {
-    showImportMenu: () => { setView('browse'); more.open = true; importMenuItem?.classList.add('jb-card-import-target'); importMenuItem?.focus({ preventScroll: true }); },
+    showImportMenu: () => { setView('browse'); moreLabel.scrollIntoView({ block: 'nearest', inline: 'nearest' }); more.open = true; importMenuItem?.classList.add('jb-card-import-target'); importMenuItem?.focus({ preventScroll: true }); },
     clearImportMenu: () => { if (importMenuItem?.classList.contains('jb-card-import-target')) { importMenuItem.classList.remove('jb-card-import-target'); more.open = false; } },
     openImportGuide: () => launchTutorial('import'),
     openCharacters: () => invoke({ kind: 'drawer_tab', id: 'characters' }),
