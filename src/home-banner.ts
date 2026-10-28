@@ -2,6 +2,7 @@ import type { SpindleFrontendContext, SpindleHostSurfaceRef, SpindleModalHandle 
 import { icon } from './icons';
 import { createLunchPicks } from './lunch-picks';
 import type { TutorialFeature } from './feature-tutorials';
+import { createSetupChecklist } from './setup-checklist';
 
 type Options = {
   invoke: (ref: SpindleHostSurfaceRef) => Promise<boolean>;
@@ -10,6 +11,7 @@ type Options = {
   openPersona: () => void;
   openPrompt: () => void;
   openTutorial?: (feature: TutorialFeature) => void;
+  chooseCharacter?: () => void;
 };
 type MemoryOptions = Pick<Options, 'invoke'>;
 const memoryTools = {
@@ -65,7 +67,7 @@ export function createPresetPromo(_ctx?: SpindleFrontendContext) {
 
 /** A quiet, user-paced introduction: one idea and one next step at a time. */
 export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) {
-  let disposed = false, index = 0;
+  let disposed = false, index = 0, active = false;
   let picksModal: SpindleModalHandle | undefined;
   const root = make('section', 'jb-discover'); root.setAttribute('aria-label', 'Discover more of Lumiverse');
   const content = make('div', 'jb-discover-content');
@@ -87,6 +89,8 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
   footer.append(progress, apiTutorial, tutorial, next);
   const status = make('p', 'jb-discover-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   content.append(eyebrow, title, description, actions, footer, status);
+  const checklist = options.chooseCharacter ? createSetupChecklist(ctx, { ...options, chooseCharacter: options.chooseCharacter, dismissed: () => { if (!disposed && index === 0) { index = 1; render(); } } }) : undefined;
+  if (checklist) content.insertBefore(checklist.root, actions);
   const art = make('div', 'jb-discover-art'); art.setAttribute('aria-hidden', 'true');
   for (const [picture, cls] of [['all-chats', 'back'], ['extension', 'middle'], ['embeddings', 'front']] as const) {
     const card = make('div', `jb-discover-card jb-discover-card-${cls}`);
@@ -176,8 +180,14 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
     root.classList.toggle('jb-discover-lunch', isLunch);
     root.classList.toggle('jb-discover-basics', isBasics);
     cardButton.hidden = personaButton.hidden = promptButton.hidden = !isBasics;
+    actions.hidden = isBasics && !!checklist;
+    if (checklist) {
+      checklist.root.hidden = !isBasics;
+      if (active && isBasics) checklist.activate(); else checklist.deactivate();
+    }
     cortexButton.hidden = idea.name !== 'Memory';
-    root.dataset.idea = idea.name.toLowerCase(); title.textContent = idea.title; description.textContent = idea.description;
+    root.dataset.idea = idea.name.toLowerCase(); title.textContent = idea.title;
+    description.textContent = isBasics && checklist ? 'Connect your AI and add a character card to start chatting. A persona and prompt are optional.' : idea.description;
     tryButton.replaceChildren(icon(idea.picture), document.createTextNode(idea.action));
     progress.textContent = `${idea.name} · ${index + 1} of ${ideas.length}`;
     next.setAttribute('aria-label', `Next idea: ${ideas[(index + 1) % ideas.length].name}`); status.textContent = '';
@@ -214,5 +224,10 @@ export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) 
   personaButton.addEventListener('click', () => openBasicStep(options.openPersona));
   promptButton.addEventListener('click', () => openBasicStep(options.openPrompt));
   render();
-  return { root, destroy() { disposed = true; picksModal?.dismiss(); root.remove(); } };
+  return { root,
+    activate() { if (disposed) return; active = true; if (index === 0) checklist?.activate(); },
+    deactivate() { active = false; checklist?.deactivate(); },
+    reviewSetup() { if (disposed) return; checklist?.review(); index = 0; render(); },
+    destroy() { disposed = true; checklist?.destroy(); picksModal?.dismiss(); root.remove(); },
+  };
 }

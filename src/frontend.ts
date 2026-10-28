@@ -16,6 +16,7 @@ import tutorialCSS from './feature-tutorials.css' with { type: 'text' };
 import welcomeCSS from './welcome.css' with { type: 'text' };
 import visualCSS from './visual-style.css' with { type: 'text' };
 import characterProfileCSS from './character-profile.css' with { type: 'text' };
+import guidedSetupCSS from './guided-setup.css' with { type: 'text' };
 import { mountProfileChats } from './profile-chats';
 import frauncesFont from '../assets/fonts/fraunces-latin.woff2';
 import juraFont from '../assets/fonts/jura-latin.woff2';
@@ -40,6 +41,7 @@ import { openFeatureTutorial, type TutorialFeature } from './feature-tutorials';
 import { tutorialScreenshots } from './tutorial-screenshots';
 import { readOptionalState, subscribeOptionalState } from './optional-state';
 import { createWelcome } from './welcome';
+import { createChatSetup } from './chat-setup';
 import { groupCharacters, type CharacterGroup, type CharacterSignatureCache, type CharacterSummary } from './character-library';
 
 type Character = CharacterSummary;
@@ -166,6 +168,7 @@ export function setup(ctx: SpindleFrontendContext) {
   cleanups.push(ctx.dom.addStyle(themeCSS), ctx.dom.addStyle(layoutCSS), ctx.dom.addStyle(uiCSS), ctx.dom.addStyle(settingsCSS), ctx.dom.addStyle(composerCSS), ctx.dom.addStyle(homeBannerCSS), ctx.dom.addStyle(cardImportCSS), ctx.dom.addStyle(myChatsCSS), ctx.dom.addStyle(soundCloudCSS), ctx.dom.addStyle(customizeCSS));
   cleanups.push(ctx.dom.addStyle(visualCSS.replace('__JB_FRAUNCES__', frauncesFont).replace('__JB_JURA__', juraFont)));
   cleanups.push(ctx.dom.addStyle(characterProfileCSS));
+  cleanups.push(ctx.dom.addStyle(guidedSetupCSS));
   const status = el('p', 'jb-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   const navButtons: Array<{ node: HTMLButtonElement; view: View }> = [];
   async function invoke(ref: SpindleHostSurfaceRef, params?: Record<string, string>) {
@@ -199,7 +202,8 @@ export function setup(ctx: SpindleFrontendContext) {
     });
     if (navigate && location.pathname !== '/') void invoke({ kind: 'route', id: '/' });
     if (next === 'chats' && location.pathname === '/') myChats.activate(); else myChats.deactivate();
-    if (next === 'browse' && location.pathname === '/') { void loadCharacters(); void loadRecent(); }
+    if (next === 'browse' && location.pathname === '/') { void loadCharacters(); void loadRecent(); homeBanner.activate(); }
+    else homeBanner.deactivate();
   }
   const masthead = el('div', 'jb-home-masthead');
   const nav = el('nav', 'jb-nav'); nav.setAttribute('aria-label', 'Main navigation');
@@ -209,6 +213,7 @@ export function setup(ctx: SpindleFrontendContext) {
   const more = el('details', 'jb-more'); const moreLabel = el('summary', '', 'More'); const menu = el('div', 'jb-more-menu');
   for (const [label, action] of [
     ['Start here', () => welcome.open()],
+    ['Setup checklist', () => { setView('browse'); homeBanner.reviewSetup(); }],
     ['Import characters', openImport],
     ['Import old chats (JAR Bridge)', () => { void openHistory().catch(() => false).then(opened => { if (!opened && !disposed) openTutorial('history'); }); }],
     ['API Settings', openConnections],
@@ -253,8 +258,9 @@ export function setup(ctx: SpindleFrontendContext) {
   });
   const chatTitle = button('Conversation', () => { void invoke({ kind: 'drawer_tab', id: 'profile' }); }, 'jb-chat-title');
   const soundCloud = createSoundCloud(ctx);
+  const chatSetup = createChatSetup(ctx, { openApi: openConnections, openPersona: () => { void invoke({ kind: 'drawer_tab', id: 'personas' }); }, openPrompt: () => openPrompt('prompt') });
   chatBar.insertBefore(chatTitle, chatRight);
-  chatHeader.append(chatBar, soundCloud.root); mounts[1].append(chatHeader);
+  chatHeader.append(chatBar, chatSetup.root, soundCloud.root); mounts[1].append(chatHeader);
   let titleRequest = 0;
   async function refreshChatHeader() {
     const active = ctx.getActiveChat(); const generation = ++titleRequest;
@@ -294,7 +300,9 @@ export function setup(ctx: SpindleFrontendContext) {
     } catch { /* The settings dialog reports unavailable saved configurations. */ }
   }
   const home = el('section', 'jb-home'); home.setAttribute('aria-label', 'Character browsing');
-  const homeBanner = createHomeBanner(ctx, { invoke, openApi: openConnections, openImport, openPersona: () => personaCreate.open(), openPrompt: () => openPrompt('prompt'), openTutorial }); home.append(homeBanner.root);
+  const homeBanner = createHomeBanner(ctx, { invoke, openApi: openConnections, openImport, openPersona: () => personaCreate.open(), openPrompt: () => openPrompt('prompt'), openTutorial,
+    chooseCharacter: () => { grid.scrollIntoView({ block: 'start' }); grid.querySelector<HTMLButtonElement>('h3 button')?.focus({ preventScroll: true }); },
+  }); home.append(homeBanner.root);
   const recentSection = el('section', 'jb-recent-section'); const recentHeading = el('div', 'jb-section-heading');
   recentHeading.append(el('h2', '', 'My chats'), button('View all →', () => setView('chats'), 'jb-text-button'));
   const recent = el('div', 'jb-recent'); recentSection.append(recentHeading, recent); home.append(recentSection);
@@ -606,12 +614,13 @@ export function setup(ctx: SpindleFrontendContext) {
   cleanups.push(subscribeOptionalState(ctx, 'chat.active', () => { void refreshChatHeader(); void refreshConnection(); }), subscribeOptionalState(ctx, 'connections.active', () => { void refreshConnection(); }));
   let lastPath = location.pathname, lastHome = lastPath === '/';
   const routeTimer = setInterval(() => {
+    chatSetup.sync();
     if (location.pathname !== lastPath) { settingsWindow.syncRoute(); if (!location.pathname.startsWith('/chat/')) soundCloud.close(); lastPath = location.pathname; }
     const atHome = location.pathname === '/';
     if (atHome && !lastHome) {
       if (view === 'chats') myChats.activate();
-      else { void loadRecent(); void loadCharacters(); }
-    } else if (!atHome && lastHome) myChats.deactivate();
+      else { homeBanner.activate(); void loadRecent(); void loadCharacters(); }
+    } else if (!atHome && lastHome) { myChats.deactivate(); homeBanner.deactivate(); }
     lastHome = atHome;
   }, 500);
   const welcome = createWelcome(ctx, {
@@ -625,11 +634,12 @@ export function setup(ctx: SpindleFrontendContext) {
   cleanups.push(() => welcome.destroy());
   setView('browse', false);
   void refreshChatHeader(); refreshConnection();
+  void chatSetup.refresh();
   void welcome.maybeOpen();
   try { if (consumePersonaSetupHandoff(window.sessionStorage)) void invoke({ kind: 'drawer_tab', id: 'personas' }); }
   catch { /* Storage can be unavailable; ordinary setup still works. */ }
   return () => {
-    disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); tutorialWindow?.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
+    disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); tutorialWindow?.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); chatSetup.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
     cleanups.reverse().forEach(cleanup => cleanup()); mounts.forEach(root => root.replaceChildren());
     if (oldView === null) document.documentElement.removeAttribute('data-janitor-bridge-view'); else document.documentElement.setAttribute('data-janitor-bridge-view', oldView);
     chatTools.destroy();

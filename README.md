@@ -16,6 +16,10 @@ Compiled bundles are included in `dist/`; you do not need to build them yourself
 
 Preview updates are published on **staging**. In the installed extension's controls, choose **Branch → staging**, then update/reload as Lumiverse prompts. Branch selection is a normal Lumiverse feature for GitHub-installed extensions. A manually copied folder without its own Git metadata cannot pull updates or switch branches; install from the repository to use those controls.
 
+**Guided setup preview:** the `test/guided-setup` branch adds a live Basics checklist and a compact current-chat setup row. On Home, the checklist checks the saved AI connection/model and character library, with persona and prompt steps marked optional. Completed steps stay clickable. **Choose a character** moves to your gallery; it does not create a conversation. Hide the checklist with **Hide checklist** or **Do this later**, and reopen it using **More → Setup checklist**. The preference belongs to your Lumiverse account. Checks use native reads and do not test credentials, generate messages or request permissions.
+
+In a chat, **Playing as**, **Model**, and **Prompt** show the current selections. Each opens its existing settings control. The prompt label identifies whether its native binding comes from this chat, persona, character, connection, or preset defaults. Chat-pinned connections and model overrides are respected; a deleted pin falls back to the native active/default connection. Raw temporary chats explicitly show no persona/preset. Unavailable details offer **Refresh setup** rather than claiming setup is complete. Preview changes stay on the test branch until reviewed.
+
 Upgrading from **Janitor Bridge**? Janiverse keeps the `janitor_bridge` identifier so existing installation settings and saved styles remain compatible.
 
 ## Features

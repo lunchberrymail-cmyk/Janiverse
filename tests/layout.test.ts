@@ -19,7 +19,7 @@ function deferred<T>() {
 }
 const cards = Array.from({ length: 24 }, (_, index) => ({ id: `char_${index}`, name: `Character ${index}`, description: 'A character from your own library.' }));
 const allCards = [...cards, ...Array.from({ length: 48 }, (_, index) => ({ id: `char_${index + 24}`, name: `Character ${index + 24}`, description: 'A character from your own library.' }))];
-const summaryRequests = () => requests.filter(request => request.url.pathname === '/api/v1/characters/summary');
+const summaryRequests = () => requests.filter(request => request.url.pathname === '/api/v1/characters/summary' && request.url.searchParams.get('limit') !== '1');
 function respondPage(data: Card[], url: URL) {
   const offset = Number(url.searchParams.get('offset') || 0), limit = Number(url.searchParams.get('limit') || 1000);
   return respond(data.slice(offset, offset + limit), data.length);
@@ -63,6 +63,8 @@ beforeEach(() => {
     const url = new URL(String(input), dom.window.location.href);
     requests.push({ url, signal: init.signal as AbortSignal | undefined, options: init });
     expect(init.credentials).toBe('same-origin');
+    if (url.pathname === '/api/v1/connections') return { ok: true, json: async () => ({ data: [], total: 0 }) };
+    if (url.pathname === '/api/v1/characters/summary' && url.searchParams.get('limit') === '1') return { ok: true, json: async () => ({ data: allCards.slice(0, 1), total: allCards.length }) };
     if (url.pathname === '/api/v1/chats/hidden-from-recent') return { ok: true, json: async () => [] };
     if (url.pathname === '/api/v1/chats' || url.pathname === '/api/v1/personas') return { ok: true, json: async () => ({ data: [], total: 0 }) };
     return fetchResult(url, init);
@@ -488,7 +490,7 @@ test('Cortex setup leaves the Memory editor for native configuration', async () 
 
 test('grouped gallery pages reuse the native summary index while search, sort and favorites reset it', async () => {
   start(); await flush();
-  expect(requests[0].url.searchParams.get('sort')).toBe('created');
+  expect(summaryRequests()[0].url.searchParams.get('sort')).toBe('created');
   expect(summaryRequests()).toHaveLength(1);
   expect(summaryRequests()[0].url.searchParams.get('limit')).toBe('1000');
   expect(summaryRequests()[0].url.searchParams.get('offset')).toBe('0');
@@ -536,7 +538,7 @@ test('a stale library response cannot replace newer results even if transport ig
   const old = deferred<any>(), fresh = deferred<any>(); let number = 0;
   fetchResult = async () => ++number === 1 ? old.promise : fresh.promise;
   start(); const sort = document.querySelector('.jb-sort') as HTMLSelectElement; sort.value = 'name'; sort.dispatchEvent(new dom.window.Event('change'));
-  expect(requests[0].signal!.aborted).toBe(true);
+  expect(summaryRequests()[0].signal!.aborted).toBe(true);
   fresh.resolve(respond([{ id: 'new', name: 'Fresh result' }])); await flush();
   old.resolve(respond([{ id: 'old', name: 'Stale result' }])); await flush();
   expect(document.querySelector('.jb-grid')!.textContent).toContain('Fresh result'); expect(document.querySelector('.jb-grid')!.textContent).not.toContain('Stale result');
@@ -605,7 +607,7 @@ test('All Characters includes saved cards with no chats and never builds the lib
   start(); await flush();
   expect([...document.querySelectorAll('.jb-card')].map(card => card.getAttribute('data-character-id'))).toEqual(['char_0', 'unused-card']);
   expect(document.querySelector('.jb-count')!.textContent).toBe('2 saved character cards');
-  const summary = requests.find(request => request.url.pathname === '/api/v1/characters/summary')!;
+  const summary = summaryRequests()[0];
   expect(summary.url.searchParams.get('sort')).toBe('created'); expect(summary.url.searchParams.has('filter')).toBe(false);
   expect(groupedQueries).toHaveLength(0); expect(chatReads).toBe(0);
   (document.querySelector('[data-character-id="unused-card"] .jb-card-title') as HTMLButtonElement).click(); await flush();
