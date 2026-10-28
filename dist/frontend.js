@@ -982,7 +982,7 @@ html[data-jb-composer="true"] [data-component="InputArea"] .jb-composer-popover-
 .jb-my-chats .jb-mc-conversation-open { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 18px; align-items: start; min-width: 0; width: 100%; padding: 18px 22px; border: 0; border-radius: 15px; background: transparent; color: inherit; text-align: left; font: inherit; }
 .jb-my-chats .jb-mc-row-actions { display: flex; align-items: center; gap: 8px; padding: 0 12px 0 0; }
 .jb-my-chats .jb-mc-row-action { display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 44px; padding: 10px; border: 0; border-radius: 8px; background: transparent; color: #b8b7bf; }
-.jb-my-chats .jb-mc-row-action svg { width: 19px; height: 19px; }
+.jb-my-chats .jb-mc-row-action svg { width: 19px; height: 19px; color: inherit; }
 .jb-my-chats .jb-mc-row-action:hover { background: #ffffff10; color: #e8ddff; }
 .jb-my-chats .jb-mc-trash { color: #ed868e; }
 .jb-my-chats .jb-mc-trash:hover { background: #ee77771c; color: #ff9da5; }
