@@ -157,6 +157,33 @@ test('Customize a copy is an explicit draft action, with no mutation until Save 
   expect(presets.get('original')?.prompt_order).toEqual(base().prompt_order);
 });
 
+test('Generation explains the locked preset and opens its named sampler guide only on request', async () => {
+  editor.destroy(); const guided: string[] = []; editor = createPromptSettings(ctx, { openSamplerGuide: name => { guided.push(name); } });
+  await start('generation'); const guide = root.querySelector<HTMLElement>('.jb-sampler-edit-guide')!;
+  expect(guide.hidden).toBe(false); expect(guide.closest<HTMLElement>('[role=tabpanel]')!.hidden).toBe(false);
+  expect(guide.textContent).toContain('My advanced preset'); expect(guide.textContent).toContain('Preset → Samplers'); expect(guide.textContent).toContain('affects other chats');
+  expect(input('temperature').disabled).toBe(true); expect(guided).toEqual([]); expect(writes()).toHaveLength(0);
+  button('Edit preset samplers').click(); expect(guided).toEqual(['My advanced preset']); expect(writes()).toHaveLength(0); expect(requested).toEqual([]);
+});
+
+test('Generation can teach and edit a sampler copy without sending the user through Instructions or modifying the original', async () => {
+  const original = structuredClone(presets.get('original')); await start('generation'); button('Customize a copy here').click();
+  expect(root.querySelector<HTMLElement>('[id$="-generation"]')!.hidden).toBe(false); expect(input('temperature').disabled).toBe(false);
+  const guide = root.querySelector<HTMLElement>('.jb-sampler-edit-guide')!; expect(guide.textContent).toContain('Adjust your copy, then save');
+  expect(guide.textContent).toContain('Choose Save settings'); expect(guide.textContent).toContain('Preset-linked regex stays with the original'); expect(writes()).toHaveLength(0);
+  change('temperature', '1.15'); await save();
+  expect(presets.get('original')).toEqual(original); expect(presets.get('copy-1')?.parameters.samplerOverrides.temperature).toBe(1.15);
+  expect(bindings.get('chat/chat-1')?.preset_id).toBe('copy-1'); expect(guide.hidden).toBe(true); expect(input('temperature').disabled).toBe(false);
+});
+
+test('inline sampler guidance names its real Save button and stays hidden for an ordinary custom prompt', async () => {
+  const { session } = await mount(); button('Customize a copy here').click();
+  expect(root.querySelector('.jb-sampler-guide-steps')!.textContent).toContain('Save prompt & generation'); session.destroy();
+  editor.destroy(); editor = createPromptSettings(ctx); ctx.ui.showModal = () => { root = document.createElement('section'); document.body.append(root); return { root, onDismiss() {}, dismiss() { root.remove(); } }; };
+  selectedId = 'native-default'; connection.preset_id = 'native-default'; inherited = null; await start('generation');
+  expect(root.querySelector<HTMLElement>('.jb-sampler-edit-guide')!.hidden).toBe(true); expect(input('temperature').disabled).toBe(false);
+});
+
 test('choosing an unchanged saved preset abandons a copy draft without applying its prompt or generation edits', async () => {
   presets.set('alternate', { ...base(), id: 'alternate', name: 'Original imported preset' });
   await start(); change('global-prompt', 'Do not carry this draft into the saved source'); change('temperature', '1.9');

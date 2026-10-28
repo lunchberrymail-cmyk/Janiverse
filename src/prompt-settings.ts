@@ -10,7 +10,7 @@ type PromptMode = 'custom' | 'preset';
 type PresetChoice = { id: string; name: string; provider: string };
 type PromptBase = { preset: Preset; binding: Binding | null; blockId: string | null; defaultsSourceId?: string };
 type EditorHandle = Pick<SpindleModalHandle, 'root' | 'dismiss' | 'onDismiss'>;
-export type PromptSettingsOptions = { openPresetManager?: () => void; openIllarinSettings?: () => void };
+export type PromptSettingsOptions = { openPresetManager?: () => void; openIllarinSettings?: () => void; openSamplerGuide?: (presetName: string) => void };
 const owner = 'janitor_bridge';
 const markerKey = '_janitor_bridge';
 const defaultSlug = 'lumiverse-builtin-default-loom';
@@ -125,11 +125,12 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
     const promptField = field('Global prompt', prompt, promptHelp); promptCard.append(sourceControls, nameField, promptField, saveNew);
     const manager = options.openPresetManager ? button('Manage / import presets', () => { if (!saving && !loading && !sourceLoading) options.openPresetManager?.(); }) : undefined;
     if (manager) sourceControls.append(manager);
-    const customize = button('Customize a copy', () => {
+    function customizePresetCopy() {
       if (!loaded || saving || loading || sourceLoading || promptMode !== 'preset' || customizeCopy) return;
       customizeCopy = true; copyDraft = true; nameDirty = false; sourceDirty = true; renderSource(staged ?? loaded, true); lock(false);
       message('You are editing a separate copy. The original stays intact. Preset-linked regex stays with the original; use Saved preset unchanged to keep that integration.', 'warning');
-    });
+    }
+    const customize = button('Customize a copy', customizePresetCopy);
     customize.hidden = true; sourceControls.append(customize);
     const promptGuide = node('details', 'jb-settings-details jb-settings-prompt-help');
     promptGuide.append(node('summary', '', 'How prompts and presets work'), node('p', 'jb-settings-help', 'Custom prompt starts from Lumiverse’s built-in Default preset. Paste your instructions in the large box; the character, persona, and conversation keep their normal places.'), node('p', 'jb-settings-help', 'Saved preset uses the original native preset unchanged, keeping its prompts, variables, generation settings, and linked regex. Use Manage / import presets to edit it in Lumiverse. Customize a copy is optional and creates a separate preset only when saved; preset-linked regex remains with the original.'), node('p', 'jb-settings-help', 'For a preset JSON from Discord, use Manage / import presets, then the Loom menu’s Import Loom JSON or Import Legacy JSON option. For Illarin, connect this Lumiverse instance in Illarin settings, then send the preset from Illarin. Choose the imported preset here afterward.'), node('p', 'jb-settings-help', 'Choosing a source only prepares a draft. Save settings applies the selected preset to this scope. Custom prompts and explicitly customized copies keep the source preset intact.'));
@@ -149,6 +150,19 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
     const rawLabel = node('label', 'jb-settings-checkbox jb-settings-toggle-row'); const raw = node('input'); raw.type = 'checkbox'; raw.name = 'enable-chat-preset'; rawLabel.append(raw, node('span', '', 'Use a native preset for this raw test chat')); rawLabel.hidden = true;
     const enabledLabel = node('label', 'jb-settings-checkbox jb-settings-toggle-row'); const enabled = node('input'); enabled.type = 'checkbox'; enabled.name = 'sampler-overrides'; enabled.addEventListener('change', () => { samplersDirty = true; });
     const enabledCopy = node('span', '', 'Use these generation controls'); enabledCopy.append(node('small', 'jb-settings-help', 'Turn on to use the values below for new replies.')); enabledLabel.append(enabled, enabledCopy);
+    const samplerGuide = node('section', 'jb-sampler-edit-guide'); samplerGuide.hidden = true; samplerGuide.setAttribute('aria-label', 'How to change preset generation settings');
+    const samplerGuideTitle = node('h3'), samplerGuideText = node('p', 'jb-settings-help'), samplerGuideSteps = node('ol', 'jb-sampler-guide-steps');
+    samplerGuideSteps.append(node('li', '', 'Turn on Use these generation controls.'), node('li', '', 'Adjust temperature, reply length or context below.'), node('li', '', `Choose ${inline ? 'Save prompt & generation' : 'Save settings'} to apply the copy.`));
+    const samplerGuideActions = node('div', 'jb-sampler-guide-actions');
+    const samplerNative = options.openSamplerGuide ? button('Edit preset samplers', () => {
+      if (current() && loaded && !saving && !loading && !sourceLoading) options.openSamplerGuide?.((staged ?? loaded).preset.name);
+    }) : undefined;
+    const samplerCopy = button('Customize a copy here', () => {
+      customizePresetCopy(); if (!useSavedOriginal() && current()) { show('generation'); enabled.focus({ preventScroll: true }); }
+    });
+    if (samplerNative) samplerGuideActions.append(samplerNative); samplerGuideActions.append(samplerCopy);
+    const samplerCopyNote = node('p', 'jb-settings-help', 'A copy leaves the original unchanged. Preset-linked regex stays with the original.');
+    samplerGuide.append(samplerGuideTitle, samplerGuideText, samplerGuideSteps, samplerGuideActions, samplerCopyNote);
     const generationCard = node('section', 'jb-settings-card'); if (inline) generationCard.append(node('h2', '', 'Generation settings')); generationCard.append(enabledLabel);
     const grid = node('div', 'jb-settings-grid'); const inputs = new Map<string, HTMLInputElement>(); const sliders = new Map<string, HTMLInputElement>();
     const advancedGeneration = node('details', 'jb-settings-advanced jb-settings-generation-advanced');
@@ -170,7 +184,7 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
       (basicHints[item.key] ? grid : advancedGrid).append(wrapper);
     }
     advancedGeneration.append(node('p', 'jb-settings-help', 'Blank temperature uses 1.0; 0 omits it from the request. Blank max new tokens uses 16,384. Blank context size uses the model’s context. Providers support different controls. Existing advanced options, model profiles, and custom request body remain intact; a custom body can override these values.'));
-    generationCard.append(grid); generationPanel.append(generationCard, advancedGeneration);
+    generationCard.append(grid); generationPanel.append(samplerGuide, generationCard, advancedGeneration);
     const advanced = node('details', 'jb-settings-advanced jb-settings-details');
     const presetInfo = node('p', 'jb-settings-help');
     advanced.append(node('summary', '', 'How these settings are saved'), presetInfo, node('p', 'jb-settings-help', 'Saved preset binds the original preset without creating or updating a preset row. Custom prompt and Customize a copy save a separate native Loom preset; later edits reuse that copy. This chat uses a chat binding; an API configuration uses a connection binding. Chat, persona, and character bindings take priority over an API configuration. No universal default is replaced. If no preset was selected, this API configuration receives the chosen preset as its fallback.'), node('p', 'jb-settings-help', 'Assistant prefill follows your connection’s existing reply prefix. Continue uses the message being continued instead.'));
@@ -200,6 +214,7 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
       editable.forEach(input => input.disabled = value);
       if (useSavedOriginal()) [prompt, promptName, prefill, enabled, ...exampleButtons, ...inputs.values(), ...sliders.values()].forEach(input => input.disabled = true);
       presetChoice.disabled = value || promptMode !== 'preset'; customize.disabled = value || loading || saving || sourceLoading;
+      samplerCopy.disabled = value || loading || saving || sourceLoading; if (samplerNative) samplerNative.disabled = value || loading || saving || sourceLoading;
       if (manager) manager.disabled = saving || loading || sourceLoading; if (illarin) illarin.disabled = saving || loading || sourceLoading;
       save.disabled = value || unconfirmedCreate; saveNew.disabled = value || unconfirmedCreate || useSavedOriginal();
       saveNew.textContent = pendingCreated ? 'Finish saving prompt' : 'Save as new prompt';
@@ -279,6 +294,9 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
       presetChoice.replaceChildren(...[...visible.values()].map(choice => { const option = node('option', '', choice.name); option.value = choice.id; return option; })); presetChoice.value = base.preset.id || choices[0]?.id || '';
       sourceHelp.textContent = promptMode === 'custom' ? !base.preset.id ? 'Lumiverse’s installed Default could not be used, so a standard base is prepared. Write or paste your own prompt; character details, memory and chat history stay included. It is saved only when you choose Save settings.' : base.preset.metadata._janiverse_standard_base ? 'Your own prompt, using a standard base with character details, memory and chat history included. Save settings to apply your changes.' : 'Your own prompt, using Lumiverse’s native Default layout. The original Default preset stays intact.' : useSavedOriginal() ? `Using “${base.preset.name}” directly, including its linked regex. Settings below show its saved values. No duplicate is created.` : `Editing a separate “${base.preset.name}” copy. Preset-linked regex stays with the original.`;
       customize.hidden = promptMode !== 'preset' || customizeCopy;
+      samplerGuide.hidden = promptMode !== 'preset' || customizeCopy && !copyDraft && !pendingCreated; samplerGuideSteps.hidden = useSavedOriginal(); samplerGuideActions.hidden = !useSavedOriginal();
+      samplerGuideTitle.textContent = useSavedOriginal() ? 'These values come from your preset' : 'Adjust your copy, then save';
+      samplerGuideText.textContent = useSavedOriginal() ? `“${base.preset.name}” is read-only here. Edit the original in Preset → Samplers (affects other chats using it), or customize a copy for ${loaded?.scope.kind === 'connection' ? 'this API configuration' : 'this chat'}.` : `Editing “${promptName.value}”. Nothing changes until you save.`;
       nativeInfo.textContent = useSavedOriginal() ? 'The saved preset is used unchanged. Edit the original in Manage / import presets, or choose Customize a copy.' : 'Your character, persona, and chat memory stay included.';
       promptField.querySelector('.jb-settings-label')!.textContent = promptMode === 'custom' ? 'Your prompt' : !base.blockId ? 'Additional instructions' : 'Global prompt';
       if (!preserveDraft || !promptDirty) { const target = base.preset.prompt_order.find(b => b.id === base.blockId); prompt.value = typeof target?.content === 'string' ? target.content : ''; }

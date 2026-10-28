@@ -123,7 +123,7 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
     ]) samplerTerms.append(node('dt', '', name), node('dd', '', detail));
     const samplerActions = node('div', 'jb-chat-guide-shortcuts'); samplerActions.append(actionButton('Open generation settings', options.openGeneration));
     generation.append(settingsPath, samplerTerms, samplerActions, node('p', 'jb-settings-help', 'Turn on “Use these generation controls”, adjust the values, then save. Advanced controls include Top P, Top K and penalties; support depends on your provider.'));
-    row(generation, 'Preset & prompt', 'Choose a preset in Instructions. Customize a copy unlocks its prompt and sampler controls.', 'Open prompt', options.openSettings);
+    row(generation, 'Preset & prompt', 'Grayed-out values belong to the saved preset. In Generation, Edit preset samplers guides you through Preset → Samplers. Customize a copy here unlocks a separate copy; adjust it, then save. Preset-linked regex stays with the original.', 'Open prompt', options.openSettings);
     const presetEditor = node('details', 'jb-chat-more-memory jb-chat-preset-editor'); presetEditor.append(node('summary', '', 'Full preset editor (Loom)'));
     row(presetEditor, 'Advanced Presets', 'Edit block order and the preset’s sampler controls.', 'Open preset editor', () => options.invoke({ kind: 'drawer_tab', id: 'loom' })); generation.append(presetEditor);
     row(story, 'Your persona', 'Choose who you play in the conversation.', 'Manage personas', options.openPersonas);

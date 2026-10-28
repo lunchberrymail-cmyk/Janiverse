@@ -21,6 +21,7 @@ import connectionTutorialCSS from './connection-tutorial.css' with { type: 'text
 import importTutorialCSS from './import-tutorial.css' with { type: 'text' };
 import cardSetupCSS from './card-setup.css' with { type: 'text' };
 import { createCardSetup } from './card-setup';
+import { openPresetSamplerGuide } from './preset-sampler-guide';
 import type { ImportGuideAttachment } from './import-tutorial';
 import { mountProfileChats } from './profile-chats';
 import frauncesFont from '../assets/fonts/fraunces-latin.woff2';
@@ -109,6 +110,13 @@ export function setup(ctx: SpindleFrontendContext) {
     invoke,
   });
   const promptSettings = createPromptSettings(settingsWindow.context('settings'), {
+    openSamplerGuide: presetName => {
+      tutorialWindow?.destroy(); const request = ++tutorialRequest;
+      tutorialWindow = openPresetSamplerGuide(ctx, { presetName,
+        openPreset: async () => { const opened = await invoke({ kind: 'drawer_tab', id: 'loom' }); if (opened && !disposed) settingsWindow.close(); return opened; },
+        onClose: () => { if (request === tutorialRequest) tutorialWindow = undefined; },
+      });
+    },
     openPresetManager: () => {
       void invoke({ kind: 'drawer_tab', id: 'loom' }).then(opened => {
         if (opened) settingsWindow.close();
