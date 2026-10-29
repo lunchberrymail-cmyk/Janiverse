@@ -101,7 +101,7 @@ test('revocation before the native write stops Create and revocation after it pr
 
 test('unknown network or server outcomes block blind Create retry and offer library navigation', async () => {
   draft(); respond = async () => { throw new TypeError('network interrupted'); }; submit(); await settle(); expect(requests).toHaveLength(1); expect(root().textContent).toContain('Check your library'); expect(button('Create Character').disabled).toBe(true);
-  submit(); await settle(); expect(requests).toHaveLength(1); expect(createdIds).toEqual([]); button('Open character library').click(); expect(navigated).toBe(1); expect(root().isConnected).toBe(false);
+  submit(); await settle(); expect(requests).toHaveLength(1); expect(createdIds).toEqual([]); button('Open character library').click(); await settle(); expect(navigated).toBe(1); expect(root().isConnected).toBe(false);
   creator.open(); draft(); respond = async () => json({ error: 'unknown server error' }, 500); submit(); await settle(); expect(requests).toHaveLength(2); expect(button('Create Character').disabled).toBe(true);
 });
 
@@ -186,4 +186,10 @@ test('empty alternatives validate before saving, can be removed, and never repla
 test('the image drop area prepares one portrait locally and rejects multiple files', () => {
   const drop = (files: File[]) => { const event = new dom.window.Event('drop', { bubbles: true, cancelable: true }); Object.defineProperty(event, 'dataTransfer', { value: { files } }); root().querySelector('.jb-character-portrait-preview')!.dispatchEvent(event); };
   drop([picture(), picture('two.png')]); expect(previewCount).toBe(0); expect(root().textContent).toContain('Choose one character picture'); drop([picture()]); expect(previewCount).toBe(1); expect(requests).toHaveLength(0); expect(checks).toBe(0);
+});
+
+test('a library shortcut that fails keeps the dialog open with a message instead of closing silently', async () => {
+  ctx.host.surfaces.invoke = async () => { throw new Error('drawer unavailable'); };
+  draft(); respond = async () => { throw new TypeError('network interrupted'); }; submit(); await settle();
+  button('Open character library').click(); await settle(); expect(root().isConnected).toBe(true); expect(root().textContent).toContain('Could not open the character library');
 });

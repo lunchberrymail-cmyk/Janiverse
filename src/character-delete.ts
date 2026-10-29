@@ -22,7 +22,8 @@ export function mountCharacterDelete(ctx: SpindleFrontendContext, root: HTMLElem
     const operation = record(value);
     if (operation.operationId !== operationId || operation.entityId !== character.id || operation.entity !== 'character') return false;
     if (operation.status === 'completed') { onDeleted(); return true; }
-    if (operation.status === 'failed') throw new Error('Deletion failed. Your library may need refreshing.');
+    // The host reports a failed operation as final, so a new deletion attempt is safe.
+    if (operation.status === 'failed') { operationId = undefined; throw new Error('Deletion failed. Your library may need refreshing before trying again.'); }
     return false;
   }
   async function run() {

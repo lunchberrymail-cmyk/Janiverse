@@ -136,7 +136,7 @@ export function openConnectionTutorial(ctx: SpindleFrontendContext, scenes: read
     } catch { if (!disposed && generation === testEpoch) status.textContent = 'Couldn’t complete the test. Check your server connection and try again.'; }
     finally { if (!disposed && generation === testEpoch) { testing = false; testAbort = undefined; syncControls(); } }
   }
-  function destroy() { if (disposed) return; disposed = true; cancelTest(); cleanups.reverse().forEach(stop => stop()); root.remove(); if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true }); options.onClose?.(); }
+  function destroy() { if (disposed) return; disposed = true; cancelTest(); cleanups.reverse().forEach(stop => stop()); root.remove(); mount?.remove(); if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true }); options.onClose?.(); }
   close.addEventListener('click', destroy); finish.addEventListener('click', () => { if (!finish.disabled) destroy(); });
   back.addEventListener('click', () => chooseScene(index - 1)); next.addEventListener('click', () => chooseScene(index + 1));
   reopen.addEventListener('click', () => { void openConnections(); }); test.addEventListener('click', () => { void runTest(); });

@@ -44,19 +44,6 @@ beforeEach(() => {
 afterEach(() => { memory.destroy(); globalThis.fetch = originalFetch; window.close(); });
 
 describe('native chat memory integration', () => {
-  test('a suggested summary remains an unsaved review draft and preserves native insertion settings on Save', async () => {
-    respond = async (_url, options) => options?.method === 'PATCH' ? json({}) : json({ metadata: {
-      authors_note: { content: 'Existing memory', depth: 8, role: 'user', custom: 'keep' },
-    } });
-    memory.open('review-chat', 'Suggested summary'); await settle();
-    expect(textarea().value).toBe('Suggested summary');
-    expect(calls.every(call => call.options?.method !== 'PATCH')).toBe(true);
-    saveButton().click(); await settle();
-    expect(JSON.parse(String(calls[1].options?.body))).toEqual({ authors_note: {
-      content: 'Suggested summary', depth: 8, role: 'user', custom: 'keep',
-    } });
-  });
-
   test('saves one metadata key atomically and preserves advanced note fields', async () => {
     respond = async (_url, options) => options?.method === 'PATCH' ? json({}) : json({ metadata: {
       authors_note: { content: 'Before', depth: 7, role: 'user', position: 2, custom: 'preserve' }, unrelated: 'keep',
@@ -137,9 +124,8 @@ describe('native chat memory integration', () => {
       mounted++; const card = document.createElement('section'); card.className = 'test-promo'; card.textContent = 'Memory tools'; target.append(card);
       return { destroy() { destroyed++; card.remove(); } };
     } });
-    memory.open('first', 'Unsaved review'); await settle();
+    memory.open('first'); await settle(); textarea().value = 'Unsaved review';
     expect(roots[0].firstElementChild?.className).toBe('jb-memory-promo-slot');
-    expect(textarea().value).toBe('Unsaved review');
     expect(mounted).toBe(1); expect(destroyed).toBe(0);
     memory.open('second'); await settle();
     expect(mounted).toBe(2); expect(destroyed).toBe(1);

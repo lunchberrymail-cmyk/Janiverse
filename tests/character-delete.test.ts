@@ -31,9 +31,15 @@ test('a lost delete response checks the existing operation instead of deleting a
 test('a card that changes while confirmation is open is never deleted',async()=>{
  read=async()=>({id:'copy-1',name:'Another copy'}); button('Delete card').click(); button('Delete this copy').click(); await settle(); expect(calls).toEqual([]); expect(completed).toBe(0); expect(root.textContent).toContain('Reopen its profile');
 });
-test('failure does not claim deletion and a status retry never sends another DELETE',async()=>{
+test('a failed operation does not claim deletion and offers a fresh attempt',async()=>{
  response=async(url)=>({ok:true,status:200,json:async()=>operation(url,'failed')}); button('Delete card').click(); button('Delete this copy').click(); await settle(); expect(completed).toBe(0); expect(root.textContent).toContain('Deletion failed');
- button('Check deletion status').click(); await settle(); expect(calls.filter(call=>call.method==='DELETE')).toHaveLength(1); expect(completed).toBe(0);
+ expect(button('Delete this copy')).toBeDefined(); response=async(url)=>({ok:true,status:200,json:async()=>operation(url)});
+ button('Delete this copy').click(); await settle(); expect(calls.filter(call=>call.method==='DELETE')).toHaveLength(2); expect(completed).toBe(1);
+});
+test('an unconfirmed operation keeps checking the same deletion instead of sending another DELETE',async()=>{
+ response=async(url,options)=>options.method==='DELETE'?{ok:true,status:202,json:async()=>operation(url,'accepted')}:{ok:false,status:503,json:async()=>({})};
+ button('Delete card').click(); button('Delete this copy').click(); await settle(); stop();
+ expect(calls.filter(call=>call.method==='DELETE')).toHaveLength(1); expect(completed).toBe(0);
 });
 test('closing during the identity check prevents a delayed destructive request',async()=>{
  let resolve!: (value:unknown)=>void; read=()=>new Promise(done=>{resolve=done;}); button('Delete card').click(); button('Delete this copy').click(); await settle(); stop(); resolve({id:'copy-2',name:'Duplicate'}); await settle(); expect(calls).toEqual([]); expect(completed).toBe(0);

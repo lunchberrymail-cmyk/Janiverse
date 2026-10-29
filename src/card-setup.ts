@@ -15,11 +15,11 @@ const nativeSteps = [
 
 /** Teaches real entry points. No file selection, import requests or permission grants. */
 export function createCardSetup(ctx: SpindleFrontendContext, options: Options) {
-  let disposed = false, root: HTMLElement | undefined;
+  let disposed = false, root: HTMLElement | undefined, mount: HTMLElement | undefined;
   let pendingMenu = false, epoch = 0;
   let stopDrawer: (() => void) | undefined;
   function close() {
-    epoch++; pendingMenu = false; stopDrawer?.(); stopDrawer = undefined; options.clearImportMenu(); root?.remove(); root = undefined;
+    epoch++; pendingMenu = false; stopDrawer?.(); stopDrawer = undefined; options.clearImportMenu(); root?.remove(); mount?.remove(); root = mount = undefined;
   }
   function companion(native: boolean) {
     close(); const session = ++epoch;
@@ -54,7 +54,6 @@ export function createCardSetup(ctx: SpindleFrontendContext, options: Options) {
     if (native) {
       const navigation = make('nav', 'jb-api-guide-nav'); navigation.setAttribute('aria-label', 'Lumiverse import steps'); navigation.append(back, next); body.append(navigation);
       const note = make('p', 'jb-card-menu-note', 'Use a character card export, not a screenshot. Cards don’t need JAR. The checklist updates when a card is actually saved.'); body.append(note);
-      let mount: HTMLElement | undefined;
       try { mount = ctx.ui.mount('drawer_footer'); } catch { /* Older hosts use a floating companion. */ }
       if (mount) { mount.classList.add('jb-api-guide-mount'); mount.append(panel); }
       else { panel.classList.add('jb-api-guide-fallback'); document.body.append(panel); }

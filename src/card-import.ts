@@ -96,8 +96,8 @@ export function createCardImport(ctx: SpindleFrontendContext, options: Options =
     const importButton = button('Import', () => { void run(false); }, 'jb-settings-save'); importButton.disabled = true;
     const library = button('Open character library', () => {
       const surfaces = ctx.host?.surfaces; const target = { kind: 'drawer_tab' as const, id: 'characters' };
-      if (!surfaces?.list(['drawer_tab']).some(item => item.id === target.id && item.invocable !== false)) return;
-      modal.dismiss(); try { void Promise.resolve(surfaces.invoke(target)).catch(() => {}); } catch { /* Native navigation is optional. */ }
+      if (!surfaces?.list(['drawer_tab']).some(item => item.id === target.id && item.invocable !== false)) { message('This shortcut is unavailable. Open Characters from Lumiverse’s sidebar.', 'error'); return; }
+      void Promise.resolve().then(() => surfaces.invoke(target)).then(() => { if (current()) modal.dismiss(); }, () => message('Could not open the character library. Open Characters from Lumiverse’s sidebar.', 'error'));
     }, 'jb-settings-link');
     library.hidden = !ctx.host?.surfaces?.list(['drawer_tab']).some(item => item.id === 'characters' && item.invocable !== false);
     actions.append(library, allow, retry, close, importButton);

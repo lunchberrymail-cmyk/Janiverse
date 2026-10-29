@@ -1167,3 +1167,11 @@ test('Home Help stays available after first-run dismissal without routing, reque
   expect(calls).toHaveLength(0); expect(permissionRequests).toBe(0); expect(native.outerHTML).toBe(nativeMarkup);
   stop!(); stop = undefined; expect(help.isConnected).toBe(false); expect(writes).toBe(1);
 });
+
+test('a favorite change in All characters keeps the current gallery page', async () => {
+  start(); await flush(); findButton('Next →').click(); await flush();
+  expect(document.querySelector('.jb-paging span')!.textContent).toBe('25–48 of 72');
+  subscriptions.get('characters.favorites')!.forEach(handler => handler()); await flush();
+  expect(document.querySelector('.jb-paging span')!.textContent).toBe('25–48 of 72');
+  expect(document.querySelector('.jb-card')!.getAttribute('data-character-id')).toBe('char_24');
+});

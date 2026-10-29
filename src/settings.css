@@ -95,11 +95,6 @@
 .jb-settings-config > :only-child { grid-column: 1 / -1; }
 /* Provider choices and their help share one column; a long notice must not
    squeeze the provider pills into a narrow vertical grid track. */
-.jb-api-settings > .jb-settings-section { margin-top: 0; padding-top: 0; border-top: 0; }
-.jb-api-settings .jb-settings-config { grid-template-columns: minmax(0, 1fr); align-items: start; gap: 7px; margin-bottom: 16px; padding: 10px 12px; }
-.jb-api-settings .jb-provider-tabs { margin: 0; }
-.jb-api-settings .jb-provider-pill { flex: 0 0 auto; min-height: 34px; padding: 6px 12px; }
-.jb-api-settings .jb-settings-grid { gap: 12px 16px; }
 .jb-settings-row, .jb-settings-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
 .jb-settings-toolbar { margin: 0 0 15px; }
 
@@ -289,11 +284,6 @@
 .jb-settings-combined .jb-api-config-card .jb-settings-actions > button:not(.jb-primary) { min-height: 36px; }
 .jb-settings-combined .jb-api-config-card .jb-settings-actions > .jb-primary { min-height: 40px; }
 .jb-api-saved-grid, .jb-api-destination-grid { margin-bottom: 14px; }
-.jb-api-settings .jb-api-model-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; min-width: 0; }
-.jb-api-settings .jb-api-model-row .jb-settings-toolbar { margin: 0; }
-.jb-api-settings .jb-api-model-row .jb-button { min-height: 42px; padding-inline: 12px; }
-.jb-api-settings .jb-api-config-card > .jb-settings-grid > .jb-settings-help { margin: -5px 0 0; }
-@media(max-width:380px) { .jb-api-settings .jb-api-model-row { grid-template-columns: minmax(0, 1fr); } }
 .jb-prompt-settings-inline.jb-settings { --jb-settings-gutter: 0px; max-width: none; padding: 0; }
 .jb-settings-global-prompt > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 32px; cursor: pointer; list-style: none; }
 .jb-settings-global-prompt > summary::-webkit-details-marker { display: none; }

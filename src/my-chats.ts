@@ -55,7 +55,9 @@ function safeUrl(value: string, image: boolean): string | null {
   try {
     if (!value.trim()) return null;
     const parsed = new URL(value, location.origin); if (parsed.username || parsed.password) return null;
-    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') return parsed.href;
+    // Notes load images automatically, so only remote HTTPS images: never this server's own API or mixed content.
+    if (image) { if (parsed.protocol === 'https:' && parsed.origin !== location.origin) return parsed.href; }
+    else if (parsed.protocol === 'https:' || parsed.protocol === 'http:') return parsed.href;
     if (image && /^data:image\/(?:png|jpe?g|gif|webp);base64,[a-z\d+/=\s]+$/i.test(value)) return value;
   } catch { /* Invalid profile resource. */ }
   return null;
@@ -93,10 +95,10 @@ export function profileMarkup(source: string): string {
   } else {
     // Keep common card Markdown readable, including its public illustration links.
     for (const paragraph of source.split(/\n\s*\n/)) {
-      const p = el('p'); const tokens = /!\[([^\]]*)\]\(([^\s)]+)(?:\s+"[^"]*")?\)|\[([^\]]+)\]\(([^\s)]+)\)|\*\*([^*]+)\*\*/g;
+      const p = el('p'); const append = (value: string) => value.split('\n').forEach((line, index) => { if (index) p.append(el('br')); p.append(document.createTextNode(line)); }); const tokens = /!\[([^\]]*)\]\(([^\s)]+)(?:\s+"[^"]*")?\)|\[([^\]]+)\]\(([^\s)]+)\)|\*\*([^*]+)\*\*/g;
       let cursor = 0;
       for (let match = tokens.exec(paragraph); match; match = tokens.exec(paragraph)) {
-        p.append(document.createTextNode(paragraph.slice(cursor, match.index)));
+        append(paragraph.slice(cursor, match.index));
         if (match[2]) {
           const src = safeUrl(match[2], true); if (src && ++images <= 24) { const img = el('img'); img.src = src; img.alt = match[1] || ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer'; p.append(img); }
         } else if (match[4]) {
@@ -104,7 +106,7 @@ export function profileMarkup(source: string): string {
         } else p.append(el('strong', '', match[5]));
         cursor = tokens.lastIndex;
       }
-      p.append(document.createTextNode(paragraph.slice(cursor))); holder.append(p);
+      append(paragraph.slice(cursor)); holder.append(p);
     }
   }
   return holder.innerHTML;
@@ -114,6 +116,7 @@ export function profileMarkup(source: string): string {
 export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptions) {
   let disposed = false, active = false, offset = 0, query = '', request = 0, detailRequest = 0;
   let groupedTotal = 0, chatTotal = 0, expanded = '';
+  let reloadDetail: (() => void) | undefined;
   let searchTimer: ReturnType<typeof setTimeout> | undefined, refreshTimer: ReturnType<typeof setTimeout> | undefined;
   let pageAbort: AbortController | undefined, detailAbort: AbortController | undefined;
   let profileInjection: Element | undefined;
@@ -158,7 +161,7 @@ export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptio
     profileCleanup?.(); profileCleanup = undefined;
     if (profileInjection) { try { ctx.dom.uninject(profileInjection); } catch { profileInjection.remove(); } profileInjection = undefined; }
   }
-  function stopDetail() { detailRequest++; detailAbort?.abort(); detailAbort = undefined; clearProfile(); expanded = ''; }
+  function stopDetail() { detailRequest++; detailAbort?.abort(); detailAbort = undefined; clearProfile(); expanded = ''; reloadDetail = undefined; }
   function updateSummary() {
     navCount.textContent = chatTotal.toLocaleString();
     summary.textContent = `${groupedTotal.toLocaleString()} ${groupedTotal === 1 ? 'character or group' : 'characters & groups'} · ${chatTotal.toLocaleString()} ${chatTotal === 1 ? 'chat' : 'chats'}`;
@@ -230,6 +233,8 @@ export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptio
       const name = row.is_group ? text(row.group_name) || text(row.latest_chat_name) || 'Group chat' : text(row.character_name) || 'Unnamed character';
       const key = rowKey(row), old = oldViews.get(key);
       if (expanded === key && old) {
+        // A background refresh changed this character's chats: re-read its list but keep the open profile.
+        if (old.row.chat_count !== row.chat_count || old.row.updated_at !== row.updated_at) reloadDetail?.();
         Object.assign(old.row, row); old.header.setAttribute('aria-label', `${name}, ${count(row.chat_count)} chats`);
         old.header.querySelector('.jb-mc-character-name')!.textContent = name;
         old.header.querySelector('.jb-mc-chat-count')!.textContent = `${row.is_group ? 'group chats' : 'chats'}: ${count(row.chat_count)}`;
@@ -241,7 +246,10 @@ export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptio
       header.append(avatar(row.character_id, row.character_image_id, name, 'jb-mc-character-avatar'), info, el('span', 'jb-mc-chevron', '⌄'));
       const body = el('div', 'jb-mc-expanded'); body.hidden = true; article.append(header, body); nodes.push(article); rowViews.set(key, { row, article, header });
     }
+    // Re-inserting a reused row blurs it, so keep keyboard focus where it was.
+    const focused = document.activeElement as HTMLElement | null, keepFocus = focused && list.contains(focused) ? focused : null;
     list.replaceChildren(...nodes); if (expanded && !rowViews.has(expanded)) stopDetail();
+    if (keepFocus?.isConnected && document.activeElement !== keepFocus) keepFocus.focus({ preventScroll: true });
   }
   function localError(body: HTMLElement, retry: () => void, message = 'Could not load this character’s chats.') {
     body.replaceChildren(el('p', 'jb-mc-status', message), button('Retry', retry));
@@ -322,14 +330,18 @@ export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptio
       const conversationHeading = el('div', 'jb-mc-conversations-heading'); const conversationSort = select('Sort conversations');
       conversationHeading.append(el('h3', '', 'Chats'), conversationSort); const conversationList = el('div', 'jb-mc-conversations'); body.append(conversationHeading, conversationList);
       const renderConversations = () => {
-        if (!current()) return; conversationList.replaceChildren();
+        if (!current()) return;
+        // Rebuilding removes the focused row control; return focus to the same chat, or the first one after a delete.
+        const active = document.activeElement as HTMLElement | null, focused = active && conversationList.contains(active) ? active : null;
+        const focusChat = focused?.closest<HTMLElement>('.jb-mc-conversation-card')?.dataset.chatId, focusClass = focused?.classList[1] ?? focused?.classList[0];
+        conversationList.replaceChildren();
         const sorted = [...chats].sort((a, b) => conversationSort.value === 'name' ? text(a.name).localeCompare(text(b.name)) : (conversationSort.value === 'oldest' ? 1 : -1) * (count(a.updated_at) - count(b.updated_at)));
         const dateGroups = conversationSort.value === 'name' ? [''] : conversationSort.value === 'oldest' ? ['Older', 'Yesterday', 'Today'] : ['Today', 'Yesterday', 'Older'];
         for (const group of dateGroups) {
           const grouped = group ? sorted.filter(chat => dateGroup(chat.updated_at) === group) : sorted; if (!grouped.length) continue;
           if (group) conversationList.append(el('h4', 'jb-mc-date-heading', group));
           for (const chat of grouped) {
-          const card = el('article', 'jb-mc-conversation-card'); const open = button('', () => openChat(chat.id), 'jb-mc-conversation-open'); open.setAttribute('aria-label', `Continue ${text(chat.name) || 'Untitled chat'}`);
+          const card = el('article', 'jb-mc-conversation-card'); card.dataset.chatId = chat.id; const open = button('', () => openChat(chat.id), 'jb-mc-conversation-open'); open.setAttribute('aria-label', `Continue ${text(chat.name) || 'Untitled chat'}`);
           const meta = el('span', 'jb-mc-conversation-meta'); meta.append(el('time', 'jb-mc-conversation-date', dateLabel(chat.updated_at))); addPersona(meta, chat);
             const messageCount = count(chat.message_count); const messages = el('span', 'jb-mc-conversation-count'); messages.title = `${messageCount} ${messageCount === 1 ? 'message' : 'messages'}`; messages.setAttribute('aria-label', messages.title); messages.append(icon('new-chat'), String(messageCount));
             open.append(meta, el('strong', 'jb-mc-conversation-name', text(chat.name) || 'Untitled chat'), el('p', 'jb-mc-conversation-preview', plain(chat.last_message_preview) || 'No messages yet.'), messages); card.append(open);
@@ -341,6 +353,24 @@ export function createMyChats(ctx: SpindleFrontendContext, options: MyChatsOptio
           }
         }
         if (!chats.length) conversationList.append(el('p', 'jb-mc-empty', 'No visible chats for this character.'));
+        if (focused) {
+          const card = [...conversationList.querySelectorAll<HTMLElement>('.jb-mc-conversation-card')].find(item => item.dataset.chatId === focusChat);
+          const target = (card && focusClass ? card.querySelector<HTMLElement>(`.${focusClass}`) : null) ?? conversationList.querySelector<HTMLElement>('.jb-mc-conversation-open') ?? conversationSort;
+          target.focus({ preventScroll: true });
+        }
+      };
+      reloadDetail = () => {
+        if (conversationList.querySelector('.jb-mc-conversation-editor:not([hidden])')) return;
+        void Promise.all([
+          runtimeChats.listForCharacter ? runtimeChats.listForCharacter(row.character_id) : get<Summary[]>(`/chats/character-chats/${encodeURIComponent(row.character_id)}`, abort.signal),
+          get<Array<{ id: string }>>('/chats/hidden-from-recent', abort.signal),
+        ]).then(([fresh, hidden]) => {
+          if (!current() || !Array.isArray(fresh) || !Array.isArray(hidden)) return;
+          const hiddenNow = new Set(hidden.map(item => text(record(item).id)));
+          const known = new Map(chats.map(chat => [chat.id, chat.metadata]));
+          chats.splice(0, chats.length, ...fresh.filter(item => text(record(item).id) && !hiddenNow.has(item.id)).map(item => ({ ...item, metadata: known.get(item.id) })));
+          renderConversations();
+        }, () => { if (current()) detailStatus.textContent = 'Could not refresh these chats. Collapse and reopen this character to retry.'; });
       };
       conversationSort.addEventListener('change', renderConversations); renderConversations();
       // The summary DTO intentionally omits metadata. Read it once for this

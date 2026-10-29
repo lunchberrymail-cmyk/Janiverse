@@ -21,7 +21,7 @@ export function createChatMemory(ctx: SpindleFrontendContext, options: MemoryOpt
   let active: MemorySession | undefined;
   let nextId = 0;
 
-  function open(chatId: string, draft?: string) {
+  function open(chatId: string) {
     if (disposed || !chatId) return;
     active?.modal.dismiss();
     const modal = ctx.ui.showModal({ title: 'Chat Memory', width: 640, maxHeight: 780 });
@@ -46,9 +46,7 @@ export function createChatMemory(ctx: SpindleFrontendContext, options: MemoryOpt
 
     const suffix = `jb-memory-${++nextId}`;
     const heading = element('h2', 'jb-memory-heading', 'Chat Memory');
-    const help = element('p', 'jb-memory-help jb-settings-intro', draft === undefined
-      ? 'Write the facts the AI should keep in mind. Save applies them to this chat’s Author’s Note.'
-      : 'Review this suggested summary before saving it to this conversation.');
+    const help = element('p', 'jb-memory-help jb-settings-intro', 'Write the facts the AI should keep in mind. Save applies them to this chat’s Author’s Note.');
     help.id = `${suffix}-help`;
     const label = element('label', 'jb-memory-label', 'Pinned facts for this chat');
     const text = element('textarea', 'jb-memory-textarea');
@@ -127,7 +125,7 @@ export function createChatMemory(ctx: SpindleFrontendContext, options: MemoryOpt
         const chat = record(await response.json());
         if (!current()) return;
         originalNote = { ...record(record(chat.metadata).authors_note) };
-        text.value = draft ?? (typeof originalNote.content === 'string' ? originalNote.content : '');
+        text.value = typeof originalNote.content === 'string' ? originalNote.content : '';
         depth.value = typeof originalNote.depth === 'number' && Number.isFinite(originalNote.depth)
           ? String(Math.max(0, Math.min(9999, Math.trunc(originalNote.depth)))) : '4';
         role.value = ['system', 'user', 'assistant'].includes(String(originalNote.role)) ? String(originalNote.role) : 'system';

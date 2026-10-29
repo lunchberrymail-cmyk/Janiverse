@@ -79,7 +79,7 @@ The optional **Global prompt** section offers **Custom prompt · Default base** 
 
 **How prompts and presets work** and **Prompt examples · Optional** expand only when requested. Examples append text only when clicked. **Manage / import presets** opens Lumiverse's Loom manager. Preset JSON files use its Import Loom JSON or Import Legacy JSON options. **Connect Illarin** opens Lumiverse's Illarin connection settings; after connecting this instance, send the preset from Illarin. These actions close the Janiverse panel so the native setup stays accessible. The preset banner uses ordinary links to [Illarin](https://illarin.com/browse?type=preset), the [Discord presets channel](https://discord.com/channels/1484149939167821915/1484156801447497792), and a separate [Discord invite](https://discord.gg/28rBWVFfCu); it does not prefetch pages, join the server, or import a preset automatically.
 
-**Memory:** only `authors_note` changes; the native insertion depth and role remain intact. Raw or no-block prompts can omit the note, so the editor explains when conversion is needed.
+**Memory:** only `authors_note` changes. Saving keeps the note's other native fields; clearing the text removes the whole note, so a later note starts again at the default depth and role. Raw or no-block prompts can omit the note, so the editor explains when conversion is needed.
 
 **Appearance:** uploads accept static PNG/JPEG/WebP images, save to the wallpaper library, and update the active chat's wallpaper reference. On phones, Customize edits the mobile override and preserves the regular chat wallpaper. Existing video wallpapers also appear in the preview. Removing an override restores normal fallback. Opacity and blur use native global wallpaper preferences. Text styling saves a native component-style override across chats. Safe Theme Mode and the emergency style-disable shortcut remain effective. No external fonts are downloaded.
 
@@ -123,7 +123,7 @@ bun run build
 bun test tests
 ```
 
-`bun run test` builds and tests together. Development dependencies are only for tests; published bundles have no runtime package dependencies. Synthetic fixtures cover native-setting preservation, character creation, import permissions and failures, optional tutorials and modal cleanup, navigation, composer behavior, Hone handoff, and SoundCloud URL validation. Tutorial screenshots are bundled local assets. No account exports or API keys are included.
+`bun run test` builds and tests together. Development dependencies are only for tests; published bundles have no runtime package dependencies. Synthetic fixtures cover native-setting preservation, character creation, import permissions and failures, optional tutorials and modal cleanup, navigation, composer behavior, and SoundCloud URL validation. Tutorial screenshots are bundled local assets. No account exports or API keys are included.
 
 ## Remove
 

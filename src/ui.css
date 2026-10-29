@@ -68,3 +68,4 @@ html[data-janitor-bridge-view=chats] .jb-home-masthead>.jb-search{display:none}
 .jb-profile-copies label{display:grid;gap:6px;font-weight:600}
 .jb-profile-copy-select{box-sizing:border-box;min-width:0;width:100%;min-height:44px;padding:8px 10px;border:1px solid #74647d;border-radius:8px;background:#29282f;color:#eee6f4;font:inherit}
 .jb-profile-copies p{margin:8px 0 0;line-height:1.5}
+.jb-toast{position:fixed;left:50%;bottom:24px;z-index:10000;transform:translateX(-50%);max-width:min(440px,calc(100vw - 32px));margin:0;padding:10px 14px;border:1px solid #716779;border-radius:9px;background:#26212c;color:#f1ecf6;font-size:13px;line-height:1.5;box-shadow:0 8px 24px rgba(0,0,0,.45)}

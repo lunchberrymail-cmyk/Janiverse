@@ -153,7 +153,7 @@ export function setup(ctx: SpindleFrontendContext) {
     });
   }
   function openPrompt(tab: 'prompt' | 'generation') { promptSettings.open(tab); }
-  function openMemory(chatId: string, draft?: string) { memory.open(chatId, draft); }
+  function openMemory(chatId: string) { memory.open(chatId); }
   function openCustomize() {
     settingsWindow.dismissEditor();
     const panel = customize.open();
@@ -191,12 +191,21 @@ export function setup(ctx: SpindleFrontendContext) {
   cleanups.push(ctx.dom.addStyle(cardSetupCSS));
   const status = el('p', 'jb-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   const navButtons: Array<{ node: HTMLButtonElement; view: View }> = [];
+  let toast: HTMLElement | undefined, toastTimer: ReturnType<typeof setTimeout> | undefined;
+  // The Home status line is off screen inside chats, so failures there also float briefly.
+  function report(message: string) {
+    if (disposed) return;
+    status.textContent = message;
+    if (location.pathname === '/') return;
+    toast ??= el('p', 'jb-toast'); toast.setAttribute('role', 'status'); toast.textContent = message; document.body.append(toast);
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => toast?.remove(), 6000);
+  }
   async function invoke(ref: SpindleHostSurfaceRef, params?: Record<string, string>) {
     if (!ctx.host.surfaces?.list([ref.kind]).some(s => s.id === ref.id && s.invocable !== false)) {
-      status.textContent = 'This shortcut is unavailable. Open the same tool from Lumiverse’s sidebar.'; return false;
+      report('This shortcut is unavailable. Open the same tool from Lumiverse’s sidebar.'); return false;
     }
     try { await ctx.host.surfaces.invoke(ref, params); return true; }
-    catch { if (!disposed) status.textContent = 'Could not open that tool. Please try again from the sidebar.'; return false; }
+    catch { report('Could not open that tool. Please try again from the sidebar.'); return false; }
   }
   function openImport(guide?: ImportGuideAttachment) {
     if (!guide) { if (cardSetup.consumeMenuImport()) return; cardSetup.close(); }
@@ -556,7 +565,11 @@ export function setup(ctx: SpindleFrontendContext) {
         const footer = el('span', 'jb-recent-footer'); footer.append(el('small', '', `${count} ${count === 1 ? 'message' : 'messages'}`), el('span', 'jb-continue', 'Continue'));
         node.append(row, footer); recent.append(node);
       }
-    } catch { if (!disposed && generation === recentRequest) recentSection.hidden = true; }
+    } catch {
+      if (disposed || generation !== recentRequest) return;
+      const failed = el('p', 'jb-status', 'Could not load your recent chats. '); failed.append(button('Retry', () => { void loadRecent(); }));
+      recent.replaceChildren(failed); recentSection.hidden = false;
+    }
   }
   function favoriteControl(characterId: string, owner: { isCurrent: () => boolean; onDispose: (cleanup: () => void) => void }, localStatus: HTMLElement, cardName?: string) {
     const toggle = button('Favorite', () => { void save(); });
@@ -593,7 +606,7 @@ export function setup(ctx: SpindleFrontendContext) {
         // characters.favorites selector. Persistence belongs to Lumiverse.
         favoriteWrites.set(characterId, added);
         localStatus.textContent = added ? 'Added to favorites.' : 'Removed from favorites.';
-        offset = 0; if (view === 'browse') void loadCharacters();
+        if (view === 'browse') void loadCharacters();
       } catch { if (current()) localStatus.textContent = 'Could not save this favorite. Please try again.'; }
       finally { release(); busy = false; if (current()) render(); }
     }
@@ -673,7 +686,7 @@ export function setup(ctx: SpindleFrontendContext) {
       }));
     }
   }
-  cleanups.push(subscribeOptionalState(ctx, 'characters.favorites', () => { favoriteWrites.clear(); offset = 0; if (view === 'browse') void loadCharacters(); }));
+  cleanups.push(subscribeOptionalState(ctx, 'characters.favorites', () => { favoriteWrites.clear(); if (view === 'browse') void loadCharacters(); }));
   cleanups.push(subscribeOptionalState(ctx, 'chat.active', () => { void refreshChatHeader(); void refreshConnection(); }), subscribeOptionalState(ctx, 'connections.active', () => { void refreshConnection(); }));
   let lastPath = location.pathname, lastHome = lastPath === '/';
   const routeTimer = setInterval(() => {
@@ -702,7 +715,7 @@ export function setup(ctx: SpindleFrontendContext) {
   try { if (consumePersonaSetupHandoff(window.sessionStorage)) void invoke({ kind: 'drawer_tab', id: 'personas' }); }
   catch { /* Storage can be unavailable; ordinary setup still works. */ }
   return () => {
-    disposed = true; request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); homeHelp?.dismiss(); tutorialWindow?.destroy(); cardSetup.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); chatSetup.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
+    disposed = true; clearTimeout(toastTimer); toast?.remove(); request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); homeHelp?.dismiss(); tutorialWindow?.destroy(); cardSetup.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); chatSetup.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
     cleanups.reverse().forEach(cleanup => cleanup()); mounts.forEach(root => root.replaceChildren());
     if (oldView === null) document.documentElement.removeAttribute('data-janitor-bridge-view'); else document.documentElement.setAttribute('data-janitor-bridge-view', oldView);
     chatTools.destroy();

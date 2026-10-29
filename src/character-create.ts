@@ -109,8 +109,8 @@ export function createCharacterCreate(ctx: SpindleFrontendContext, options: Opti
     const view = button('View character', () => { if (!created || !options.openCharacter) return; const id = created.id; modal.dismiss(); try { options.openCharacter(id); } catch { /* The card remains saved even if navigation fails. */ } }, 'jb-settings-save'); view.hidden = true;
     const create = el('button', 'jb-settings-save', 'Create Character'); create.type = 'submit';
     const library = button('Open character library', () => {
-      const surfaces = ctx.host?.surfaces; if (!surfaces?.list(['drawer_tab']).some(item => item.id === 'characters' && item.invocable !== false)) return;
-      modal.dismiss(); try { void Promise.resolve(surfaces.invoke({ kind: 'drawer_tab', id: 'characters' })).catch(() => {}); } catch { /* Navigation is optional. */ }
+      const surfaces = ctx.host?.surfaces; if (!surfaces?.list(['drawer_tab']).some(item => item.id === 'characters' && item.invocable !== false)) { message('This shortcut is unavailable. Open Characters from Lumiverse’s sidebar.', 'error'); return; }
+      void Promise.resolve().then(() => surfaces.invoke({ kind: 'drawer_tab', id: 'characters' })).then(() => { if (current()) modal.dismiss(); }, () => message('Could not open the character library. Open Characters from Lumiverse’s sidebar.', 'error'));
     }, 'jb-settings-link'); library.hidden = true;
     const content = el('div', 'jb-character-content'); content.append(heading, intro, fields, status, pendingNote); const layout = el('div', 'jb-character-create-layout'); layout.append(rail, content);
     actions.append(library, allow, retryPortrait, cancel, view, create); form.append(layout, actions); modal.root.append(form);

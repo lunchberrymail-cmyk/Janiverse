@@ -22,9 +22,10 @@ export function openPresetSamplerGuide(ctx: SpindleFrontendContext, options: Opt
   help.append(reopen);
   const nav = make('nav', 'jb-api-guide-nav'), back = make('button', '', 'Back'), next = make('button', 'jb-api-guide-primary'); back.type = next.type = 'button'; nav.setAttribute('aria-label', 'Sampler guide steps'); nav.append(back, next);
   body.append(title, instruction, make('p', 'jb-api-guide-result', 'Edits affect the original and other chats using it.'), status, nav, help); root.append(header, body);
-  try { const mount = ctx.ui.mount('drawer_footer'); mount.classList.add('jb-api-guide-mount'); mount.append(root); }
+  let mount: HTMLElement | undefined;
+  try { mount = ctx.ui.mount('drawer_footer'); mount.classList.add('jb-api-guide-mount'); mount.append(root); }
   catch { root.classList.add('jb-api-guide-fallback'); document.body.append(root); }
-  function destroy() { if (disposed) return; disposed = true; root.remove(); options.onClose?.(); }
+  function destroy() { if (disposed) return; disposed = true; root.remove(); mount?.remove(); options.onClose?.(); }
   function render() { progress.textContent = `Preset → Samplers · ${step + 1} / ${steps.length}`; title.textContent = steps[step][0]; instruction.textContent = steps[step][1]; back.disabled = step === 0; next.textContent = step === steps.length - 1 ? 'Close guide' : 'Next'; }
   back.addEventListener('click', () => { if (step > 0) { step--; render(); } });
   next.addEventListener('click', () => { if (step === steps.length - 1) destroy(); else { step++; render(); } });

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
-import { createMyChats } from '../src/my-chats';
+import { createMyChats, profileMarkup } from '../src/my-chats';
 
 type Query = { limit?: number; offset?: number; search?: string; sort?: string; direction?: string };
 type Grouped = { character_id: string; character_name: string; character_image_id: string | null; latest_chat_id: string; latest_chat_name: string; updated_at: number; chat_count: number; is_group: boolean; group_character_ids?: string[]; group_name?: string };
@@ -184,7 +184,7 @@ describe('My Chats native rename and delete actions', () => {
   });
   test('delete requires confirmation, removes the exact conversation and refreshes counts without deleting its character', async () => {
     const deleted: string[] = []; ctx.permissions.getGranted = async () => ['chats'];
-    ctx.chats.delete = async (id: string) => { deleted.push(id); groupedResult = async () => ({ data: [{ ...groups[0], chat_count: 3 }], total: 1 }); recentResult = async () => ({ data: [], total: 2 }); };
+    ctx.chats.delete = async (id: string) => { deleted.push(id); groupedResult = async () => ({ data: [{ ...groups[0], chat_count: 3 }], total: 1 }); recentResult = async () => ({ data: [], total: 2 }); const previous = summariesResult; summariesResult = async (character: string) => (await previous(character)).filter((chat: { id: string }) => chat.id !== id); };
     setup().activate(); await flush(); btn('Ada, 4 chats').click(); await flush();
     btn('Delete chat: Yesterday conversation').click(); expect(deleted).toHaveLength(0); expect(invoked).toHaveLength(0);
     expect(root().textContent).toContain('permanently deletes this conversation and its messages'); btn('Cancel').click(); expect(deleted).toHaveLength(0);
@@ -393,5 +393,39 @@ describe('My Chats filters and asynchronous lifecycle', () => {
     for (const callbacks of subscriptions.values()) callbacks.forEach(callback => callback()); browser.refresh(); await new Promise(resolve => setTimeout(resolve, 325));
     expect(groupedReads).toHaveLength(reads); pending.resolve({ data: [groups[1]], total: 1 }); await flush(); expect(root().hidden).toBe(true); expect(uninjected).toHaveLength(1);
     browser.destroy(); view = undefined; expect(document.querySelector('.jb-my-chats')).toBeNull(); expect([...subscriptions.values()].every(callbacks => callbacks.size === 0)).toBe(true); expect(document.querySelector('#native')?.textContent).toBe('Native chat remains mounted');
+  });
+});
+
+describe('My Chats keeps an expanded character current', () => {
+  test('a background change re-reads the expanded chat list without collapsing the character', async () => {
+    setup().activate(); await flush(); btn('Ada, 4 chats').click(); await flush();
+    const detail = root().querySelector('.jb-mc-expanded'); const reads = characterChatReads.length;
+    groupedResult = async () => ({ data: [{ ...structuredClone(groups[0]), chat_count: 1 }, ...structuredClone(groups.slice(1))], total: 3 });
+    summariesResult = async () => structuredClone(summaries.slice(0, 1));
+    subscriptions.get('CHAT_DELETED')?.forEach(callback => callback()); await new Promise(resolve => setTimeout(resolve, 325)); await flush();
+    expect(characterChatReads.length).toBe(reads + 1); expect(root().querySelector('.jb-mc-expanded')).toBe(detail);
+    expect(root().querySelectorAll('.jb-mc-conversation-card')).toHaveLength(1); expect(btn('Continue Today conversation')).toBeDefined();
+  });
+  test('rename and delete return keyboard focus to the same chat, or the first remaining one', async () => {
+    ctx.permissions.getGranted = async () => ['chats'];
+    ctx.chats.update = async (id: string, input: unknown) => ({ id, ...input as object });
+    setup().activate(); await flush(); btn('Ada, 4 chats').click(); await flush();
+    btn('Rename chat: Yesterday conversation').click();
+    root().querySelector<HTMLInputElement>('input[aria-label="Chat name"]')!.value = 'Renamed';
+    btn('Save name').click(); await flush(); await flush();
+    expect(document.activeElement).toBe(btn('Rename chat: Renamed'));
+    ctx.chats.delete = async () => {}; btn('Delete chat: Renamed').click(); btn('Delete chat').click(); await flush(); await flush();
+    expect(document.activeElement?.classList.contains('jb-mc-conversation-open')).toBe(true);
+  });
+});
+
+describe('Creator’s Note formatting', () => {
+  test('notes only auto-load remote HTTPS images, never this server’s API or plain HTTP', () => {
+    const markup = profileMarkup('<img src="/api/v1/settings/favorites"><img src="http://localhost:7860/api/v1/chats"><img src="http://example.com/a.png"><img src="https://example.com/b.png"><a href="http://example.com/page">link</a>');
+    expect(markup).not.toContain('/api/v1'); expect(markup).not.toContain('http://example.com/a.png');
+    expect(markup).toContain('https://example.com/b.png'); expect(markup).toContain('href="http://example.com/page"');
+  });
+  test('plain-text notes keep single line breaks inside a paragraph', () => {
+    expect(profileMarkup('First line\nSecond line\n\nNew paragraph').replace(/ class=""/g, '')).toBe('<p>First line<br>Second line</p><p>New paragraph</p>');
   });
 });
