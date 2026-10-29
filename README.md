@@ -107,7 +107,7 @@ SoundCloud playback in profiles and chats needs the Lumiverse host to allow the 
 
 **APK connections:** when the Android app connects to a computer, the computer serves this policy and Janiverse. Apply the [narrow host patch](patches/lumiverse-soundcloud-frames.patch) to that Lumiverse source, rebuild its frontend, restart the server, then reconnect/reload the APK to refresh its cached page. This only allows the official SoundCloud frame origin; it preserves the existing sources and restrictions. An APK hosting on the phone instead needs an app/backend build containing the host correction. Janiverse reports the required host update when the frame is blocked; it cannot change an enforcing policy itself.
 
-**Help → Explore → Polish my writing** recommends [Hone](https://github.com/AMousePad/Hone), with its repository link and installation steps. Hone provides its own draft refinement and reply editing controls after installation and setup. It is optional; Janiverse’s discovery guide does not run Hone or request generation.
+**Help → Explore → Enhance my draft** recommends [Hone](https://github.com/AMousePad/Hone), with its repository link and installation steps. Hone provides its own draft refinement and reply editing controls after installation and setup. It is optional; Janiverse’s discovery guide does not run Hone or request generation.
 
 In the optional JanitorAI-style layout, the sparkle button opens **Help → Explore** to discover useful extensions. Selecting a goal only shows a recommendation. **Copy link** and **Open Extensions** help you install it yourself; discovery never runs generation or edits your message draft.
 

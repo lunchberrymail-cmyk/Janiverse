@@ -2,7 +2,7 @@ import type { SpindleFrontendContext, SpindleModalHandle } from 'lumiverse-spind
 
 type NoteRole = 'system' | 'user' | 'assistant';
 type MemorySession = { modal: SpindleModalHandle; abort: AbortController; closed: boolean };
-type MemoryOptions = { mountPromo?: (target: HTMLElement) => { destroy(): void } | undefined };
+type MemoryOptions = { mountPromo?: (target: HTMLElement) => { destroy(): void } | undefined; nativeWay?: (target: HTMLElement, close: () => void) => void };
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
   const node = document.createElement(tag);
@@ -99,6 +99,7 @@ export function createChatMemory(ctx: SpindleFrontendContext, options: MemoryOpt
     actions.append(element('small', 'jb-settings-help', 'Leave empty to clear this chat’s memory.'), retry, cancel, save);
     const content = element('section', 'jb-settings-card jb-memory-card'); content.append(label, text, meta);
     modal.root.append(heading, help, content, advanced, status, actions);
+    options.nativeWay?.(modal.root, () => modal.dismiss());
 
     let originalNote: Record<string, unknown> = {};
     let loaded = false;

@@ -6,7 +6,7 @@ import { record } from './setup-data';
 
 export const HISTORY_GUIDE_KEY = 'onboarding:history_guide_v2';
 
-export type TutorialFeature = 'connections' | 'import' | 'history' | 'presets' | 'memory' | 'lorebooks' | 'group' | 'voice' | 'extensions' | 'character';
+export type TutorialFeature = 'connections' | 'import' | 'history' | 'presets' | 'memory' | 'lorebooks' | 'group' | 'voice' | 'extensions' | 'character' | 'authorsNote';
 export type TutorialHighlight = { x: number; y: number; width: number; height: number };
 export type TutorialScreenshot = {
   src: string; alt: string; caption?: string;
@@ -90,16 +90,16 @@ export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
     help: ['Missing entry? Check the attached book, Enabled, exact Primary Keys, Scan Depth, activation conditions, and token budget.', 'Primary Keys accepts comma-separated alternatives. Content supplies model context; Comment / Label is for organizing.', 'Constant entries do not need a keyword. Disabled entries contribute nothing. Keep advanced recursion and vector activation at their defaults for this first test.', 'Import Book accepts compatible lorebook JSON. Always Active attaches a book globally; character-attached books and Group Lorebooks follow the relevant card/group rules.'],
   },
   memory: {
-    title: 'Set up useful chat memory', intro: 'Start with a saved Summary. Embeddings and Cortex are optional next steps.',
+    title: 'Set up useful chat memory', intro: 'Pick one: Summary keeps a recap you control, Memory Cortex recalls older events automatically. Don’t use both in the same chat.',
     prerequisites: ['Open the conversation you want to improve.', 'Janiverse Chat Memory edits Author’s Note; Summary and recall are separate.'],
     scenes: [
       { title: 'Save a story recap', instruction: 'With your conversation open, choose Summary in the sidebar. Write a short recap in Summary Text and choose Save.', result: 'The recap is stored with this chat. Generate can write it for you using your chosen model.', screenshot: 'summary-editor', action: { label: 'Open Summary', destination: drawer('summary'), fallback: 'Open Summary from Lumiverse’s sidebar with your chat selected.', needsChat: true } },
       { title: 'Include it in replies', instruction: 'Open Preset and check for an existing Story Summary block containing {{loomSummary}}. Enable it. If missing, choose Add Prompt → Story Summary.', result: 'Story Summary uses Role: System and Position: Before Chat History. The default preset already includes it; keep one copy. Edits use the block’s Save button.', screenshot: 'summary-preset', action: loom },
       { title: 'Prepare older-message recall', instruction: 'For recall, configure an Embedding Models connection. In Embeddings settings, select it, choose Test Embedding API, and enable Vectorize chat messages (long-term memory).', result: 'An embedding-capable model can prepare chat vectors. Embedding services may charge for usage.', screenshot: 'memory-embeddings', action: { label: 'Open Embeddings settings', destination: settings('embeddings'), fallback: 'Open Lumiverse Settings → Embeddings.' } },
-      { title: 'Optionally add Cortex', instruction: 'In Memory Cortex settings, enable Cortex and start with Simple mode.', result: 'Cortex can track entities and relationships. A sidecar LLM is optional and can add model requests.', screenshot: 'memory-cortex', action: { label: 'Open Memory Cortex settings', destination: settings('memoryCortex'), fallback: 'Open Lumiverse Settings → Memory Cortex.' } },
+      { title: 'Or use Cortex instead', instruction: 'In Memory Cortex settings, enable Cortex and start with Simple mode. Using Cortex? Turn off the Story Summary block and automatic Summary updates for that chat.', result: 'Cortex can track entities and relationships. A sidecar LLM is optional and can add model requests.', screenshot: 'memory-cortex', action: { label: 'Open Memory Cortex settings', destination: settings('memoryCortex'), fallback: 'Open Lumiverse Settings → Memory Cortex.' } },
       { title: 'Inspect what gets recalled', instruction: 'With your chat open, choose Memory in the sidebar → Stats. Review its preparation status and per-chat Cortex toggle. Use the reply toolbar’s Extras (⋯) → Dry Run to inspect the resolved prompt.', result: 'Stored memories are not all inserted into every reply. {{memories}} inserts eligible recalled context.', screenshot: 'memory-stats', fallbackScreenshot: 'memory-cortex', action: { label: 'Open this chat’s Memory panel', destination: drawer('cortex'), fallback: 'Open Memory from Lumiverse’s sidebar, then select Stats.', needsChat: true } },
     ],
-    help: ['For recall: Settings → Advanced → Long-Term Chat Memory → Balanced is a starting mode. With Injection Strategy → Macro only, put {{memories}} in a separate enabled system block before Chat History.', 'Cortex needs its global switch and the per-chat Cortex toggle. Stored entities or chunks are not all inserted into every reply; confirm the resolved prompt.', 'Summary can update manually or automatically. API Source selects Active Connection or Dedicated Connection. Check Interval, Context, and Message Lag before enabling automatic updates. Rebuild from scratch can make several model calls.', 'Empty recap? Select the right chat and save Summary Text. Empty recall? Check embedding credentials/model, vectorization, activation, and exclusion window. Short chats or a cold cache may have no eligible older passages.'],
+    help: ['Summary or Cortex, not both: together they repeat the same events in the prompt.', 'For recall: Settings → Advanced → Long-Term Chat Memory → Balanced is a starting mode. With Injection Strategy → Macro only, put {{memories}} in a separate enabled system block before Chat History.', 'Cortex needs its global switch and the per-chat Cortex toggle. Stored entities or chunks are not all inserted into every reply; confirm the resolved prompt.', 'Summary can update manually or automatically. API Source selects Active Connection or Dedicated Connection. Check Interval, Context, and Message Lag before enabling automatic updates. Rebuild from scratch can make several model calls.', 'Empty recap? Select the right chat and save Summary Text. Empty recall? Check embedding credentials/model, vectorization, activation, and exclusion window. Short chats or a cold cache may have no eligible older passages.'],
   },
   voice: {
     title: 'Hear replies and dictate messages', intro: 'Set up playback or dictation. They are separate features.',
@@ -124,6 +124,16 @@ export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
       { title: 'Creator’s note and tags', instruction: 'Open Identity for Creator Notes and Tags. When you are done, start a chat from the card on Home or in Chars.', result: 'Your character appears on Janiverse Home like any other card.', screenshot: '' },
     ],
     help: ['Can’t find a field? JanitorAI’s Personality is Description here. Lumiverse’s Personality field is a separate, optional summary.', 'Prefer one page? Use Create a Character → Use the familiar form instead. Both save a normal Lumiverse card.', 'Made an extra New Character by accident? Delete it from Chars or from its profile on Home.'],
+  },
+  authorsNote: {
+    title: 'Use Author’s Note in Lumiverse', intro: 'Janiverse’s Chat Memory edits this note. Here is where it lives without Janiverse.',
+    prerequisites: ['Open the chat you want to change.', 'Each chat has its own note.'],
+    scenes: [
+      { title: 'Open Extras', instruction: 'In your chat, find the reply toolbar above the message box and choose Extras (⋯).', result: 'A menu opens with Author’s Note among its options.', screenshot: '', action: toolbar },
+      { title: 'Open Author’s Note', instruction: 'Choose Author’s Note.', result: 'A panel opens with the same text you wrote in Chat Memory.', screenshot: '' },
+      { title: 'Write and place it', instruction: 'Type the facts the AI should keep in mind. Depth from latest message and Role match Chat Memory’s Insertion depth and Message role.', result: 'It saves as you type. The title shows · Active while the note has text.', screenshot: '' },
+    ],
+    help: ['No Extras button? Use Show reply toolbar, or open Customize composer (sliders) above the message box to reveal it.', 'Empty the text to turn the note off for this chat.'],
   },
   extensions: {
     title: 'Add and manage extensions', intro: 'Install from the author’s repository, then choose which tools to enable.',

@@ -1,7 +1,7 @@
 import type { SpindleFrontendContext, SpindleModalHandle } from 'lumiverse-spindle-types';
 import { icon } from './icons';
 
-type Options = { onCreated?: (id: string) => void; openCharacter?: (id: string) => void };
+type Options = { onCreated?: (id: string) => void; openCharacter?: (id: string) => void; nativeWay?: (target: HTMLElement, close: () => void) => void };
 type Session = { modal: SpindleModalHandle; abort: AbortController; closed: boolean; previewUrl?: string };
 type NativeCharacter = { id: string; name?: string };
 const portraitLimit = 10 * 1024 * 1024 - 64 * 1024; // Leave room for multipart framing in the host's 10 MiB request cap.
@@ -113,7 +113,7 @@ export function createCharacterCreate(ctx: SpindleFrontendContext, options: Opti
       void Promise.resolve().then(() => surfaces.invoke({ kind: 'drawer_tab', id: 'characters' })).then(() => { if (current()) modal.dismiss(); }, () => message('Could not open the character library. Open Characters from Lumiverse’s sidebar.', 'error'));
     }, 'jb-settings-link'); library.hidden = true;
     const content = el('div', 'jb-character-content'); content.append(heading, intro, fields, status, pendingNote); const layout = el('div', 'jb-character-create-layout'); layout.append(rail, content);
-    actions.append(library, allow, retryPortrait, cancel, view, create); form.append(layout, actions); modal.root.append(form);
+    actions.append(library, allow, retryPortrait, cancel, view, create); form.append(layout, actions); modal.root.append(form); options.nativeWay?.(modal.root, () => modal.dismiss());
     function message(text: string, tone = '') { if (current()) { status.textContent = text; status.dataset.tone = tone; } }
     function sync() {
       if (!current()) return;

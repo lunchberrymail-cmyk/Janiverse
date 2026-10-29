@@ -89,7 +89,7 @@ test('native helper opens real Summary and Cortex setup surfaces only on request
 });
 
 test.each([
-  ['Polish my writing', 'Hone', 'https://github.com/AMousePad/Hone'],
+  ['Enhance my draft', 'Hone', 'https://github.com/AMousePad/Hone'],
   ['Remember long stories', 'LumiBooks', 'https://github.com/AMousePad/LumiBooks'],
   ['Hear character voices', 'Choir', 'https://github.com/patatasbravasch-arch/Choir'],
   ['Color character dialogue', 'Prism', 'https://github.com/kittyafterdark/Prism'],
@@ -110,7 +110,7 @@ test.each([
 
 test('unavailable extension manager keeps the recommendation and allows retry', async () => {
   tools = createChatTools(ctx, { onLayoutChange() {}, openSettings() {}, openGeneration() {}, openMemory() {}, openPersonas() {}, invoke: async () => false });
-  tools.openHelp('extensions'); button('Polish my writing').click(); button('Open Extensions').click(); await settle();
+  tools.openHelp('extensions'); button('Enhance my draft').click(); button('Open Extensions').click(); await settle();
   expect(document.querySelector('.jb-extension-result h3')!.textContent).toBe('Hone');
   expect(document.querySelector('.jb-chat-guide-status')!.textContent).toContain('unavailable');
   expect(button('Open Extensions').disabled).toBe(false);
@@ -177,6 +177,6 @@ test('Start here gathers setup guides, the checklist and persona creation in the
 test('Explore lists every pick by Lunch in one place', async () => {
   setup(); tools!.openHelp('extensions');
   const goals = [...document.querySelectorAll('.jb-extension-goals button')].map(node => node.textContent);
-  expect(goals).toEqual(['Polish my writing', 'Remember long stories', 'Hear character voices', 'Color character dialogue', 'Read it like a visual novel', 'Add an in-world phone']);
+  expect(goals).toEqual(['Enhance my draft', 'Remember long stories', 'Hear character voices', 'Color character dialogue', 'Read it like a visual novel', 'Add an in-world phone']);
   expect(document.querySelector('.jb-extension-picks-title')!.textContent).toBe('Extensions picked by Lunch');
 });

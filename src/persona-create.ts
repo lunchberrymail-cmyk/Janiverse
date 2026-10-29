@@ -1,6 +1,6 @@
 import type { SpindleFrontendContext, SpindleModalHandle } from 'lumiverse-spindle-types';
 
-type Options = { openPersonas: () => Promise<boolean>; finishSetup: () => void };
+type Options = { openPersonas: () => Promise<boolean>; finishSetup: () => void; nativeWay?: (target: HTMLElement, close: () => void) => void };
 type Session = { modal: SpindleModalHandle; abort: AbortController; closed: boolean };
 const handoffKey = 'janiverse:persona-setup-handoff';
 
@@ -100,6 +100,7 @@ export function createPersonaCreate(ctx: SpindleFrontendContext, options: Option
       catch { message('Reload Janiverse and check Personas before creating this persona again.', 'warning'); }
     }, 'jb-settings-link'); check.hidden = true;
     modal.root.append(intro, form, status, enable, success, manage, check, actions);
+    options.nativeWay?.(modal.root, () => modal.dismiss());
     function sync() {
       fields.disabled = busy || saved || uncertain; create.disabled = busy || saved || uncertain;
       cancel.disabled = busy; manage.disabled = busy; enable.disabled = busy;

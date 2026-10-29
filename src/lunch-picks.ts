@@ -3,12 +3,12 @@ export type LunchPick = { goal: string; name: string; url: string; note: string 
 /** Lunch's published recommendations, the only extension list; edited with the extension's source. */
 export const lunchPicks: readonly LunchPick[] = [
   {
-    goal: 'Polish my writing', name: 'Hone', url: 'https://github.com/AMousePad/Hone',
+    goal: 'Enhance my draft', name: 'Hone', url: 'https://github.com/AMousePad/Hone',
     note: 'Refine AI replies or enhance your own drafts with a separate editing pass.',
   },
   {
     goal: 'Remember long stories', name: 'LumiBooks', url: 'https://github.com/AMousePad/LumiBooks',
-    note: 'Turn older messages into editable chapter and arc summaries, with optional story-detail tracking.',
+    note: 'Turn older messages into editable chapter and arc summaries, with optional story-detail tracking. Use it instead of Memory Cortex.',
   },
   {
     goal: 'Hear character voices', name: 'Choir', url: 'https://github.com/patatasbravasch-arch/Choir',

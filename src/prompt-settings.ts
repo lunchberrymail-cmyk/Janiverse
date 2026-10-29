@@ -10,7 +10,7 @@ type PromptMode = 'custom' | 'preset';
 type PresetChoice = { id: string; name: string; provider: string };
 type PromptBase = { preset: Preset; binding: Binding | null; blockId: string | null; defaultsSourceId?: string };
 type EditorHandle = Pick<SpindleModalHandle, 'root' | 'dismiss' | 'onDismiss'>;
-export type PromptSettingsOptions = { openPresetManager?: () => void; openIllarinSettings?: () => void; openSamplerGuide?: (presetName: string) => void };
+export type PromptSettingsOptions = { openPresetManager?: () => void; openIllarinSettings?: () => void; openSamplerGuide?: (presetName: string) => void; nativeWay?: (target: HTMLElement, close: () => void) => void };
 const owner = 'janitor_bridge';
 const markerKey = '_janitor_bridge';
 const defaultSlug = 'lumiverse-builtin-default-loom';
@@ -197,6 +197,7 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
     actions.append(save);
     if (!inline) modal.root.append(tabs, heading, intro);
     modal.root.append(scopeInfo, rawLabel, promptPanel, generationPanel, advanced, status, actions); show(selected);
+    options.nativeWay?.(modal.root, () => modal.dismiss());
     if (inline) actions.prepend(status);
     const editable = [prompt, promptName, prefill, enabled, raw, sourceChoice, presetChoice, ...exampleButtons, ...inputs.values(), ...sliders.values(), ...(manager ? [manager] : []), ...(illarin ? [illarin] : [])];
     function syncSlider(key: string) {

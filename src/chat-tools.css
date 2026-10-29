@@ -66,3 +66,21 @@
   .jb-chat-help-row > div { flex-basis: 100%; }
   .jb-chat-help-row button { width: 100%; }
 }
+.jb-lumiverse-way { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 18px; padding: 12px 14px; border: 1px dashed #ffffff26; border-radius: 10px; color: #bcb8c7; font-size: 13px; line-height: 1.5; }
+.jb-lumiverse-way > p:first-child { flex: 1 1 260px; margin: 0; }
+.jb-lumiverse-way .jb-status { flex-basis: 100%; margin: 0; }
+.jb-lumiverse-way .jb-status:empty { display: none; }
+.jb-lumiverse-ways-progress { margin: 4px 0 8px; color: #c7b4f2; font-size: 13px; font-weight: 600; }
+.jb-lumiverse-ways-list { margin: 0; padding: 0; list-style: none; }
+.jb-lumiverse-way-row { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-bottom: 1px solid #ffffff13; }
+.jb-lumiverse-way-row > div:first-child { flex: 1; min-width: 0; }
+.jb-lumiverse-way-row h4 { margin: 0 0 4px; font-size: 14px; font-weight: 500; }
+.jb-lumiverse-way-row p { margin: 0; color: #bcb8c7; font-size: 13px; line-height: 1.5; }
+.jb-lumiverse-way-row .jb-status:empty { display: none; }
+.jb-lumiverse-way-controls { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+.jb-lumiverse-way-check { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #bcb8c7; cursor: pointer; }
+.jb-lumiverse-ways-done { margin-top: 18px; padding: 14px; border: 1px solid #7fd3a64d; border-radius: 10px; background: #7fd3a60f; }
+.jb-lumiverse-ways-done[hidden] { display: none; }
+.jb-lumiverse-ways-done h3 { margin: 0 0 6px; font-size: 15px; }
+.jb-lumiverse-ways-done p { margin: 0; font-size: 13px; line-height: 1.5; }
+@media (max-width: 520px) { .jb-lumiverse-way-row { flex-direction: column; align-items: stretch; } .jb-lumiverse-way-controls { flex-direction: row; justify-content: space-between; align-items: center; } }

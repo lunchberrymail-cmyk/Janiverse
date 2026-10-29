@@ -17,6 +17,7 @@ type Options = {
   openGlossary?(): void;
   openChecklist?(): void;
   openPersonaCreate?(): void;
+  openLumiverseWays?(): void;
   invoke(ref: SpindleHostSurfaceRef): Promise<boolean>;
 };
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') {
@@ -106,6 +107,7 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
       row(start, 'Bring old chats', 'Old conversations come over with the JAR Bridge extension.', 'Old chat import guide', guide('history'));
     }
     if (options.openPersonaCreate) row(start, 'Your persona', 'Who you play as in your chats.', 'Create a persona', options.openPersonaCreate);
+    if (options.openLumiverseWays) row(start, 'Use Lumiverse on its own', 'Learn where each Janiverse tool lives in plain Lumiverse, so you can keep going without Janiverse.', 'Show the list', options.openLumiverseWays);
     native.append(node('p', 'jb-chat-guide-location', 'Look for these icons in the toolbar above your message box.'));
     const tips = node('div', 'jb-toolbar-tips');
     for (const [picture, title, detail, location] of [
@@ -144,8 +146,8 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
     row(story, 'Chat Memory', 'Write pinned facts, then Save for this chat. This edits Author’s Note; Summary and automatic recall are separate.', 'Open memory', options.openMemory, true);
     row(story, 'Lorebooks', 'Add world facts, give them keywords, then attach the book to your chat.', options.openTutorial ? 'Set up a Lorebook' : 'Open Lorebooks', () => options.openTutorial ? options.openTutorial('lorebooks') : options.invoke({ kind: 'drawer_tab', id: 'lorebook' }));
     const moreMemory = node('details', 'jb-chat-more-memory'); moreMemory.append(node('summary', '', 'Summaries & automatic memory'));
-    row(moreMemory, 'Summary', 'Review or update a recap of the conversation.', 'Open Summary', () => options.invoke({ kind: 'drawer_tab', id: 'summary' }), true);
-    row(moreMemory, 'Memory Cortex', 'Set up automatic recall of people, relationships, and events.', 'Set up Memory Cortex', () => options.invoke({ kind: 'settings_tab', id: 'memoryCortex' })); story.append(moreMemory);
+    row(moreMemory, 'Summary', 'Review or update a recap of the conversation. Use Summary or Memory Cortex, not both.', 'Open Summary', () => options.invoke({ kind: 'drawer_tab', id: 'summary' }), true);
+    row(moreMemory, 'Memory Cortex', 'Automatic recall of people, relationships, and events. Use it instead of Summary, not with it.', 'Set up Memory Cortex', () => options.invoke({ kind: 'settings_tab', id: 'memoryCortex' })); story.append(moreMemory);
     if (options.openTutorial) moreMemory.append(actionButton('Memory guide', () => options.openTutorial?.('memory'), true));
 
     extensions.append(node('p', 'jb-settings-help', 'Optional extras for when the basics work.'));

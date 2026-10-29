@@ -49,6 +49,7 @@ import { readOptionalState, subscribeOptionalState } from './optional-state';
 import { createWelcome } from './welcome';
 import { openGlossary } from './glossary';
 import { openCharacterChoice } from './character-choice';
+import { mountLumiverseWay, openLumiverseWays, type LumiverseWay } from './lumiverse-ways';
 import { groupCharacters, type CharacterGroup, type CharacterSignatureCache, type CharacterSummary } from './character-library';
 
 type Character = CharacterSummary;
@@ -69,7 +70,13 @@ export function setup(ctx: SpindleFrontendContext) {
   let searchTimer: ReturnType<typeof setTimeout> | undefined, controller: AbortController | undefined;
   let libraryRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   let modal: SpindleModalHandle | undefined;
-  let glossaryWindow: SpindleModalHandle | undefined, createChoice: SpindleModalHandle | undefined;
+  let glossaryWindow: SpindleModalHandle | undefined, createChoice: SpindleModalHandle | undefined, waysWindow: SpindleModalHandle | undefined;
+  /** Teaching the native spot: a guide when one exists, otherwise the native panel itself. */
+  const wayActions = { show: (way: LumiverseWay) => {
+    if (disposed) return false;
+    if (way.tutorial) { openTutorial(way.tutorial); return true; }
+    return way.ref ? invoke(way.ref) : false;
+  } };
   let tutorialWindow: ReturnType<typeof openFeatureTutorial> | undefined;
   let tutorialRequest = 0;
   const cleanups: Array<() => void> = [];
@@ -98,6 +105,7 @@ export function setup(ctx: SpindleFrontendContext) {
       target.append(promo.root);
       return promo;
     },
+    nativeWay: (target, close) => mountLumiverseWay(target, 'memory', wayActions, close),
   });
   const composer = createComposer(ctx, {
     onDiscover: () => chatTools.openHelp('extensions'),
@@ -113,9 +121,11 @@ export function setup(ctx: SpindleFrontendContext) {
     openGlossary: () => openGlossaryWindow(),
     openChecklist: () => { setView('browse'); homeBanner.reviewSetup(); },
     openPersonaCreate: () => personaCreate.open(),
+    openLumiverseWays: () => { waysWindow?.dismiss(); waysWindow = openLumiverseWays(ctx, wayActions); },
     invoke,
   });
   const promptSettings = createPromptSettings(settingsWindow.context('settings'), {
+    nativeWay: (target, close) => mountLumiverseWay(target, 'prompt', wayActions, close),
     openSamplerGuide: presetName => {
       tutorialWindow?.destroy(); const request = ++tutorialRequest;
       tutorialWindow = openPresetSamplerGuide(ctx, { presetName,
@@ -173,6 +183,7 @@ export function setup(ctx: SpindleFrontendContext) {
     },
   });
   const characterCreate = createCharacterCreate(ctx, {
+    nativeWay: (target, close) => mountLumiverseWay(target, 'character', wayActions, close),
     onCreated: () => { libraryCache = undefined; offset = 0; void loadCharacters(); },
     openCharacter: id => {
       void ctx.characters.get(id).then(value => {
@@ -184,6 +195,7 @@ export function setup(ctx: SpindleFrontendContext) {
   const personaCreate = createPersonaCreate(ctx, {
     openPersonas: () => invoke({ kind: 'drawer_tab', id: 'personas' }),
     finishSetup: () => reloadForPersonaSetup(window.sessionStorage, () => window.location.reload()),
+    nativeWay: (target, close) => mountLumiverseWay(target, 'persona', wayActions, close),
   });
   cleanups.push(ctx.dom.addStyle(characterCreateCSS), ctx.dom.addStyle(personaCreateCSS), ctx.dom.addStyle(tutorialCSS), ctx.dom.addStyle(welcomeCSS), ctx.dom.addStyle(chatToolsCSS));
   cleanups.push(ctx.dom.addStyle(themeCSS), ctx.dom.addStyle(layoutCSS), ctx.dom.addStyle(uiCSS), ctx.dom.addStyle(settingsCSS), ctx.dom.addStyle(composerCSS), ctx.dom.addStyle(homeBannerCSS), ctx.dom.addStyle(cardImportCSS), ctx.dom.addStyle(myChatsCSS), ctx.dom.addStyle(soundCloudCSS), ctx.dom.addStyle(customizeCSS));
@@ -717,7 +729,7 @@ export function setup(ctx: SpindleFrontendContext) {
   try { if (consumePersonaSetupHandoff(window.sessionStorage)) void invoke({ kind: 'drawer_tab', id: 'personas' }); }
   catch { /* Storage can be unavailable; ordinary setup still works. */ }
   return () => {
-    disposed = true; clearTimeout(toastTimer); toast?.remove(); request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); glossaryWindow?.dismiss(); createChoice?.dismiss(); tutorialWindow?.destroy(); cardSetup.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
+    disposed = true; clearTimeout(toastTimer); toast?.remove(); request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); glossaryWindow?.dismiss(); createChoice?.dismiss(); waysWindow?.dismiss(); tutorialWindow?.destroy(); cardSetup.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
     cleanups.reverse().forEach(cleanup => cleanup()); mounts.forEach(root => root.replaceChildren());
     if (oldView === null) document.documentElement.removeAttribute('data-janitor-bridge-view'); else document.documentElement.setAttribute('data-janitor-bridge-view', oldView);
     chatTools.destroy();

@@ -495,7 +495,7 @@ test('familiar composer opens extension discovery without requesting generation 
   document.querySelector<HTMLButtonElement>('.jb-assist-toggle')!.click(); await flush();
   const guide = document.querySelector('.jb-chat-help')!;
   expect(guide.querySelector<HTMLElement>('.jb-extension-guide')!.hidden).toBe(false);
-  findButton('Polish my writing', guide).click();
+  findButton('Enhance my draft', guide).click();
   expect(guide.querySelector('.jb-extension-result h3')!.textContent).toBe('Hone');
   expect(document.querySelector('.jb-assist-menu')).toBeNull();
   expect(sent).toHaveLength(0); expect(calls).toHaveLength(0);
@@ -1124,7 +1124,7 @@ test('Home More keeps five everyday actions and moves setup guides into Help', a
   findButton('Help', more).click(); await flush(); const help = document.querySelector('.jb-chat-help')!;
   expect(help.getAttribute('aria-label')).toBe('Help'); expect(findButton('Start here', help).getAttribute('aria-pressed')).toBe('true');
   expect(findButton('Where did it go? Search JanitorAI terms', help)).not.toBeNull();
-  expect([...help.querySelectorAll('.jb-start-guide button')].map(node => node.textContent)).toEqual(['Show checklist', 'API connection guide', 'Card import guide', 'Old chat import guide', 'Create a persona']);
+  expect([...help.querySelectorAll('.jb-start-guide button')].map(node => node.textContent)).toEqual(['Show checklist', 'API connection guide', 'Card import guide', 'Old chat import guide', 'Create a persona', 'Show the list']);
   expect(more.open).toBe(false); expect(calls).toHaveLength(0); expect(requests).toHaveLength(beforeRequests);
   findButton('Card import guide', help).click(); await flush();
   expect(help.isConnected).toBe(false); expect(more.open).toBe(true); expect(document.querySelector('.jb-card-menu-guide')).not.toBeNull();

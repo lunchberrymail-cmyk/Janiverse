@@ -24,7 +24,7 @@ export function createMemoryPromo(_ctx: SpindleFrontendContext, options: MemoryO
   let disposed = false;
   const root = make('section', 'jb-memory-promo'); root.setAttribute('aria-label', 'Improve chat memory');
   const title = make('h3', '', 'Give your characters more memory.');
-  const description = make('p', '', 'Keep a recap with Summary, or recall important facts with Memory Cortex.');
+  const description = make('p', '', 'Keep a recap with Summary, or recall important facts with Memory Cortex. Pick one; they don’t mix.');
   const actions = make('div', 'jb-memory-promo-actions');
   const status = make('p', 'jb-memory-promo-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   for (const [label, ref] of [['Set up summaries', memoryTools.summary], ['Explore Memory Cortex', memoryTools.cortex]] as const) {
