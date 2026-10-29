@@ -40,36 +40,19 @@ export async function readConnection(ctx: SpindleFrontendContext, signal: AbortS
     model: (pinned ? text(metadata.connection_model) : '') || text(profile.model), presetId: text(profile.preset_id), source: pinned ? 'chat' : active ? 'active' : 'default' };
 }
 
-export async function readPrompt(ctx: SpindleFrontendContext, signal: AbortSignal, connection: Connection | null, chat?: { id: string; metadata: Row }): Promise<Prompt | null> {
-  if (chat?.metadata.temporary === true && chat.metadata.no_preset === true) return { id: '', name: 'No preset · Raw chat', source: 'Raw chat' };
+export async function readPrompt(ctx: SpindleFrontendContext, signal: AbortSignal, connection: Connection | null): Promise<Prompt | null> {
   // The chosen member profile (and its preset binding) is not known until generation.
-  if (connection?.roulette) return chat ? { id: '', name: 'Resolved per reply', source: 'Model roulette' } : null;
-  const selectedId = text(readOptionalState(ctx, 'loom.activePresetId', '')) || connection?.presetId || '';
+  if (connection?.roulette) return null;
   let resolved: Row = {};
-  if (chat && chat.metadata.temporary !== true) {
-    const params = new URLSearchParams();
-    if (selectedId) params.set('preset_id', selectedId);
-    if (connection) params.set('connection_id', connection.id);
-    const personaId = text(readOptionalState(ctx, 'persona.activeId', ''));
-    if (personaId) params.set('persona_id', personaId);
-    resolved = record(await readSetupJson(`/preset-profiles/resolve/${encodeURIComponent(chat.id)}?${params}`, signal));
-  } else {
-    // Temporary chats have no persona or character preset binding.
-    if (chat) {
-      const binding = record(await readSetupJson(`/preset-profiles/chat/${encodeURIComponent(chat.id)}`, signal, true));
-      if (text(binding.preset_id)) resolved = { ...binding, source: 'chat' };
-    }
-    if (!text(resolved.preset_id) && connection) {
-      const binding = record(await readSetupJson(`/preset-profiles/connection/${encodeURIComponent(connection.id)}`, signal, true));
-      if (text(binding.preset_id)) resolved = { ...binding, source: 'connection' };
-    }
-    if (!text(resolved.preset_id)) resolved = { preset_id: selectedId, source: 'none' };
+  if (connection) {
+    const binding = record(await readSetupJson(`/preset-profiles/connection/${encodeURIComponent(connection.id)}`, signal, true));
+    if (text(binding.preset_id)) resolved = { ...binding, source: 'connection' };
   }
+  if (!text(resolved.preset_id)) resolved = { preset_id: text(readOptionalState(ctx, 'loom.activePresetId', '')) || connection?.presetId || '', source: 'none' };
   const id = text(resolved.preset_id); if (!id) return null;
   const preset = record(await readSetupJson(`/presets/${encodeURIComponent(id)}`, signal));
   if (preset.id !== id || !text(preset.name)) throw new Error('Invalid preset');
-  const sources: Record<string, string> = { chat: 'This chat', persona: 'This persona', character: 'This character', connection: 'This connection', defaults: 'Preset defaults', none: 'Selected preset' };
-  return { id, name: text(preset.name), source: sources[text(resolved.source)] || 'Selected preset' };
+  return { id, name: text(preset.name), source: resolved.source === 'connection' ? 'This connection' : 'Selected preset' };
 }
 
 export async function readSetupPage(path: string, signal: AbortSignal): Promise<{ first: Row | null; total: number }> {

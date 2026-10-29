@@ -49,7 +49,6 @@ import { readOptionalState, subscribeOptionalState } from './optional-state';
 import { createWelcome } from './welcome';
 import { openGlossary } from './glossary';
 import { openCharacterChoice } from './character-choice';
-import { createChatSetup } from './chat-setup';
 import { groupCharacters, type CharacterGroup, type CharacterSignatureCache, type CharacterSummary } from './character-library';
 
 type Character = CharacterSummary;
@@ -330,9 +329,8 @@ export function setup(ctx: SpindleFrontendContext) {
   });
   const chatTitle = button('Conversation', () => { void invoke({ kind: 'drawer_tab', id: 'profile' }); }, 'jb-chat-title');
   const soundCloud = createSoundCloud(ctx);
-  const chatSetup = createChatSetup(ctx, { openApi: openConnections, openPersona: () => { void invoke({ kind: 'drawer_tab', id: 'personas' }); }, openPrompt: () => openPrompt('prompt') });
   chatBar.insertBefore(chatTitle, chatRight);
-  chatHeader.append(chatBar, chatSetup.root, soundCloud.root); mounts[1].append(chatHeader);
+  chatHeader.append(chatBar, soundCloud.root); mounts[1].append(chatHeader);
   let titleRequest = 0;
   async function refreshChatHeader() {
     const active = ctx.getActiveChat(); const generation = ++titleRequest;
@@ -697,7 +695,6 @@ export function setup(ctx: SpindleFrontendContext) {
   cleanups.push(subscribeOptionalState(ctx, 'chat.active', () => { void refreshChatHeader(); void refreshConnection(); }), subscribeOptionalState(ctx, 'connections.active', () => { void refreshConnection(); }));
   let lastPath = location.pathname, lastHome = lastPath === '/';
   const routeTimer = setInterval(() => {
-    chatSetup.sync();
     if (location.pathname !== lastPath) { settingsWindow.syncRoute(); if (!location.pathname.startsWith('/chat/')) soundCloud.close(); lastPath = location.pathname; }
     const atHome = location.pathname === '/';
     if (atHome && !lastHome) {
@@ -716,12 +713,11 @@ export function setup(ctx: SpindleFrontendContext) {
   cleanups.push(() => welcome.destroy());
   setView('browse', false);
   void refreshChatHeader(); refreshConnection();
-  void chatSetup.refresh();
   void welcome.maybeOpen();
   try { if (consumePersonaSetupHandoff(window.sessionStorage)) void invoke({ kind: 'drawer_tab', id: 'personas' }); }
   catch { /* Storage can be unavailable; ordinary setup still works. */ }
   return () => {
-    disposed = true; clearTimeout(toastTimer); toast?.remove(); request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); glossaryWindow?.dismiss(); createChoice?.dismiss(); tutorialWindow?.destroy(); cardSetup.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); chatSetup.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
+    disposed = true; clearTimeout(toastTimer); toast?.remove(); request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); glossaryWindow?.dismiss(); createChoice?.dismiss(); tutorialWindow?.destroy(); cardSetup.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
     cleanups.reverse().forEach(cleanup => cleanup()); mounts.forEach(root => root.replaceChildren());
     if (oldView === null) document.documentElement.removeAttribute('data-janitor-bridge-view'); else document.documentElement.setAttribute('data-janitor-bridge-view', oldView);
     chatTools.destroy();
