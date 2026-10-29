@@ -3,7 +3,6 @@ import uiCSS from './ui.css' with { type: 'text' };
 import themeCSS from './theme.css' with { type: 'text' };
 import layoutCSS from './layout.css' with { type: 'text' };
 import settingsCSS from './settings.css' with { type: 'text' };
-import composerCSS from './composer.css' with { type: 'text' };
 import chatToolsCSS from './chat-tools.css' with { type: 'text' };
 import homeBannerCSS from './home-banner.css' with { type: 'text' };
 import cardImportCSS from './card-import.css' with { type: 'text' };
@@ -30,7 +29,6 @@ import { createChatMemory } from './memory';
 import { createPromptSettings } from './prompt-settings';
 import { icon } from './icons';
 import { createBrand } from './brand';
-import { createComposer } from './composer';
 import { createChatTools } from './chat-tools';
 import { createHomeBanner, createMemoryPromo, createPresetPromo } from './home-banner';
 import { createCardImport } from './card-import';
@@ -107,11 +105,7 @@ export function setup(ctx: SpindleFrontendContext) {
     },
     nativeWay: (target, close) => mountLumiverseWay(target, 'memory', wayActions, close),
   });
-  const composer = createComposer(ctx, {
-    onDiscover: () => chatTools.openHelp('extensions'),
-  });
   const chatTools = createChatTools(ctx, {
-    onLayoutChange: layout => composer.setEnabled(layout === 'janitorai'),
     openSettings: () => openPrompt('prompt'),
     openGeneration: () => openPrompt('generation'),
     openMemory: () => { const chatId = ctx.getActiveChat()?.chatId; if (chatId) openMemory(chatId); },
@@ -198,7 +192,7 @@ export function setup(ctx: SpindleFrontendContext) {
     nativeWay: (target, close) => mountLumiverseWay(target, 'persona', wayActions, close),
   });
   cleanups.push(ctx.dom.addStyle(characterCreateCSS), ctx.dom.addStyle(personaCreateCSS), ctx.dom.addStyle(tutorialCSS), ctx.dom.addStyle(welcomeCSS), ctx.dom.addStyle(chatToolsCSS));
-  cleanups.push(ctx.dom.addStyle(themeCSS), ctx.dom.addStyle(layoutCSS), ctx.dom.addStyle(uiCSS), ctx.dom.addStyle(settingsCSS), ctx.dom.addStyle(composerCSS), ctx.dom.addStyle(homeBannerCSS), ctx.dom.addStyle(cardImportCSS), ctx.dom.addStyle(myChatsCSS), ctx.dom.addStyle(soundCloudCSS), ctx.dom.addStyle(customizeCSS));
+  cleanups.push(ctx.dom.addStyle(themeCSS), ctx.dom.addStyle(layoutCSS), ctx.dom.addStyle(uiCSS), ctx.dom.addStyle(settingsCSS), ctx.dom.addStyle(homeBannerCSS), ctx.dom.addStyle(cardImportCSS), ctx.dom.addStyle(myChatsCSS), ctx.dom.addStyle(soundCloudCSS), ctx.dom.addStyle(customizeCSS));
   cleanups.push(ctx.dom.addStyle(visualCSS.replace('__JB_FRAUNCES__', frauncesFont).replace('__JB_JURA__', juraFont)));
   cleanups.push(ctx.dom.addStyle(characterProfileCSS));
   cleanups.push(ctx.dom.addStyle(guidedSetupCSS));
@@ -241,7 +235,7 @@ export function setup(ctx: SpindleFrontendContext) {
   function launchTutorial(feature: TutorialFeature) {
     tutorialWindow?.destroy();
     const request = ++tutorialRequest;
-    tutorialWindow = openFeatureTutorial(ctx, feature, { invoke, openImport, openHistory, openHistoryTutorial: () => openTutorial('history'), openCardTutorial: () => openTutorial('import'), showReplyToolbar: () => chatTools.setLayout('lumiverse'), screenshots: tutorialScreenshots,
+    tutorialWindow = openFeatureTutorial(ctx, feature, { invoke, openImport, openHistory, openHistoryTutorial: () => openTutorial('history'), openCardTutorial: () => openTutorial('import'), screenshots: tutorialScreenshots,
       onClose: () => { if (request === tutorialRequest) tutorialWindow = undefined; },
     });
   }
@@ -729,7 +723,7 @@ export function setup(ctx: SpindleFrontendContext) {
   try { if (consumePersonaSetupHandoff(window.sessionStorage)) void invoke({ kind: 'drawer_tab', id: 'personas' }); }
   catch { /* Storage can be unavailable; ordinary setup still works. */ }
   return () => {
-    disposed = true; clearTimeout(toastTimer); toast?.remove(); request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); glossaryWindow?.dismiss(); createChoice?.dismiss(); waysWindow?.dismiss(); tutorialWindow?.destroy(); cardSetup.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
+    disposed = true; clearTimeout(toastTimer); toast?.remove(); request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); glossaryWindow?.dismiss(); createChoice?.dismiss(); waysWindow?.dismiss(); tutorialWindow?.destroy(); cardSetup.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
     cleanups.reverse().forEach(cleanup => cleanup()); mounts.forEach(root => root.replaceChildren());
     if (oldView === null) document.documentElement.removeAttribute('data-janitor-bridge-view'); else document.documentElement.setAttribute('data-janitor-bridge-view', oldView);
     chatTools.destroy();

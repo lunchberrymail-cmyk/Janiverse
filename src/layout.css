@@ -16,8 +16,6 @@ html[data-janitor-bridge-view] [data-component="LandingPageHeader"] [class*="_ta
 [data-component="LandingPageHeader"] > [data-spindle-ext-id="janitor_bridge"][data-spindle-mount-point="landing_header"] { display: contents; }
 [data-component="LandingPageHeader"] .jb-home-masthead { order: 1; flex: 1 1 auto; width: auto; }
 [data-component="LandingPageHeader"] [class*="_accountBtn_"] { min-height: 32px; border-color: #ffffff20; border-radius: 7px; background: #ffffff08; }
-html[data-jb-tools="false"] [data-component="LandingPageHeader"] [class*="_tempChatWrap_"],
-html[data-jb-tools="false"] [data-component="LandingPageHeader"] button[aria-label="Open Lumiverse guides"] { display: none !important; }
 [data-component="LandingPageMain"], .jb-home { width: 100%; min-width: 0; }
 html[data-janitor-bridge-view] [data-component="LandingPageTabs"],
 html[data-janitor-bridge-view] [data-component="LandingPageChats"],
@@ -39,10 +37,6 @@ html[data-janitor-bridge-view="browse"] .jb-my-chats { display: none !important;
 [data-component="ChatView"] [data-spindle-ext-id="janitor_bridge"][data-spindle-mount-point="chat_header_left"] { flex: 0 0 auto; min-width: 0; width: 100%; }
 [data-component="ChatView"] .jb-chat-header { box-sizing: border-box; width: auto; margin-inline: 12px; padding-inline: 0; }
 [data-component="ChatView"] [data-spindle-mount="chat_top_dock"] { min-height: 0; padding: 0 16px; border: 0; background: transparent; }
-/* Only hide tools when the extension's accessible More menu owns their reveal.
-   Without this attribute every native control stays visible. */
-html[data-jb-tools="false"] [data-component="ChatView"] [data-spindle-mount="chat_top_dock"],
-html[data-jb-tools="false"] [data-component="InputArea"] > [class*="_actionBar_"] { display: none !important; }
 [data-component="MessageList"] { padding-inline: 12px; }
 
 /* Both native message modes become quiet, borderless left-avatar rows. */

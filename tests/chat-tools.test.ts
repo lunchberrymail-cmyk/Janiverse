@@ -1,24 +1,22 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
-import { COMPOSER_LAYOUT_KEY, createChatTools, type ComposerLayout } from '../src/chat-tools';
+import { createChatTools } from '../src/chat-tools';
 
 const original = { document: globalThis.document };
 let dom: JSDOM, tools: ReturnType<typeof createChatTools> | undefined;
-let layouts: ComposerLayout[], actions: string[], saves: unknown[][];
+let actions: string[], saves: unknown[][];
 let ctx: any;
-function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(r => resolve = r); return { promise, resolve }; }
 const settle = async () => { for (let n = 0; n < 20; n++) await Promise.resolve(); };
 function setup() {
-  tools = createChatTools(ctx, { onLayoutChange: layout => layouts.push(layout),
+  tools = createChatTools(ctx, {
     openSettings: () => { actions.push('settings'); }, openGeneration: () => { actions.push('generation'); }, openMemory: () => { actions.push('memory'); },
     openPersonas: () => { actions.push('personas'); }, invoke: async ref => { actions.push(ref.kind + ':' + ref.id); return true; },
   }); return tools;
 }
-function choose(value: ComposerLayout) { button('Explore').click(); document.querySelector<HTMLDetailsElement>('.jb-chat-layout-preferences')!.open = true; document.querySelector<HTMLInputElement>(`input[value="${value}"]`)!.click(); }
 function button(text: string) { return [...document.querySelectorAll('button')].find(button => button.textContent === text)!; }
 beforeEach(() => {
-  dom = new JSDOM('<!doctype html><html data-jb-tools="previous"><body><button id="help">Help</button><textarea id="draft">Unsent story draft</textarea></body></html>');
-  globalThis.document = dom.window.document; layouts = []; actions = []; saves = [];
+  dom = new JSDOM('<!doctype html><html><body><button id="help">Help</button><textarea id="draft">Unsent story draft</textarea></body></html>');
+  globalThis.document = dom.window.document; actions = []; saves = [];
   ctx = { getActiveChat: () => ({ chatId: 'chat-1' }), settings: {
     get: async () => undefined, set: async (...args: unknown[]) => { saves.push(args); },
   }, ui: { showModal() {
@@ -31,52 +29,16 @@ beforeEach(() => {
 });
 afterEach(() => { tools?.destroy(); tools = undefined; dom.window.close(); Object.assign(globalThis, original); });
 
-test('default and help leave all native tools available without saving or invoking Hone', async () => {
-  setup(); await tools!.ready; tools!.openHelp();
-  expect(tools!.getLayout()).toBe('lumiverse'); expect(document.documentElement.dataset.jbTools).toBe('true');
-  expect(document.querySelector<HTMLInputElement>('input[value="lumiverse"]')!.checked).toBe(true);
+test('Help leaves every native tool visible and offers no layout switch, without saving or invoking anything', async () => {
+  setup(); tools!.openHelp();
+  expect(document.documentElement.hasAttribute('data-jb-tools')).toBe(false);
+  expect(document.querySelector('input[type=radio]')).toBeNull(); expect(document.querySelector('.jb-chat-help')!.textContent).not.toContain('Show reply toolbar');
   expect(saves).toEqual([]); expect(actions).toEqual([]);
   expect(document.querySelector<HTMLTextAreaElement>('#draft')!.value).toBe('Unsent story draft');
 });
 
-test('saved layout restores without another write and choosing a layout persists through the host account settings', async () => {
-  ctx.settings.get = async () => 'janitorai'; setup(); await tools!.ready;
-  expect(tools!.getLayout()).toBe('janitorai'); expect(document.documentElement.dataset.jbTools).toBe('false'); expect(saves).toEqual([]);
-  tools!.openHelp(); choose('lumiverse'); await settle();
-  expect(saves).toEqual([[COMPOSER_LAYOUT_KEY, 'lumiverse']]); expect(actions).toEqual([]);
-});
-
-test('a late preference read cannot undo a new choice and a read after disable cannot alter the host', async () => {
-  const read = deferred<unknown>(); ctx.settings.get = () => read.promise;
-  setup(); tools!.openHelp(); choose('janitorai'); read.resolve('lumiverse'); await tools!.ready;
-  expect(tools!.getLayout()).toBe('janitorai');
-  tools!.destroy(); expect(document.documentElement.dataset.jbTools).toBe('previous');
-  tools = undefined;
-  const late = deferred<unknown>(); ctx.settings.get = () => late.promise;
-  setup(); tools!.destroy(); late.resolve('janitorai'); await tools!.ready;
-  expect(document.documentElement.dataset.jbTools).toBe('previous');
-});
-
-test('rapid changes serialize preference writes so the latest layout remains saved', async () => {
-  const first = deferred<void>(); let stored: unknown;
-  ctx.settings.set = async (_key: string, value: unknown) => { saves.push([value]); if (saves.length === 1) await first.promise; stored = value; };
-  setup(); await tools!.ready; tools!.openHelp(); choose('janitorai'); await settle(); choose('lumiverse'); await settle();
-  expect(saves).toEqual([['janitorai']]); first.resolve(); await settle();
-  expect(saves).toEqual([['janitorai'], ['lumiverse']]); expect(stored).toBe('lumiverse');
-});
-
-test('a save failure is visible and retry preserves the chosen layout and draft', async () => {
-  ctx.settings.set = async () => { throw new Error('Unavailable'); };
-  setup(); await tools!.ready; tools!.openHelp(); choose('janitorai'); await settle();
-  expect(document.querySelector('.jb-settings-status')!.textContent).toContain('could not be saved');
-  expect(tools!.getLayout()).toBe('janitorai'); expect(document.querySelector<HTMLTextAreaElement>('#draft')!.value).toBe('Unsent story draft');
-  ctx.settings.set = async (...args: unknown[]) => { saves.push(args); };
-  await tools!.setLayout('janitorai'); expect(document.querySelector('.jb-settings-status')!.textContent).toBe('');
-  expect(saves).toEqual([[COMPOSER_LAYOUT_KEY, 'janitorai']]);
-});
-
 test('native helper opens real Summary and Cortex setup surfaces only on request', async () => {
-  setup(); await tools!.ready; tools!.openHelp();
+  setup(); tools!.openHelp();
   expect(document.querySelector('.jb-toolbar-tips')!.textContent).toContain('Regenerate');
   button('Story tools').click(); document.querySelector<HTMLDetailsElement>('.jb-chat-more-memory')!.open = true;
   button('Open Summary').click(); await settle();
@@ -96,7 +58,7 @@ test.each([
   ['Read it like a visual novel', 'Cue — Living Novel', 'https://github.com/japolino/cue-living-novel'],
   ['Add an in-world phone', 'Pocket', 'https://github.com/kittyafterdark/Pocket'],
 ])('discovery recommends %s without installing or running it', async (goal, name, url) => {
-  setup(); await tools!.ready; tools!.openHelp('extensions'); button(goal).click();
+  setup(); tools!.openHelp('extensions'); button(goal).click();
   const result = document.querySelector('.jb-extension-result')!;
   expect(result.querySelector('h3')!.textContent).toBe(name);
   expect(result.querySelector('a')!.href).toBe(url);
@@ -109,7 +71,7 @@ test.each([
 });
 
 test('unavailable extension manager keeps the recommendation and allows retry', async () => {
-  tools = createChatTools(ctx, { onLayoutChange() {}, openSettings() {}, openGeneration() {}, openMemory() {}, openPersonas() {}, invoke: async () => false });
+  tools = createChatTools(ctx, { openSettings() {}, openGeneration() {}, openMemory() {}, openPersonas() {}, invoke: async () => false });
   tools.openHelp('extensions'); button('Enhance my draft').click(); button('Open Extensions').click(); await settle();
   expect(document.querySelector('.jb-extension-result h3')!.textContent).toBe('Hone');
   expect(document.querySelector('.jb-chat-guide-status')!.textContent).toContain('unavailable');
@@ -125,10 +87,9 @@ test('Escape closes help before the host generation shortcut and returns focus t
 });
 
 test('help topics show one compact panel and leave the draft and settings untouched', async () => {
-  setup(); await tools!.ready; tools!.openHelp();
+  setup(); tools!.openHelp();
   expect(document.querySelector<HTMLElement>('.jb-native-guide')!.hidden).toBe(false);
   expect(document.querySelector<HTMLElement>('.jb-generation-guide')!.hidden).toBe(true);
-  expect(document.querySelector<HTMLElement>('.jb-chat-layout-preferences')!.hidden).toBe(true);
   expect(document.querySelectorAll('.jb-chat-guide-card svg')).toHaveLength(4);
   expect(document.querySelectorAll('.jb-chat-guide-card button')).toHaveLength(0);
   for (const topic of ['Start here', 'AI settings', 'Story tools', 'Explore', 'Replies']) button(topic).click();
@@ -139,7 +100,7 @@ test('help topics show one compact panel and leave the draft and settings untouc
 });
 
 test('sampler help opens generation directly, while prompt and Loom have distinct destinations', async () => {
-  setup(); await tools!.ready; tools!.openHelp('generation');
+  setup(); tools!.openHelp('generation');
   expect(document.querySelector('.jb-sampler-terms')!.textContent).toContain('Context size');
   button('Open generation settings').click(); await settle();
   expect(actions).toEqual(['generation']); expect(document.querySelector('.jb-chat-help')).toBeNull();
@@ -149,17 +110,8 @@ test('sampler help opens generation directly, while prompt and Loom have distinc
   expect(actions).toEqual(['generation', 'settings', 'drawer_tab:loom']); expect(saves).toEqual([]);
 });
 
-test('simple-layout users can restore the reply toolbar explicitly without generating or replacing the draft', async () => {
-  ctx.settings.get = async () => 'janitorai'; setup(); await tools!.ready; tools!.openHelp();
-  expect(document.querySelector<HTMLElement>('.jb-chat-toolbar-notice')!.hidden).toBe(false);
-  expect(saves).toEqual([]); button('Show reply toolbar').click(); await settle();
-  expect(tools!.getLayout()).toBe('lumiverse'); expect(document.querySelector<HTMLElement>('.jb-chat-toolbar-notice')!.hidden).toBe(true);
-  expect(saves).toEqual([[COMPOSER_LAYOUT_KEY, 'lumiverse']]); expect(actions).toEqual([]);
-  expect(document.querySelector<HTMLTextAreaElement>('#draft')!.value).toBe('Unsent story draft');
-});
-
 test('Start here gathers setup guides, the checklist and persona creation in the one Help', async () => {
-  tools = createChatTools(ctx, { onLayoutChange() {}, openSettings() {}, openGeneration() {}, openMemory() {}, openPersonas() {},
+  tools = createChatTools(ctx, { openSettings() {}, openGeneration() {}, openMemory() {}, openPersonas() {},
     openTutorial: feature => { actions.push('guide:' + feature); }, openChecklist: () => { actions.push('checklist'); }, openPersonaCreate: () => { actions.push('persona-create'); },
     invoke: async ref => { actions.push(ref.kind + ':' + ref.id); return true; } });
   tools.openHelp('start');

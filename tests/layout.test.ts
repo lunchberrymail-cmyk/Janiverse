@@ -144,7 +144,7 @@ afterEach(() => {
 
 test('mounts only the declared visual slots and preserves native chat DOM and listeners', async () => {
   start(); await flush();
-  expect([...roots.keys()]).toEqual(['landing_header', 'chat_header_left', 'landing_hero', 'chat_input_tools_left', 'chat_composer_above', 'landing_chats']);
+  expect([...roots.keys()]).toEqual(['landing_header', 'chat_header_left', 'landing_hero', 'landing_chats']);
   expect(document.querySelector('#native')).toBe(native); expect(native.outerHTML).toBe(nativeMarkup);
   (document.querySelector('#native-send') as HTMLButtonElement).click(); expect(nativeClicks).toBe(1);
   expect(document.querySelectorAll('.jb-card')).toHaveLength(24);
@@ -463,45 +463,17 @@ test('chat help and the chat menu open the generation panel directly', async () 
   expect(native.outerHTML).toBe(nativeMarkup); expect(calls).toEqual([]);
 });
 
-test('native chat tools are the default and the home menu or chat Help can open the optional familiar layout', async () => {
-  start(); await flush(); expect(document.documentElement.getAttribute('data-jb-tools')).toBe('true');
-  expect(document.documentElement.getAttribute('data-jb-composer')).toBe('false');
+test('native chat tools always stay visible and Help offers no layout switch', async () => {
+  start(); await flush(); expect(document.documentElement.getAttribute('data-jb-tools')).toBe('saved');
+  expect(document.documentElement.hasAttribute('data-jb-composer')).toBe(false);
   const header = roots.get('chat_header_left')!;
-  expect(header.querySelector('.jb-memory-button')).toBeNull();
   expect([...header.querySelectorAll('button')].filter(button => button.textContent === 'Chat Memory')).toHaveLength(1);
-  findButton('Help', roots.get('landing_header')!).click();
-  findButton('Explore', document.querySelector('.jb-chat-help')!).click();
-  document.querySelector<HTMLInputElement>('input[value="janitorai"]')!.click();
-  expect(document.documentElement.getAttribute('data-jb-tools')).toBe('false');
-  expect(document.documentElement.getAttribute('data-jb-composer')).toBe('true');
-  findButton('Close', document.querySelector('.jb-chat-help')!).click();
-  expect(header.querySelector('.jb-chat-help-button')!.getAttribute('aria-label')).toBe('Chat tools & help');
+  expect(header.querySelector('.jb-chat-title')!.parentElement).toBe(header.querySelector('.jb-chat-bar'));
   header.querySelector<HTMLButtonElement>('.jb-chat-help-button')!.click();
   findButton('Explore', document.querySelector('.jb-chat-help')!).click();
-  document.querySelector<HTMLInputElement>('input[value="lumiverse"]')!.click();
-  expect(document.documentElement.getAttribute('data-jb-tools')).toBe('true');
-  expect(document.documentElement.getAttribute('data-jb-composer')).toBe('false');
-  expect(native.outerHTML).toBe(nativeMarkup);
-  stop!(); stop = undefined; expect(document.documentElement.getAttribute('data-jb-tools')).toBe('saved');
-});
-
-test('familiar composer opens extension discovery without requesting generation or changing a draft', async () => {
-  activeChat = { chatId: 'chat-1', characterId: 'char-1' }; const sent: any[] = [];
-  ctx.composer = { getState: () => ({ mounted: true, chatId: 'chat-1', text: 'An unsent draft' }), onChange: () => () => {}, focus() {} };
-  ctx.sendToBackend = (payload: unknown) => sent.push(payload);
-  start(); await flush(); roots.get('chat_header_left')!.querySelector<HTMLButtonElement>('.jb-chat-help-button')!.click();
-  findButton('Explore', document.querySelector('.jb-chat-help')!).click();
-  document.querySelector<HTMLInputElement>('input[value="janitorai"]')!.click(); findButton('Close', document.querySelector('.jb-chat-help')!).click();
-  document.querySelector<HTMLButtonElement>('.jb-assist-toggle')!.click(); await flush();
-  const guide = document.querySelector('.jb-chat-help')!;
-  expect(guide.querySelector<HTMLElement>('.jb-extension-guide')!.hidden).toBe(false);
-  findButton('Enhance my draft', guide).click();
-  expect(guide.querySelector('.jb-extension-result h3')!.textContent).toBe('Hone');
-  expect(document.querySelector('.jb-assist-menu')).toBeNull();
-  expect(sent).toHaveLength(0); expect(calls).toHaveLength(0);
-  expect(ctx.composer.getState().text).toBe('An unsent draft');
-  const header = roots.get('chat_header_left')!;
-  expect(header.querySelector('.jb-chat-title')!.parentElement).toBe(header.querySelector('.jb-chat-bar'));
+  expect(document.querySelector('.jb-chat-help input[type=radio]')).toBeNull();
+  expect(document.querySelector('.jb-chat-help')!.textContent).not.toContain('Choose your chat layout');
+  expect(document.querySelector('.jb-assist-toggle')).toBeNull(); expect(native.outerHTML).toBe(nativeMarkup);
 });
 
 test('Cortex setup leaves the Memory editor for native configuration', async () => {

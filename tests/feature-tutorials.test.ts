@@ -201,14 +201,16 @@ test('late saved progress cannot replace a step the user chose or reopen a close
   tutorial.destroy(); tutorial.destroy(); expect(closes).toBe(1); expect(tutorial.root.isConnected).toBe(false);
 });
 
-test('a chat-only step explains the missing context and the toolbar changes only on an explicit action', async () => {
+test('a chat-only step explains the missing context, and guides never change the reply toolbar', async () => {
   ctx.getActiveChat = () => null;
   let tutorial = openFeatureTutorial(ctx, 'memory', options()); find('Open Summary').click(); await flush();
   expect(invoked).toEqual([]); expect(tutorial.root.textContent).toContain('Open a chat first'); tutorial.destroy();
-  let changes = 0; ctx.getActiveChat = () => ({ chatId: 'chat-1' });
-  tutorial = openFeatureTutorial(ctx, 'voice', { ...options(), showReplyToolbar: async () => { changes++; } });
-  for (let index = 0; index < 3; index++) find('Next').click(); expect(changes).toBe(0);
-  find('Show reply toolbar').click(); await flush(); expect(changes).toBe(1); expect(invoked).toEqual([]); expect(tutorial.root.isConnected).toBe(true); tutorial.destroy();
+  ctx.getActiveChat = () => ({ chatId: 'chat-1' });
+  for (const feature of ['voice', 'lorebooks', 'authorsNote'] as const) {
+    tutorial = openFeatureTutorial(ctx, feature, options());
+    expect(JSON.stringify(featureTutorials[feature])).not.toContain('Show reply toolbar'); tutorial.destroy();
+  }
+  expect(invoked).toEqual([]);
 });
 
 test('guide paths use current entry points and explain distinct native saving behavior', () => {

@@ -3,11 +3,8 @@ import { lunchPicks } from './lunch-picks';
 import { icon } from './icons';
 import type { TutorialFeature } from './feature-tutorials';
 
-export type ComposerLayout = 'lumiverse' | 'janitorai';
 export type GuideView = 'start' | 'lumiverse' | 'generation' | 'story' | 'extensions';
-export const COMPOSER_LAYOUT_KEY = 'chat:composer_layout_v1';
 type Options = {
-  onLayoutChange(layout: ComposerLayout): void;
   openSettings(): void;
   openGeneration(): void;
   openMemory(): void;
@@ -25,34 +22,9 @@ function node<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''
 }
 /** Janiverse's one Help: setup, chat controls and extras. Never generates, installs, or changes a draft. */
 export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
-  let disposed = false, layout: ComposerLayout = 'lumiverse', revision = 0;
-  let modal: SpindleModalHandle | undefined, render: (() => void) | undefined;
+  let disposed = false;
+  let modal: SpindleModalHandle | undefined;
   let selectView: ((view: GuideView) => void) | undefined;
-  let notice = '', writes = Promise.resolve();
-  const oldTools = document.documentElement.getAttribute('data-jb-tools');
-  function apply(value: ComposerLayout) {
-    layout = value;
-    document.documentElement.setAttribute('data-jb-tools', String(value === 'lumiverse'));
-    options.onLayoutChange(value); render?.();
-  }
-  async function setLayout(value: ComposerLayout) {
-    if (disposed) return;
-    const ticket = ++revision; notice = ''; apply(value);
-    const settings = ctx.settings;
-    if (!settings?.set) { notice = 'This Lumiverse version cannot save this preference. Your choice lasts until reload.'; render?.(); return; }
-    writes = writes.catch(() => {}).then(async () => { if (!disposed) await settings.set(COMPOSER_LAYOUT_KEY, value); });
-    try { await writes; }
-    catch { if (!disposed && revision === ticket) { notice = 'Your layout changed, but could not be saved. Choose it again to retry.'; render?.(); } }
-  }
-  apply('lumiverse');
-  const ready = (async () => {
-    const ticket = revision;
-    try {
-      const value = await ctx.settings?.get<unknown>(COMPOSER_LAYOUT_KEY);
-      if (!disposed && ticket === revision && (value === 'lumiverse' || value === 'janitorai')) apply(value);
-    } catch { /* A failed preference read leaves the native toolbar available. */ }
-  })();
-
   function openHelp(view: GuideView = 'lumiverse') {
     if (disposed) return;
     options.beforeOpenHelp?.();
@@ -70,11 +42,9 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
     const tabs = node('nav', 'jb-chat-guide-tabs'); tabs.setAttribute('aria-label', 'Chat help topics');
     const start = node('section', 'jb-start-guide'), native = node('section', 'jb-native-guide'), generation = node('section', 'jb-generation-guide'), story = node('section', 'jb-story-guide'), extensions = node('section', 'jb-extension-guide');
     const sections = new Map<GuideView, HTMLElement>([['start', start], ['lumiverse', native], ['generation', generation], ['story', story], ['extensions', extensions]]);
-    const preferences = node('details', 'jb-chat-layout-preferences');
     const viewButtons = new Map<GuideView, HTMLButtonElement>();
     selectView = value => {
       for (const [key, section] of sections) section.hidden = value !== key;
-      preferences.hidden = value !== 'extensions';
       actionStatus.textContent = '';
       for (const [key, button] of viewButtons) button.setAttribute('aria-pressed', String(value === key));
       viewButtons.get(value)?.focus({ preventScroll: true });
@@ -121,9 +91,6 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
     }
     const editing = node('p', 'jb-chat-guide-editing'); editing.append(node('span', '', 'On a message:'), icon('edit'), node('span', '', 'Edit'), icon('trash'), node('span', '', 'Remove'));
     native.append(tips, editing);
-    const hiddenToolbar = node('div', 'jb-chat-toolbar-notice');
-    const showToolbar = node('button', 'jb-button', 'Show reply toolbar'); showToolbar.type = 'button'; showToolbar.addEventListener('click', () => { void setLayout('lumiverse'); });
-    hiddenToolbar.append(node('p', '', 'Your simple layout hides this toolbar.'), showToolbar); native.append(hiddenToolbar);
     native.append(node('p', 'jb-settings-help', 'Missing an icon? Open Customize composer (sliders) above the message box to show hidden actions.'));
     function row(target: HTMLElement, title: string, detail: string, label: string, action: () => void | boolean | Promise<void | boolean>, needsChat = false) {
       const row = node('div', 'jb-chat-help-row'), text = node('div'); text.append(node('h4', '', title), node('p', '', detail));
@@ -183,23 +150,9 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
       goals.append(button);
     }
     extensions.append(goals, result);
-    preferences.append(node('summary', '', 'Choose your chat layout'));
-    const choices = node('fieldset', 'jb-chat-layouts'); choices.append(node('legend', '', 'Chat composer'));
-    const inputs = new Map<ComposerLayout, HTMLInputElement>();
-    for (const [value, title, detail] of [
-      ['lumiverse', 'Lumiverse tools', 'Default · Native chat toolbar and extension controls.'],
-      ['janitorai', 'JanitorAI-style', 'A simpler message box with extension discovery and a persona picker.'],
-    ] as const) {
-      const label = node('label', 'jb-chat-layout'), input = node('input'); input.type = 'radio'; input.name = 'jb-composer-layout'; input.value = value;
-      const text = node('span'); text.append(node('strong', '', title), node('span', 'jb-chat-layout-detail', detail)); label.append(input, text); choices.append(label); inputs.set(value, input);
-      input.addEventListener('change', () => { if (input.checked) void setLayout(value); });
-    }
-    const status = node('p', 'jb-settings-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
-    render = () => { for (const [value, input] of inputs) { input.checked = value === layout; input.closest('label')?.classList.toggle('jb-selected', input.checked); } status.textContent = notice; hiddenToolbar.hidden = layout !== 'janitorai'; };
-    render(); preferences.append(choices);
     const close = node('button', 'jb-button jb-chat-help-close', 'Close'); close.type = 'button'; close.addEventListener('click', () => current.dismiss());
     const actions = node('div', 'jb-settings-actions'); actions.append(close);
-    root.append(heading, tabs, start, native, generation, story, extensions, actionStatus, status, preferences, actions); selectView(view);
+    root.append(heading, tabs, start, native, generation, story, extensions, actionStatus, actions); selectView(view);
     const keys = (event: KeyboardEvent) => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); current.dismiss(); return; }
       if (event.key !== 'Tab') return;
@@ -214,12 +167,11 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
     root.addEventListener('keydown', keys);
     current.onDismiss(() => {
       root.removeEventListener('keydown', keys);
-      if (modal === current) { modal = undefined; render = undefined; selectView = undefined; }
+      if (modal === current) { modal = undefined; selectView = undefined; }
       if (!disposed && previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     });
   }
-  return { openHelp, setLayout, ready, getLayout: () => layout, destroy() {
-    if (disposed) return; disposed = true; modal?.dismiss(); modal = undefined; render = undefined; selectView = undefined;
-    if (oldTools === null) document.documentElement.removeAttribute('data-jb-tools'); else document.documentElement.setAttribute('data-jb-tools', oldTools);
+  return { openHelp, destroy() {
+    if (disposed) return; disposed = true; modal?.dismiss(); modal = undefined; selectView = undefined;
   } };
 }

@@ -16,9 +16,6 @@
 .jb-chat-guide-editing { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 16px 0 10px; color: #c1bcc8; font-size: 12px; }
 .jb-chat-guide-editing svg { width: 16px; height: 16px; margin-left: 10px; }
 .jb-chat-guide-editing svg:first-child { margin-left: 0; }
-.jb-chat-toolbar-notice { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid #b993d166; border-radius: 8px; }
-.jb-chat-toolbar-notice p { flex: 1; margin: 0; font-size: 13px; line-height: 1.5; }
-.jb-chat-toolbar-notice button { min-height: 44px; }
 .jb-sampler-terms { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 12px 18px; padding: 16px; margin: 0 0 12px; border: 1px solid #b993d12e; border-radius: 9px; background: #ad83c00b; font-size: 13px; line-height: 1.5; }
 .jb-sampler-terms dt { font-weight: 700; color: #e2dce7; }
 .jb-sampler-terms dd { margin: 0; color: #c1bcc8; }
@@ -35,17 +32,8 @@
 .jb-extension-result a { color: #d9b5ee; }
 .jb-extension-url { display: block; width: 100%; min-width: 0; padding: 9px; border: 1px solid #ffffff30; border-radius: 5px; color: inherit; background: #0002; font-size: 13px; }
 .jb-extension-actions button { min-height: 44px; }
-.jb-chat-layout-preferences { margin-top: 18px; border-top: 1px solid #ffffff20; padding-top: 12px; }
-.jb-chat-layout-preferences > summary { cursor: pointer; padding: 8px 0; }
 .jb-chat-guide-status:empty, .jb-chat-help .jb-settings-status:empty { display: none; }
 @media(max-width:600px),(pointer:coarse) { .jb-chat-help-button { min-width: 44px; min-height: 44px; } }
-.jb-chat-layouts { min-width: 0; margin: 20px 0 0; padding: 0; border: 0; }
-.jb-chat-layouts legend { margin-bottom: 10px; font-weight: 700; }
-.jb-chat-layout { display: flex; align-items: flex-start; gap: 12px; padding: 14px; margin: 0 0 9px; border: 1px solid #575861; border-radius: 9px; cursor: pointer; }
-.jb-chat-layout.jb-selected { border-color: #b993d1; background: #ad83c012; }
-.jb-chat-layout input { flex: 0 0 auto; width: 18px; height: 18px; margin: 2px 0 0; accent-color: #b993d1; }
-.jb-chat-layout strong, .jb-chat-layout-detail { display: block; }
-.jb-chat-layout-detail { margin-top: 4px; color: #c1bcc8; font-size: 13px; line-height: 1.5; }
 .jb-chat-help h3 { margin: 22px 0 0; font-size: 16px; }
 .jb-chat-help-row { display: flex; align-items: center; gap: 16px; padding: 15px 0; border-bottom: 1px solid #ffffff13; }
 .jb-chat-help-row > div { flex: 1; min-width: 0; }
@@ -60,7 +48,6 @@
   .jb-sampler-terms { gap: 10px 12px; padding: 12px; }
   .jb-chat-guide-tabs { gap: 5px; }
   .jb-chat-help .jb-chat-guide-tabs button { font-size: 12px; }
-  .jb-chat-toolbar-notice { flex-wrap: wrap; }
   .jb-extension-goals { grid-template-columns: 1fr; }
   .jb-chat-help-row { flex-wrap: wrap; gap: 10px; }
   .jb-chat-help-row > div { flex-basis: 100%; }

@@ -24,19 +24,16 @@ export type FeatureTutorialOptions = {
   openHistory?: () => boolean | Promise<boolean>;
   openHistoryTutorial?: () => void;
   openCardTutorial?: () => void;
-  showReplyToolbar?: () => void | Promise<void>;
   screenshots?: TutorialScreenshots;
   onClose?: () => void;
 };
-type Action = { label: string; destination: SpindleHostSurfaceRef | 'history' | 'reply-toolbar'; fallback: string; needsChat?: boolean };
+type Action = { label: string; destination: SpindleHostSurfaceRef | 'history'; fallback: string; needsChat?: boolean };
 export type Scene = { title: string; instruction: string; result: string; screenshot: string; fallbackScreenshot?: string; action?: Action };
 type Tutorial = { title: string; intro: string; prerequisites: readonly string[]; scenes: readonly Scene[]; help: readonly string[]; setup?: Action };
 const drawer = (id: string): SpindleHostSurfaceRef => ({ kind: 'drawer_tab', id });
 const settings = (id: string): SpindleHostSurfaceRef => ({ kind: 'settings_tab', id });
 const connections: Action = { label: 'Open Connections', destination: drawer('connections'), fallback: 'Open Connections from Lumiverse’s sidebar.' };
 const loom: Action = { label: 'Open preset editor', destination: drawer('loom'), fallback: 'Open Preset from Lumiverse’s sidebar, or use Settings → Manage / import presets.' };
-const toolbar: Action = { label: 'Show reply toolbar', destination: 'reply-toolbar', fallback: 'Open chat Help → Replies → Show reply toolbar. Use Customize composer (sliders) to reveal individual actions.', needsChat: true };
-
 /** Guides show native controls; actions run only through explicitly chosen shortcuts. */
 export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
   presets: {
@@ -85,7 +82,7 @@ export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
       { title: 'Create a book and entry', instruction: 'Open Lore from the sidebar → New Book. Name it, then choose New Entry.', result: 'The entry editor opens. Comment / Label names the entry for you.', screenshot: 'lorebook-entry', action: { label: 'Open Lorebooks', destination: drawer('lorebook'), fallback: 'Open Lore from Lumiverse’s sidebar.' } },
       { title: 'Write the trigger and facts', instruction: 'Put Lantern Café in Primary Keys and the café facts in Content. Under Activation, set Activation method to Key match and Status to Enabled.', result: 'The keyword can trigger those facts. Changes save automatically; pause briefly before continuing.', screenshot: 'lorebook-entry' },
       { title: 'Attach it to this chat', instruction: 'With your chat open, under This Chat Only, choose Add and select your book.', result: 'The book appears in this chat’s attached list. Always Active would apply it globally.', screenshot: 'lorebook-activation' },
-      { title: 'Check the prompt', instruction: 'Use the reply toolbar above the message box. Type Lantern Café into the draft, then choose Extras (⋯) → Dry Run. If the toolbar is hidden, use Show reply toolbar below.', result: 'In Prompt Dry Run, check World Info for activation and Messages or Raw for the café facts. Leave the draft unsent.', screenshot: 'lorebook-verify', fallbackScreenshot: 'lorebook-activation', action: toolbar },
+      { title: 'Check the prompt', instruction: 'Use the reply toolbar above the message box. Type Lantern Café into the draft, then choose Extras (⋯) → Dry Run. Missing a button? Customize composer (sliders) above the message box shows hidden actions.', result: 'In Prompt Dry Run, check World Info for activation and Messages or Raw for the café facts. Leave the draft unsent.', screenshot: 'lorebook-verify', fallbackScreenshot: 'lorebook-activation' },
     ],
     help: ['Missing entry? Check the attached book, Enabled, exact Primary Keys, Scan Depth, activation conditions, and token budget.', 'Primary Keys accepts comma-separated alternatives. Content supplies model context; Comment / Label is for organizing.', 'Constant entries do not need a keyword. Disabled entries contribute nothing. Keep advanced recursion and vector activation at their defaults for this first test.', 'Import Book accepts compatible lorebook JSON. Always Active attaches a book globally; character-attached books and Group Lorebooks follow the relevant card/group rules.'],
   },
@@ -108,7 +105,7 @@ export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
       { title: 'Set up spoken replies', instruction: 'Open Settings → Voice. Under Text-to-Speech, choose a Connection and turn on Enable text-to-speech. Leave Auto-play responses off.', result: 'Your saved connection supplies the model and voice. If the list is empty, use Before you start → Open Connections, then return here.', screenshot: 'voice-settings', action: { label: 'Open Voice & Speech', destination: settings('voice'), fallback: 'Open Lumiverse Settings → Voice.' } },
       { title: 'Try playback', instruction: 'On an AI message, choose its native Play button (speaker icon). You can also use Test under Settings → Voice → Text-to-Speech.', result: 'The chosen voice reads the text. Adjust Speed and Volume in Voice settings. Cloud TTS may use a billable provider request.', screenshot: 'voice-playback', fallbackScreenshot: 'voice-settings' },
       { title: 'Choose dictation', instruction: 'In Settings → Voice, scroll to Speech-to-Text. Choose a Provider and turn on Show mic button in input bar.', result: 'Whistle prepares its model on this device. STT Connection needs a saved connection; Web Speech API uses browser speech support.', screenshot: 'voice-dictation', fallbackScreenshot: 'voice-settings' },
-      { title: 'Show the microphone', instruction: 'Use Show reply toolbar below. Above the message box, Customize composer (sliders) lets you reveal hidden actions such as the microphone.', result: 'The native toolbar becomes available. Choose which individual actions to show in Customize composer.', screenshot: '', action: toolbar },
+      { title: 'Show the microphone', instruction: 'Above the message box, Customize composer (sliders) lets you reveal hidden actions such as the microphone.', result: 'Choose which individual actions to show in Customize composer.', screenshot: '' },
       { title: 'Record and review', instruction: 'Use the microphone in the message box. Allow access, record, stop, and review the transcript before sending.', result: 'Your speech becomes a message draft. Sending the draft is a separate choice.', screenshot: 'voice-compose' },
     ],
     help: ['Playback failure? Check the TTS connection, key, model, voice, output volume and browser audio permissions. Create a connection under Connections → Text-to-Speech → New TTS Connection, then choose it in Settings → Voice. Close Settings before working in the Connections drawer.', 'Dictation failure? Check the microphone device/permission and selected STT provider. Whistle’s status offers preparation progress and Try again; an insecure HTTP phone connection may need HTTPS.', 'Whistle uses your device’s processing power and needs no API key. Cloud transcription and Web Speech API follow their provider/browser behavior.', 'Review Auto-submit after silence if you want to control submission. Group member menu → Voice… sets a voice override for that member in the chat.'],
@@ -129,11 +126,11 @@ export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
     title: 'Use Author’s Note in Lumiverse', intro: 'Janiverse’s Chat Memory edits this note. Here is where it lives without Janiverse.',
     prerequisites: ['Open the chat you want to change.', 'Each chat has its own note.'],
     scenes: [
-      { title: 'Open Tools', instruction: 'In your chat, find the reply toolbar above the message box and choose Tools (wrench icon).', result: 'A menu opens with Chat Settings and Author’s Note among its options.', screenshot: '', action: toolbar },
+      { title: 'Open Tools', instruction: 'In your chat, find the reply toolbar above the message box and choose Tools (wrench icon).', result: 'A menu opens with Chat Settings and Author’s Note among its options.', screenshot: '' },
       { title: 'Open Author’s Note', instruction: 'Choose Author’s Note.', result: 'A panel opens with the same text you wrote in Chat Memory.', screenshot: '' },
       { title: 'Write and place it', instruction: 'Type the facts the AI should keep in mind. Depth from latest message and Role match Chat Memory’s Insertion depth and Message role.', result: 'It saves as you type. The title shows · Active while the note has text.', screenshot: '' },
     ],
-    help: ['No Tools button? Use Show reply toolbar, or open Customize composer (sliders) above the message box and show Tools.', 'Empty the text to turn the note off for this chat.'],
+    help: ['No Tools button? Open Customize composer (sliders) above the message box and show Tools.', 'Empty the text to turn the note off for this chat.'],
   },
   extensions: {
     title: 'Add and manage extensions', intro: 'Install from the author’s repository, then choose which tools to enable.',
@@ -279,7 +276,6 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
       if (disposed) return false;
       if (action.needsChat && !ctx.getActiveChat?.()?.chatId) { status.textContent = 'Open a chat first, then use this step.'; return undefined; }
       if (action.destination === 'history') return options.openHistory ? await options.openHistory() : false;
-      if (action.destination === 'reply-toolbar') { if (!options.showReplyToolbar) return false; await options.showReplyToolbar(); return true; }
       return options.invoke(action.destination);
     }).then(ok => {
       if (disposed || ok === undefined) return; if (ok) { if (feature === 'history') { persist(Math.max(1, index)); restoreFocus = false; dismiss(); } } else status.textContent = `This shortcut is unavailable. ${action.fallback}`;
