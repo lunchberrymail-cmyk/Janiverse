@@ -1,10 +1,10 @@
 import type { SpindleFrontendContext, SpindleHostSurfaceRef, SpindleModalHandle } from 'lumiverse-spindle-types';
-import { lunchPicks, type LunchPick } from './lunch-picks';
+import { lunchPicks } from './lunch-picks';
 import { icon } from './icons';
 import type { TutorialFeature } from './feature-tutorials';
 
 export type ComposerLayout = 'lumiverse' | 'janitorai';
-type GuideView = 'lumiverse' | 'generation' | 'story' | 'extensions';
+export type GuideView = 'start' | 'lumiverse' | 'generation' | 'story' | 'extensions';
 export const COMPOSER_LAYOUT_KEY = 'chat:composer_layout_v1';
 type Options = {
   onLayoutChange(layout: ComposerLayout): void;
@@ -15,18 +15,14 @@ type Options = {
   openTutorial?(feature: TutorialFeature): void;
   beforeOpenHelp?(): void;
   openGlossary?(): void;
+  openChecklist?(): void;
+  openPersonaCreate?(): void;
   invoke(ref: SpindleHostSurfaceRef): Promise<boolean>;
 };
-const recommendations: Array<{ goal: string; pick: LunchPick }> = [
-  { goal: 'Polish my writing', pick: { name: 'Hone', url: 'https://github.com/AMousePad/Hone', note: 'Refine AI replies or enhance your own drafts with a separate editing pass.' } },
-  ...[
-    ['Remember long stories', 'LumiBooks'], ['Hear character voices', 'Choir'], ['Color character dialogue', 'Prism'],
-  ].map(([goal, name]) => ({ goal, pick: lunchPicks.find(pick => pick.name === name)! })),
-];
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') {
   const result = document.createElement(tag); result.className = cls; result.textContent = text; return result;
 }
-/** Discover existing tools without generating, installing, or changing a draft. */
+/** Janiverse's one Help: setup, chat controls and extras. Never generates, installs, or changes a draft. */
 export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
   let disposed = false, layout: ComposerLayout = 'lumiverse', revision = 0;
   let modal: SpindleModalHandle | undefined, render: (() => void) | undefined;
@@ -61,9 +57,9 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
     options.beforeOpenHelp?.();
     if (modal) { selectView?.(view); return; }
     const previousFocus = document.activeElement as HTMLElement | null;
-    const current = ctx.ui.showModal({ title: 'Chat help', width: 600, maxHeight: 760 }); modal = current;
+    const current = ctx.ui.showModal({ title: 'Help', width: 600, maxHeight: 760 }); modal = current;
     const root = current.root; root.classList.add('jb-settings', 'jb-chat-help');
-    root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Chat help');
+    root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Help');
     const active = () => !disposed && modal === current;
     const heading = node('p', 'jb-chat-guide-intro', 'Coming from JanitorAI? Find your familiar controls here.');
     if (options.openGlossary) {
@@ -71,8 +67,8 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
       where.addEventListener('click', () => { if (!active()) return; current.dismiss(); options.openGlossary?.(); }); heading.append(' ', where);
     }
     const tabs = node('nav', 'jb-chat-guide-tabs'); tabs.setAttribute('aria-label', 'Chat help topics');
-    const native = node('section', 'jb-native-guide'), generation = node('section', 'jb-generation-guide'), story = node('section', 'jb-story-guide'), extensions = node('section', 'jb-extension-guide');
-    const sections = new Map<GuideView, HTMLElement>([['lumiverse', native], ['generation', generation], ['story', story], ['extensions', extensions]]);
+    const start = node('section', 'jb-start-guide'), native = node('section', 'jb-native-guide'), generation = node('section', 'jb-generation-guide'), story = node('section', 'jb-story-guide'), extensions = node('section', 'jb-extension-guide');
+    const sections = new Map<GuideView, HTMLElement>([['start', start], ['lumiverse', native], ['generation', generation], ['story', story], ['extensions', extensions]]);
     const preferences = node('details', 'jb-chat-layout-preferences');
     const viewButtons = new Map<GuideView, HTMLButtonElement>();
     selectView = value => {
@@ -82,7 +78,7 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
       for (const [key, button] of viewButtons) button.setAttribute('aria-pressed', String(value === key));
       viewButtons.get(value)?.focus({ preventScroll: true });
     };
-    for (const [value, title] of [['lumiverse', 'Replies'], ['generation', 'AI settings'], ['story', 'Story tools'], ['extensions', 'Extras']] as const) {
+    for (const [value, title] of [['start', 'Start here'], ['lumiverse', 'Replies'], ['generation', 'AI settings'], ['story', 'Story tools'], ['extensions', 'Explore']] as const) {
       const button = node('button', 'jb-button', title); button.type = 'button'; button.addEventListener('click', () => selectView?.(value));
       viewButtons.set(value, button); tabs.append(button);
     }
@@ -102,6 +98,14 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
       });
       return button;
     }
+    const guide = (feature: TutorialFeature) => () => options.openTutorial?.(feature);
+    if (options.openChecklist) row(start, 'Setup checklist', 'Connect your AI and add a character card. The checklist lives on Janiverse Home.', 'Show checklist', options.openChecklist);
+    if (options.openTutorial) {
+      row(start, 'Connect your AI', 'Add a provider, key and model in Connections.', 'API connection guide', guide('connections'));
+      row(start, 'Bring your cards', 'Import JanitorAI card files or links.', 'Card import guide', guide('import'));
+      row(start, 'Bring old chats', 'Old conversations come over with the JAR Bridge extension.', 'Old chat import guide', guide('history'));
+    }
+    if (options.openPersonaCreate) row(start, 'Your persona', 'Who you play as in your chats.', 'Create a persona', options.openPersonaCreate);
     native.append(node('p', 'jb-chat-guide-location', 'Look for these icons in the toolbar above your message box.'));
     const tips = node('div', 'jb-toolbar-tips');
     for (const [picture, title, detail, location] of [
@@ -144,11 +148,17 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
     row(moreMemory, 'Memory Cortex', 'Set up automatic recall of people, relationships, and events.', 'Set up Memory Cortex', () => options.invoke({ kind: 'settings_tab', id: 'memoryCortex' })); story.append(moreMemory);
     if (options.openTutorial) moreMemory.append(actionButton('Memory guide', () => options.openTutorial?.('memory'), true));
 
-    extensions.append(node('p', 'jb-settings-help', 'Choose what you want to add. These optional extensions each have their own setup.'));
+    extensions.append(node('p', 'jb-settings-help', 'Optional extras for when the basics work.'));
+    if (options.openTutorial) {
+      row(extensions, 'Group chats', 'Put two or more characters in the same scene.', 'Group chat guide', guide('group'));
+      row(extensions, 'Voice & dictation', 'Hear spoken replies or dictate your messages.', 'Voices & dictation guide', guide('voice'));
+      row(extensions, 'Install an extension', 'Add tools from GitHub and manage them in Extensions.', 'Extension guide', guide('extensions'));
+    }
+    extensions.append(node('h3', 'jb-extension-picks-title', 'Extensions picked by Lunch'), node('p', 'jb-settings-help', 'Choose what you want to add. Each extension has its own setup.'));
     const goals = node('div', 'jb-extension-goals'); goals.setAttribute('aria-label', 'What would you like to add?');
     const result = node('article', 'jb-extension-result'); result.setAttribute('aria-live', 'polite'); result.hidden = true;
-    for (const { goal, pick } of recommendations) {
-      const button = node('button', 'jb-button', goal); button.type = 'button'; button.setAttribute('aria-pressed', 'false');
+    for (const pick of lunchPicks) {
+      const button = node('button', 'jb-button', pick.goal); button.type = 'button'; button.setAttribute('aria-pressed', 'false');
       button.addEventListener('click', () => {
         if (!active()) return;
         for (const option of goals.querySelectorAll('button')) option.setAttribute('aria-pressed', String(option === button));
@@ -171,7 +181,6 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
       goals.append(button);
     }
     extensions.append(goals, result);
-    if (options.openTutorial) extensions.append(actionButton('Voices & dictation guide', () => options.openTutorial?.('voice')));
     preferences.append(node('summary', '', 'Choose your chat layout'));
     const choices = node('fieldset', 'jb-chat-layouts'); choices.append(node('legend', '', 'Chat composer'));
     const inputs = new Map<ComposerLayout, HTMLInputElement>();
@@ -188,7 +197,7 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
     render(); preferences.append(choices);
     const close = node('button', 'jb-button jb-chat-help-close', 'Close'); close.type = 'button'; close.addEventListener('click', () => current.dismiss());
     const actions = node('div', 'jb-settings-actions'); actions.append(close);
-    root.append(heading, tabs, native, generation, story, extensions, actionStatus, status, preferences, actions); selectView(view);
+    root.append(heading, tabs, start, native, generation, story, extensions, actionStatus, status, preferences, actions); selectView(view);
     const keys = (event: KeyboardEvent) => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); current.dismiss(); return; }
       if (event.key !== 'Tab') return;

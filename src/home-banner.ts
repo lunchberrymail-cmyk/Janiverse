@@ -1,19 +1,15 @@
-import type { SpindleFrontendContext, SpindleHostSurfaceRef, SpindleModalHandle } from 'lumiverse-spindle-types';
-import { icon } from './icons';
-import { createLunchPicks } from './lunch-picks';
-import type { TutorialFeature } from './feature-tutorials';
+import type { SpindleFrontendContext, SpindleHostSurfaceRef } from 'lumiverse-spindle-types';
 import { createSetupChecklist } from './setup-checklist';
 
 type Options = {
-  invoke: (ref: SpindleHostSurfaceRef) => Promise<boolean>;
   openApi: () => void;
   openImport: () => void;
   openPersona: () => void;
   openPrompt: () => void;
-  openTutorial?: (feature: TutorialFeature) => void;
-  chooseCharacter?: () => void;
+  chooseCharacter: () => void;
+  openHelp: () => void;
 };
-type MemoryOptions = Pick<Options, 'invoke'>;
+type MemoryOptions = { invoke: (ref: SpindleHostSurfaceRef) => Promise<boolean> };
 const memoryTools = {
   summary: { kind: 'drawer_tab', id: 'summary' },
   cortex: { kind: 'settings_tab', id: 'memoryCortex' },
@@ -65,170 +61,24 @@ export function createPresetPromo(_ctx?: SpindleFrontendContext) {
   return { root, destroy() { root.remove(); } };
 }
 
-/** A quiet, user-paced introduction: one idea and one next step at a time. */
+/** The one setup checklist. Guides and later ideas live in Help. */
 export function createHomeBanner(ctx: SpindleFrontendContext, options: Options) {
-  let disposed = false, index = 0, active = false;
-  let picksModal: SpindleModalHandle | undefined;
-  const root = make('section', 'jb-discover'); root.setAttribute('aria-label', 'Discover more of Lumiverse');
+  let disposed = false;
+  const root = make('section', 'jb-discover jb-discover-basics'); root.setAttribute('aria-label', 'Your setup checklist'); root.dataset.idea = 'basics';
   const content = make('div', 'jb-discover-content');
-  const eyebrow = make('p', 'jb-discover-eyebrow', 'A LITTLE MORE LUMIVERSE');
-  const title = make('h2', 'jb-discover-title');
-  const description = make('p', 'jb-discover-description');
-  const actions = make('div', 'jb-discover-actions');
-  const tryButton = make('button', 'jb-discover-primary'); tryButton.type = 'button';
-  const cardButton = make('button', 'jb-discover-import', '2. Add a card'); cardButton.type = 'button'; cardButton.prepend(icon('import'));
-  const personaButton = make('button', 'jb-discover-import', '3. Create a persona'); personaButton.type = 'button'; personaButton.prepend(icon('persona'));
-  const promptButton = make('button', 'jb-discover-import', '4. Preset or prompt (optional)'); promptButton.type = 'button'; promptButton.prepend(icon('prompt'));
-  const cortexButton = make('button', 'jb-discover-import', 'Explore Memory Cortex'); cortexButton.type = 'button'; cortexButton.prepend(icon('embeddings'));
-  actions.append(tryButton, cardButton, personaButton, promptButton, cortexButton);
+  const eyebrow = make('p', 'jb-discover-eyebrow', 'START HERE');
+  const title = make('h2', 'jb-discover-title', 'Let’s do the basics.');
+  const description = make('p', 'jb-discover-description', 'Connect your AI and add a character card to start chatting. A persona and prompt are optional.');
   const footer = make('div', 'jb-discover-footer');
-  const progress = make('span', 'jb-discover-progress'); progress.setAttribute('aria-live', 'polite');
-  const next = make('button', 'jb-discover-next', 'Next idea'); next.type = 'button'; next.append(icon('arrow'));
-  const tutorial = make('button', 'jb-discover-tutorial', 'Full tutorial'); tutorial.type = 'button';
-  const apiTutorial = make('button', 'jb-discover-tutorial', 'API connection guide'); apiTutorial.type = 'button';
-  footer.append(progress, apiTutorial, tutorial, next);
-  const status = make('p', 'jb-discover-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
-  content.append(eyebrow, title, description, actions, footer, status);
-  const checklist = options.chooseCharacter ? createSetupChecklist(ctx, { ...options, chooseCharacter: options.chooseCharacter, dismissed: () => { if (!disposed && index === 0) { index = 1; render(); } } }) : undefined;
-  if (checklist) content.insertBefore(checklist.root, actions);
-  const art = make('div', 'jb-discover-art'); art.setAttribute('aria-hidden', 'true');
-  for (const [picture, cls] of [['all-chats', 'back'], ['extension', 'middle'], ['embeddings', 'front']] as const) {
-    const card = make('div', `jb-discover-card jb-discover-card-${cls}`);
-    card.append(icon(picture), make('span', 'jb-discover-card-line'), make('span', 'jb-discover-card-line jb-discover-card-line-short'));
-    art.append(card);
-  }
-  root.append(content, art);
-  function openLunchPicks() {
-    if (disposed) return;
-    picksModal?.dismiss();
-    const modal = ctx.ui.showModal({ title: 'Shameless ads by Lunch', width: 760, maxHeight: 850 }); picksModal = modal;
-    modal.root.classList.add('jb-lunch-panel');
-    const intro = make('p', '', 'A few favorite extensions, picked by Lunch. Follow a link to read about one before choosing to install it.');
-    const manage = make('button', 'jb-button jb-primary', 'Open Extensions'); manage.type = 'button';
-    const notice = make('p', 'jb-lunch-status'); notice.setAttribute('role', 'status');
-    const current = () => !disposed && picksModal === modal;
-    manage.addEventListener('click', () => {
-      if (!current() || manage.disabled) return;
-      manage.disabled = true; notice.textContent = '';
-      void options.invoke({ kind: 'drawer_tab', id: 'spindle' }).then(ok => {
-        if (!current()) return;
-        if (ok) modal.dismiss(); else notice.textContent = 'Extensions is unavailable. Open it from Lumiverse’s sidebar.';
-      }).catch(() => { if (current()) notice.textContent = 'Could not open Extensions. Open it from Lumiverse’s sidebar.'; })
-        .finally(() => { if (current()) manage.disabled = false; });
-    });
-    modal.root.append(intro, createLunchPicks(), manage, notice);
-    modal.onDismiss(() => { if (picksModal === modal) picksModal = undefined; if (!disposed && tryButton.isConnected) tryButton.focus(); });
-  }
-  const ideas = [
-    {
-      name: 'Basics', title: 'Let’s do the basics.',
-      description: 'Connect your AI, add a character card, and create the persona you’ll chat as. A preset or prompt is optional.',
-      action: '1. Add API connection', picture: 'settings',
-      tutorial: 'import',
-      open: async () => { options.openApi(); return true; },
-    },
-    {
-      name: 'Memory', title: 'Keep the important moments.',
-      description: 'Keep a running recap with Summary, or recall people and events with Memory Cortex.',
-      action: 'Set up summaries', picture: 'memory',
-      tutorial: 'memory',
-      open: () => options.invoke(memoryTools.summary),
-    },
-    {
-      name: 'Lorebooks', title: 'Build a world beyond the character card.',
-      description: 'Save places, people, and world rules. Matching keywords bring the right details into your chat.',
-      action: 'Explore Lorebooks', picture: 'lorebook',
-      tutorial: 'lorebooks',
-      open: () => options.invoke({ kind: 'drawer_tab', id: 'lorebook' }),
-    },
-    {
-      name: 'Group chats', title: 'Put your characters in the same scene.',
-      description: 'Chat with two or more of your cards together. Let the cast interact, and choose who replies next.',
-      action: 'Explore group chats', picture: 'group',
-      tutorial: 'group',
-      open: () => options.invoke({ kind: 'drawer_tab', id: 'characters' }),
-    },
-    {
-      name: 'Voice', title: 'Hear their voice. Speak your replies.',
-      description: 'Listen to spoken replies or dictate your messages with Voice & Speech.',
-      action: 'Explore voice & dictation', picture: 'voice',
-      tutorial: 'voice',
-      open: () => options.invoke({ kind: 'settings_tab', id: 'voice' }),
-    },
-    {
-      name: 'Extensions', title: 'Add something new when you want it.',
-      description: 'Add tools from GitHub and manage the extensions you use, all in one place.',
-      action: 'Manage extensions', picture: 'extension',
-      tutorial: 'extensions',
-      open: () => options.invoke({ kind: 'drawer_tab', id: 'spindle' }),
-    },
-    {
-      name: 'Lunch’s picks', title: 'Shameless ads by Lunch',
-      description: 'A few favorite extensions, picked by Lunch. Take a look and see what suits your stories.',
-      action: 'See Lunch’s picks', picture: 'extension', tutorial: null,
-      open: async () => { openLunchPicks(); return true; },
-    },
-  ] as const;
-  function render() {
-    const idea = ideas[index];
-    const isLunch = idea.name === 'Lunch’s picks';
-    const isBasics = idea.name === 'Basics';
-    eyebrow.textContent = isLunch ? 'LUNCH’S PICKS' : idea.name === 'Memory' ? 'HELP YOUR CHARACTERS REMEMBER MORE' : isBasics ? 'START HERE' : 'A LITTLE MORE LUMIVERSE';
-    tutorial.hidden = isLunch;
-    tutorial.textContent = isBasics ? 'Card import guide' : 'Full tutorial';
-    root.classList.toggle('jb-discover-lunch', isLunch);
-    root.classList.toggle('jb-discover-basics', isBasics);
-    cardButton.hidden = personaButton.hidden = promptButton.hidden = !isBasics;
-    actions.hidden = isBasics && !!checklist;
-    if (checklist) {
-      checklist.root.hidden = !isBasics;
-    }
-    cortexButton.hidden = idea.name !== 'Memory';
-    root.dataset.idea = idea.name.toLowerCase(); title.textContent = idea.title;
-    description.textContent = isBasics && checklist ? 'Connect your AI and add a character card to start chatting. A persona and prompt are optional.' : idea.description;
-    tryButton.replaceChildren(icon(idea.picture), document.createTextNode(idea.action));
-    progress.textContent = `${idea.name} · ${index + 1} of ${ideas.length}`;
-    next.setAttribute('aria-label', `Next idea: ${ideas[(index + 1) % ideas.length].name}`); status.textContent = '';
-    const front = art.querySelector('.jb-discover-card-front')!;
-    front.querySelector('svg')?.replaceWith(icon(idea.picture));
-    // A remembered dismissal can render another idea synchronously. Activate last
-    // so this render cannot overwrite that idea with stale Basics copy.
-    if (active && isBasics) checklist?.activate(); else checklist?.deactivate();
-  }
-  tutorial.addEventListener('click', () => {
-    if (disposed) return;
-    const feature = ideas[index].tutorial;
-    if (feature) options.openTutorial?.(feature);
-  });
-  apiTutorial.addEventListener('click', () => { if (!disposed) options.openTutorial?.('connections'); });
-  next.addEventListener('click', () => { index = (index + 1) % ideas.length; render(); });
-  tryButton.addEventListener('click', () => {
-    if (disposed) return;
-    status.textContent = '';
-    void ideas[index].open().then(ok => {
-      if (!disposed && !ok) status.textContent = 'This tool is unavailable right now. You can try another idea.';
-    }).catch(() => { if (!disposed) status.textContent = 'Could not open this tool. Please try again from Lumiverse’s sidebar.'; });
-  });
-  cortexButton.addEventListener('click', () => {
-    if (disposed) return;
-    void options.invoke(memoryTools.cortex).then(ok => {
-      if (!disposed && !ok) status.textContent = 'Memory Cortex is unavailable right now. You can still try Summary.';
-    }).catch(() => { if (!disposed) status.textContent = 'Could not open Memory Cortex. Please try again from Lumiverse’s sidebar.'; });
-  });
-  function openBasicStep(action: () => void) {
-    if (disposed || index !== 0) return;
-    status.textContent = '';
-    try { action(); }
-    catch { status.textContent = 'Could not open this setup step. Please try again from Janiverse’s More menu.'; }
-  }
-  cardButton.addEventListener('click', () => openBasicStep(options.openImport));
-  personaButton.addEventListener('click', () => openBasicStep(options.openPersona));
-  promptButton.addEventListener('click', () => openBasicStep(options.openPrompt));
-  render();
+  const help = make('button', 'jb-discover-tutorial', 'Guides & help'); help.type = 'button';
+  footer.append(help);
+  const checklist = createSetupChecklist(ctx, { ...options, dismissed: () => { if (!disposed) root.hidden = true; } });
+  content.append(eyebrow, title, description, checklist.root, footer); root.append(content);
+  help.addEventListener('click', () => { if (!disposed) options.openHelp(); });
   return { root,
-    activate() { if (disposed) return; active = true; if (index === 0) checklist?.activate(); },
-    deactivate() { active = false; checklist?.deactivate(); },
-    reviewSetup() { if (disposed) return; checklist?.review(); index = 0; render(); },
-    destroy() { disposed = true; checklist?.destroy(); picksModal?.dismiss(); root.remove(); },
+    activate() { if (!disposed) checklist.activate(); },
+    deactivate() { checklist.deactivate(); },
+    reviewSetup() { if (disposed) return; root.hidden = false; checklist.review(); },
+    destroy() { disposed = true; checklist.destroy(); root.remove(); },
   };
 }

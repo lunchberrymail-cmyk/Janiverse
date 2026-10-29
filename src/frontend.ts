@@ -69,7 +69,7 @@ export function setup(ctx: SpindleFrontendContext) {
   let searchTimer: ReturnType<typeof setTimeout> | undefined, controller: AbortController | undefined;
   let libraryRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   let modal: SpindleModalHandle | undefined;
-  let homeHelp: SpindleModalHandle | undefined, glossaryWindow: SpindleModalHandle | undefined;
+  let glossaryWindow: SpindleModalHandle | undefined;
   let tutorialWindow: ReturnType<typeof openFeatureTutorial> | undefined;
   let tutorialRequest = 0;
   const cleanups: Array<() => void> = [];
@@ -111,6 +111,8 @@ export function setup(ctx: SpindleFrontendContext) {
     openTutorial,
     beforeOpenHelp: () => { tutorialWindow?.destroy(); cardSetup.close(); },
     openGlossary: () => openGlossaryWindow(),
+    openChecklist: () => { setView('browse'); homeBanner.reviewSetup(); },
+    openPersonaCreate: () => personaCreate.open(),
     invoke,
   });
   const promptSettings = createPromptSettings(settingsWindow.context('settings'), {
@@ -233,7 +235,7 @@ export function setup(ctx: SpindleFrontendContext) {
   }
   function openGlossaryWindow() {
     if (disposed) return;
-    cardSetup.close(); tutorialWindow?.destroy(); homeHelp?.dismiss(); glossaryWindow?.dismiss();
+    cardSetup.close(); tutorialWindow?.destroy(); glossaryWindow?.dismiss();
     const opened = openGlossary(ctx, { invoke, actions: {
       home: () => { setView('browse'); },
       myChats: () => { setView('chats'); },
@@ -244,34 +246,9 @@ export function setup(ctx: SpindleFrontendContext) {
       generation: () => { openPrompt('generation'); },
       memory: () => { const chatId = ctx.getActiveChat()?.chatId; if (!chatId) return false; openMemory(chatId); },
       customize: () => { openCustomize(); },
-      replies: () => { chatTools.openHelp(); },
+      replies: () => { chatTools.openHelp('lumiverse'); },
     } });
     glossaryWindow = opened; opened.onDismiss(() => { if (glossaryWindow === opened) glossaryWindow = undefined; });
-  }
-  function openHomeHelp() {
-    if (disposed) return;
-    cardSetup.close(); tutorialWindow?.destroy(); homeHelp?.dismiss();
-    const panel = ctx.ui.showModal({ title: 'Help', width: 420, maxHeight: 580 }); homeHelp = panel;
-    panel.root.classList.add('jb-home-help'); panel.root.setAttribute('aria-label', 'Home help');
-    panel.onDismiss(() => { if (homeHelp === panel) homeHelp = undefined; });
-    for (const [label, picture, action] of [
-      ['Where did it go? JanitorAI → Lumiverse', 'arrow', () => openGlossaryWindow()],
-      ['Setup checklist', 'tools', () => { setView('browse'); homeBanner.reviewSetup(); }],
-      ['API connection guide', 'settings', () => openTutorial('connections')],
-      ['Card import guide', 'import', () => openTutorial('import')],
-      ['Old chat import guide', 'all-chats', () => openTutorial('history')],
-      ['Create a persona', 'persona', () => personaCreate.open()],
-      ['Preset & generation guide', 'prompt', () => openTutorial('presets')],
-      ['Chat controls', 'message', () => chatTools.openHelp()],
-    ] as const) {
-      const item = button(label, () => { if (disposed || homeHelp !== panel) return; panel.dismiss(); action(); }, 'jb-button');
-      item.prepend(icon(picture)); panel.root.append(item);
-    }
-    const optional = el('details', 'jb-home-help-optional'); optional.append(el('summary', '', 'More guides'));
-    for (const [label, feature] of [['Remember my story', 'memory'], ['Add world details', 'lorebooks'], ['Create a group chat', 'group'], ['Voices & dictation', 'voice'], ['Install an extension', 'extensions']] as const) {
-      optional.append(button(label, () => { if (disposed || homeHelp !== panel) return; panel.dismiss(); openTutorial(feature); }, 'jb-button'));
-    }
-    panel.root.append(optional);
   }
   function setView(next: View, navigate = true) {
     soundCloud.close();
@@ -296,7 +273,7 @@ export function setup(ctx: SpindleFrontendContext) {
     ['Import old chats', () => { void openHistory().catch(() => false).then(opened => { if (!opened && !disposed) openTutorial('history'); }); }],
     ['API Settings', openConnections],
     ['Prompt & generation', () => openPrompt('prompt')],
-    ['Help', openHomeHelp],
+    ['Help', () => chatTools.openHelp('start')],
   ] as const) {
     const item = button(label, () => { more.open = false; action(); }, 'jb-menu-link');
     if (label === 'Import characters') { importMenuItem = item; item.setAttribute('aria-label', label); }
@@ -385,7 +362,7 @@ export function setup(ctx: SpindleFrontendContext) {
     } catch { /* The settings dialog reports unavailable saved configurations. */ }
   }
   const home = el('section', 'jb-home'); home.setAttribute('aria-label', 'Character browsing');
-  const homeBanner = createHomeBanner(ctx, { invoke, openApi: openConnections, openImport: () => openTutorial('import'), openPersona: () => personaCreate.open(), openPrompt: () => openPrompt('prompt'), openTutorial,
+  const homeBanner = createHomeBanner(ctx, { openApi: openConnections, openImport: () => openTutorial('import'), openPersona: () => personaCreate.open(), openPrompt: () => openPrompt('prompt'), openHelp: () => chatTools.openHelp('start'),
     chooseCharacter: () => { grid.scrollIntoView({ block: 'start' }); grid.querySelector<HTMLButtonElement>('h3 button')?.focus({ preventScroll: true }); },
   }); home.append(homeBanner.root);
   const recentSection = el('section', 'jb-recent-section'); const recentHeading = el('div', 'jb-section-heading');
@@ -724,8 +701,7 @@ export function setup(ctx: SpindleFrontendContext) {
       if (location.pathname !== '/' && !await invoke({ kind: 'route', id: '/' })) return false;
       setView('browse', false); return true;
     },
-    openApi: openConnections,
-    openImport: () => openTutorial('import'),
+    openGlossary: () => { openGlossaryWindow(); return !!glossaryWindow; },
   });
   cleanups.push(() => welcome.destroy());
   setView('browse', false);
@@ -735,7 +711,7 @@ export function setup(ctx: SpindleFrontendContext) {
   try { if (consumePersonaSetupHandoff(window.sessionStorage)) void invoke({ kind: 'drawer_tab', id: 'personas' }); }
   catch { /* Storage can be unavailable; ordinary setup still works. */ }
   return () => {
-    disposed = true; clearTimeout(toastTimer); toast?.remove(); request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); homeHelp?.dismiss(); glossaryWindow?.dismiss(); tutorialWindow?.destroy(); cardSetup.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); chatSetup.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
+    disposed = true; clearTimeout(toastTimer); toast?.remove(); request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); glossaryWindow?.dismiss(); tutorialWindow?.destroy(); cardSetup.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); chatSetup.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
     cleanups.reverse().forEach(cleanup => cleanup()); mounts.forEach(root => root.replaceChildren());
     if (oldView === null) document.documentElement.removeAttribute('data-janitor-bridge-view'); else document.documentElement.setAttribute('data-janitor-bridge-view', oldView);
     chatTools.destroy();

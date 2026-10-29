@@ -34,7 +34,7 @@
 }
 :is(.jb-home, .jb-home-masthead, .jb-chat-header, .jb-preview, .jb-my-chats,
     .jb-settings, .jb-settings-window-root, .jb-memory, .jb-customize,
-    .jb-welcome, .jb-lunch-panel) {
+    .jb-welcome) {
   font-family: var(--jb-font-ui);
   color: var(--jb-text);
 }
@@ -85,23 +85,23 @@
 .jb-button { background: #41434a; border-color: #ffffff29; color: #eeeaf4; border-radius: 7px; }
 .jb-button:hover:not(:disabled) { background: #4b4d55; border-color: #ffffff40; filter: none; }
 .jb-button.jb-primary, .jb-settings :is(.jb-primary, .jb-settings-save),
-.jb-discover .jb-discover-primary, .jb-memory-promo :is(button, .jb-promo-link):first-child {
+.jb-memory-promo :is(button, .jb-promo-link):first-child {
   background: var(--jb-primary-bg);
   border-color: #f8a5f166;
   color: #1a0b2a;
   box-shadow: var(--jb-primary-shadow);
 }
 .jb-button.jb-primary:hover:not(:disabled), .jb-settings :is(.jb-primary, .jb-settings-save):hover:not(:disabled),
-.jb-discover .jb-discover-primary:hover, .jb-memory-promo :is(button, .jb-promo-link):first-child:hover {
+.jb-memory-promo :is(button, .jb-promo-link):first-child:hover {
   background: linear-gradient(#ff9cf7, #ec7be4);
   border-color: #fac0f5;
   filter: none;
 }
 .jb-discover { background: radial-gradient(ellipse at 85% 30%, #30234b66, transparent 55%), #050a18; border-color: #ffffff24; border-radius: 12px; box-shadow: 0 10px 28px #0004; }
 .jb-discover-title { font-family: var(--jb-font-display); font-weight: 400; font-optical-sizing: auto; letter-spacing: -.8px; }
-.jb-discover-description, .jb-discover-guide, .jb-discover-eyebrow { font-family: var(--jb-font-ui); }
+.jb-discover-description, .jb-discover-eyebrow { font-family: var(--jb-font-ui); }
 .jb-discover-description { color: #c7c6d9; }
-.jb-discover :is(.jb-discover-import, .jb-discover-next, .jb-discover-tutorial) { color: #d7c9ed; }
+.jb-discover .jb-discover-tutorial { color: #d7c9ed; }
 .jb-memory-promo { background: radial-gradient(ellipse at 100% 0, #4c295866, transparent 70%), #151221; border-color: #b798eb40; border-radius: 12px; box-shadow: inset 0 1px 0 #ffffff0a; }
 .jb-memory-promo h3 { font: 500 22px/1.2 var(--jb-font-display); color: #f8f6ff; letter-spacing: -.3px; }
 .jb-memory-promo p { font-family: var(--jb-font-ui); color: #c8c2d7; }

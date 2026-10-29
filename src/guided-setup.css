@@ -33,8 +33,6 @@
 @media (max-width: 500px) {
   .jb-discover-basics:has(.jb-setup-checklist) .jb-discover-description { display: none; }
   .jb-discover-basics:has(.jb-setup-checklist) .jb-discover-footer { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; width: 100%; }
-  .jb-discover-basics:has(.jb-setup-checklist) .jb-discover-progress { grid-area: 1 / 1; }
-  .jb-discover-basics:has(.jb-setup-checklist) .jb-discover-next { grid-area: 1 / 2; justify-self: end; }
   .jb-discover-basics:has(.jb-setup-checklist) .jb-discover-tutorial { text-align: left; }
   .jb-setup-steps { gap: 8px; }
   .jb-discover .jb-setup-step { gap: 8px; min-height: 88px; padding: 10px; }

@@ -14,7 +14,7 @@ function setup() {
     openPersonas: () => { actions.push('personas'); }, invoke: async ref => { actions.push(ref.kind + ':' + ref.id); return true; },
   }); return tools;
 }
-function choose(value: ComposerLayout) { button('Extras').click(); document.querySelector<HTMLDetailsElement>('.jb-chat-layout-preferences')!.open = true; document.querySelector<HTMLInputElement>(`input[value="${value}"]`)!.click(); }
+function choose(value: ComposerLayout) { button('Explore').click(); document.querySelector<HTMLDetailsElement>('.jb-chat-layout-preferences')!.open = true; document.querySelector<HTMLInputElement>(`input[value="${value}"]`)!.click(); }
 function button(text: string) { return [...document.querySelectorAll('button')].find(button => button.textContent === text)!; }
 beforeEach(() => {
   dom = new JSDOM('<!doctype html><html data-jb-tools="previous"><body><button id="help">Help</button><textarea id="draft">Unsent story draft</textarea></body></html>');
@@ -93,6 +93,8 @@ test.each([
   ['Remember long stories', 'LumiBooks', 'https://github.com/AMousePad/LumiBooks'],
   ['Hear character voices', 'Choir', 'https://github.com/patatasbravasch-arch/Choir'],
   ['Color character dialogue', 'Prism', 'https://github.com/kittyafterdark/Prism'],
+  ['Read it like a visual novel', 'Cue — Living Novel', 'https://github.com/japolino/cue-living-novel'],
+  ['Add an in-world phone', 'Pocket', 'https://github.com/kittyafterdark/Pocket'],
 ])('discovery recommends %s without installing or running it', async (goal, name, url) => {
   setup(); await tools!.ready; tools!.openHelp('extensions'); button(goal).click();
   const result = document.querySelector('.jb-extension-result')!;
@@ -129,8 +131,8 @@ test('help topics show one compact panel and leave the draft and settings untouc
   expect(document.querySelector<HTMLElement>('.jb-chat-layout-preferences')!.hidden).toBe(true);
   expect(document.querySelectorAll('.jb-chat-guide-card svg')).toHaveLength(4);
   expect(document.querySelectorAll('.jb-chat-guide-card button')).toHaveLength(0);
-  for (const topic of ['AI settings', 'Story tools', 'Extras', 'Replies']) button(topic).click();
-  const panels = ['.jb-native-guide', '.jb-generation-guide', '.jb-story-guide', '.jb-extension-guide'];
+  for (const topic of ['Start here', 'AI settings', 'Story tools', 'Explore', 'Replies']) button(topic).click();
+  const panels = ['.jb-start-guide', '.jb-native-guide', '.jb-generation-guide', '.jb-story-guide', '.jb-extension-guide'];
   expect(panels.filter(selector => !document.querySelector<HTMLElement>(selector)!.hidden)).toEqual(['.jb-native-guide']);
   expect(actions).toEqual([]); expect(saves).toEqual([]);
   expect(document.querySelector<HTMLTextAreaElement>('#draft')!.value).toBe('Unsent story draft');
@@ -154,4 +156,27 @@ test('simple-layout users can restore the reply toolbar explicitly without gener
   expect(tools!.getLayout()).toBe('lumiverse'); expect(document.querySelector<HTMLElement>('.jb-chat-toolbar-notice')!.hidden).toBe(true);
   expect(saves).toEqual([[COMPOSER_LAYOUT_KEY, 'lumiverse']]); expect(actions).toEqual([]);
   expect(document.querySelector<HTMLTextAreaElement>('#draft')!.value).toBe('Unsent story draft');
+});
+
+test('Start here gathers setup guides, the checklist and persona creation in the one Help', async () => {
+  tools = createChatTools(ctx, { onLayoutChange() {}, openSettings() {}, openGeneration() {}, openMemory() {}, openPersonas() {},
+    openTutorial: feature => { actions.push('guide:' + feature); }, openChecklist: () => { actions.push('checklist'); }, openPersonaCreate: () => { actions.push('persona-create'); },
+    invoke: async ref => { actions.push(ref.kind + ':' + ref.id); return true; } });
+  tools.openHelp('start');
+  const help = document.querySelector('.jb-chat-help')!;
+  expect(help.getAttribute('aria-label')).toBe('Help');
+  expect(document.querySelector<HTMLElement>('.jb-start-guide')!.hidden).toBe(false);
+  expect([...document.querySelectorAll('.jb-start-guide button')].map(node => node.textContent)).toEqual(['Show checklist', 'API connection guide', 'Card import guide', 'Old chat import guide', 'Create a persona']);
+  for (const [label, view] of [['Show checklist', 'start'], ['API connection guide', 'start'], ['Card import guide', 'start'], ['Old chat import guide', 'start'], ['Create a persona', 'start'], ['Group chat guide', 'extensions'], ['Voices & dictation guide', 'extensions'], ['Extension guide', 'extensions']] as const) {
+    tools.openHelp(view); button(label).click(); await settle(); expect(document.querySelector('.jb-chat-help')).toBeNull();
+  }
+  expect(actions).toEqual(['checklist', 'guide:connections', 'guide:import', 'guide:history', 'persona-create', 'guide:group', 'guide:voice', 'guide:extensions']);
+  expect(saves).toEqual([]);
+});
+
+test('Explore lists every pick by Lunch in one place', async () => {
+  setup(); tools!.openHelp('extensions');
+  const goals = [...document.querySelectorAll('.jb-extension-goals button')].map(node => node.textContent);
+  expect(goals).toEqual(['Polish my writing', 'Remember long stories', 'Hear character voices', 'Color character dialogue', 'Read it like a visual novel', 'Add an in-world phone']);
+  expect(document.querySelector('.jb-extension-picks-title')!.textContent).toBe('Extensions picked by Lunch');
 });

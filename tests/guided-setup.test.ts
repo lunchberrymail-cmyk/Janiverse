@@ -28,7 +28,7 @@ function startChat() {
   document.body.append(chatSetup.root); void chatSetup.refresh(); return chatSetup;
 }
 function startHome() {
-  homeBanner = createHomeBanner(ctx, { invoke: async ref => { opened.push(`${ref.kind}:${ref.id}`); return true; }, openApi: () => opened.push('api'), openImport: () => opened.push('import'), openPersona: () => opened.push('persona'), openPrompt: () => opened.push('prompt'), chooseCharacter: () => opened.push('choose'), openTutorial: feature => opened.push(`tutorial:${feature}`) });
+  homeBanner = createHomeBanner(ctx, { openApi: () => opened.push('api'), openImport: () => opened.push('import'), openPersona: () => opened.push('persona'), openPrompt: () => opened.push('prompt'), chooseCharacter: () => opened.push('choose'), openHelp: () => opened.push('help') });
   document.body.append(homeBanner.root); homeBanner.activate(); return homeBanner;
 }
 beforeEach(() => {
@@ -59,24 +59,17 @@ beforeEach(() => {
 });
 afterEach(() => { homeBanner?.destroy(); checklist?.destroy(); chatSetup?.destroy(); homeBanner = undefined; checklist = undefined; chatSetup = undefined; dom.window.close(); globalThis.document = oldDocument; globalThis.fetch = oldFetch; });
 
-test('hiding the Home checklist preserves API tutorial access and consistent banner actions', async () => {
-  const view = startHome(); await settle(); button('Hide checklist', view.root).click(); await settle();
-  expect(view.root.dataset.idea).toBe('memory'); expect(view.root.querySelector('h2')!.textContent).toBe('Keep the important moments.');
-  expect(view.root.querySelector('.jb-discover-progress')!.textContent).toBe('Memory · 2 of 7');
-  const apiGuide = button('API connection guide', view.root); expect(apiGuide.hidden).toBe(false); apiGuide.click();
-  expect(opened).toEqual(['tutorial:connections']); button('Set up summaries', view.root).click(); await settle();
-  expect(opened).toEqual(['tutorial:connections', 'drawer_tab:summary']); expect(changes.at(-1)).toEqual({ key: SETUP_DISMISSED_KEY, value: true });
+test('hiding the Home checklist hides the whole banner and remembers it, while Help stays one click away', async () => {
+  const view = startHome(); await settle(); button('Guides & help', view.root).click(); expect(opened).toEqual(['help']);
+  button('Hide checklist', view.root).click(); await settle();
+  expect(view.root.hidden).toBe(true); expect(changes.at(-1)).toEqual({ key: SETUP_DISMISSED_KEY, value: true });
 });
 
-test('a remembered hidden checklist cannot mix Basics text with Memory actions when revisiting the banner', async () => {
+test('a remembered hidden checklist keeps the banner hidden until setup is reviewed', async () => {
   savedPreference = true; const view = startHome(); await settle();
-  for (let turn = 0; turn < 2; turn++) {
-    for (let idea = 0; idea < 6; idea++) button('Next idea', view.root).click();
-    expect(view.root.dataset.idea).toBe('memory'); expect(view.root.querySelector('h2')!.textContent).toBe('Keep the important moments.');
-    expect(view.root.querySelector('.jb-discover-progress')!.textContent).toBe('Memory · 2 of 7');
-    expect(button('Set up summaries', view.root).hidden).toBe(false); expect(button('API connection guide', view.root).hidden).toBe(false);
-  }
-  view.reviewSetup(); await settle(); expect(view.root.dataset.idea).toBe('basics'); expect(view.root.querySelector('h2')!.textContent).toBe('Let’s do the basics.');
+  expect(view.root.hidden).toBe(true); expect(changes).toEqual([]);
+  view.deactivate(); view.activate(); await settle(); expect(view.root.hidden).toBe(true);
+  view.reviewSetup(); await settle(); expect(view.root.hidden).toBe(false); expect(view.root.querySelector('h2')!.textContent).toBe('Let’s do the basics.');
   expect(view.root.querySelector('.jb-setup-checklist')!.hasAttribute('hidden')).toBe(false); expect(changes.at(-1)).toEqual({ key: SETUP_DISMISSED_KEY, value: false });
 });
 

@@ -7,12 +7,12 @@ const flush = async () => { for (let index = 0; index < 10; index++) await Promi
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
 let dom: JSDOM, ctx: any, welcome: ReturnType<typeof createWelcome> | undefined;
 let settings: Map<string, unknown>, reads: string[], writes: Array<{ key: string; value: unknown }>, grants: unknown;
-let permissionRequests: number, fetchCalls: number, shown: number, dismissed: number, apiCalls: number, importCalls: number, homeCalls: number;
-let readSetting: (key: string) => Promise<unknown>, readGrants: () => Promise<unknown>, goHome: () => Promise<boolean>;
+let permissionRequests: number, fetchCalls: number, shown: number, dismissed: number, glossaryCalls: number, homeCalls: number;
+let readSetting: (key: string) => Promise<unknown>, readGrants: () => Promise<unknown>, goHome: () => Promise<boolean>, glossaryOpens: boolean;
 let closeHost: () => void, failStorage: boolean, failModal: boolean;
 
 function setup() {
-  welcome = createWelcome(ctx, { openHome: () => { homeCalls++; return goHome(); }, openApi: () => { apiCalls++; }, openImport: () => { importCalls++; } });
+  welcome = createWelcome(ctx, { openHome: () => { homeCalls++; return goHome(); }, openGlossary: () => { glossaryCalls++; return glossaryOpens; } });
   return welcome;
 }
 function action(label: string) {
@@ -23,7 +23,7 @@ beforeEach(() => {
   dom = new JSDOM('<!doctype html><html><body><main id="native"><button>Native action</button><p>Existing Lumiverse library</p></main></body></html>', { url: 'http://localhost:7860/characters' });
   globalThis.document = dom.window.document;
   settings = new Map(); reads = []; writes = []; grants = [];
-  permissionRequests = fetchCalls = shown = dismissed = apiCalls = importCalls = homeCalls = 0; failStorage = failModal = false;
+  permissionRequests = fetchCalls = shown = dismissed = glossaryCalls = homeCalls = 0; failStorage = failModal = false; glossaryOpens = true;
   readSetting = async key => settings.get(key); readGrants = async () => grants; goHome = async () => true;
   globalThis.fetch = (async () => { fetchCalls++; throw new Error('No network expected'); }) as typeof fetch;
   ctx = {
@@ -56,7 +56,7 @@ test('fresh zero-permission installation can orient on the native characters pag
   expect(document.querySelector('.jb-welcome')?.textContent).toContain('No permissions enabled yet? That’s normal.');
   expect(document.querySelector('.jb-welcome')?.textContent).toContain('close it with its ×');
   expect(document.querySelector('.jb-welcome')?.textContent).toContain('stay in Lumiverse');
-  expect(dom.window.location.pathname).toBe('/characters'); expect(homeCalls + apiCalls + importCalls + permissionRequests + fetchCalls).toBe(0);
+  expect(dom.window.location.pathname).toBe('/characters'); expect(homeCalls + glossaryCalls + permissionRequests + fetchCalls).toBe(0);
   expect(writes).toHaveLength(0); expect(native.outerHTML).toBe(before);
   expect(await helper.maybeOpen()).toBe(false); expect(shown).toBe(1);
 });
@@ -78,7 +78,7 @@ test('automatic welcome stays out of chats but manual Start here can always reop
   expect(helper.open()).toBe(true); expect(shown).toBe(1); helper.open(); expect(shown).toBe(1);
   action('Got it').click(); await flush(); expect(writes).toEqual([{ key: WELCOME_COMPLETED_KEY, value: true }]);
   helper.open(); expect(shown).toBe(2); closeHost(); await flush(); expect(writes).toHaveLength(1);
-  expect(permissionRequests).toBe(0); expect(homeCalls + apiCalls + importCalls).toBe(0);
+  expect(permissionRequests).toBe(0); expect(homeCalls + glossaryCalls).toBe(0);
 });
 
 test('successful Home choice acknowledges only after its route resolves', async () => {
@@ -98,11 +98,14 @@ test('failed Home navigation stays open with retry and never marks first run com
   goHome = async () => true; action('Retry opening Janiverse Home').click(); await flush(); expect(writes).toHaveLength(1); expect(dismissed).toBe(1);
 });
 
-test('API and import are separate explicit optional actions', async () => {
-  const helper = setup(); helper.open(); action('API settings').click(); await flush();
-  expect(apiCalls).toBe(1); expect(importCalls + homeCalls).toBe(0); expect(writes).toHaveLength(1);
-  helper.open(); action('Import old cards & chats').click(); await flush();
-  expect(importCalls).toBe(1); expect(dismissed).toBe(2); expect(writes).toHaveLength(1); expect(permissionRequests + fetchCalls).toBe(0);
+test('the welcome points to the one checklist and Help instead of repeating setup steps', async () => {
+  const helper = setup(); helper.open(); const text = document.querySelector('.jb-welcome')!.textContent!;
+  expect(text).toContain('setup checklist'); expect(text).toContain('Where did it go?');
+  expect([...document.querySelectorAll('.jb-welcome button')].map(node => node.textContent)).toEqual(['Open Janiverse Home', 'Where did it go?', 'Got it']);
+  glossaryOpens = false; action('Where did it go?').click(); await flush();
+  expect(glossaryCalls).toBe(1); expect(dismissed).toBe(0); expect(writes).toHaveLength(0); expect(document.querySelector('[role="status"]')?.textContent).toContain('Try again');
+  glossaryOpens = true; action('Where did it go?').click(); await flush();
+  expect(glossaryCalls).toBe(2); expect(homeCalls).toBe(0); expect(dismissed).toBe(1); expect(writes).toHaveLength(1); expect(permissionRequests + fetchCalls).toBe(0);
 });
 
 test('host close is an acknowledgement while destroying an open window is not', async () => {

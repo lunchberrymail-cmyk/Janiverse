@@ -355,3 +355,4 @@
 .jb-glossary-empty{color:#bcb8c7;font-size:13px}
 .jb-glossary-link{margin-left:4px}
 @media(max-width:520px){.jb-glossary-row{grid-template-columns:minmax(0,1fr)}.jb-glossary-row>.jb-button{grid-column:1;grid-row:auto;justify-self:start}}
+.jb-extension-picks-title{margin:18px 0 4px;font-size:15px}

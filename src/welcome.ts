@@ -4,8 +4,7 @@ import type { SpindleFrontendContext, SpindleModalHandle } from 'lumiverse-spind
 export const WELCOME_COMPLETED_KEY = 'onboarding:welcome_completed_v1';
 export interface WelcomeOptions {
   openHome(): Promise<boolean>;
-  openApi(): void;
-  openImport(): void;
+  openGlossary(): boolean;
 }
 type Session = { modal: SpindleModalHandle; closed: boolean; busy: boolean; acknowledgeOnClose: boolean };
 const DIALOG_SELECTOR = '[data-spindle-modal], [role="dialog"], [aria-modal="true"], dialog[open]';
@@ -42,18 +41,18 @@ export function createWelcome(ctx: SpindleFrontendContext, options: WelcomeOptio
     const session: Session = { modal, closed: false, busy: false, acknowledgeOnClose: true }; current = session;
     modal.root.classList.add('jb-welcome'); modal.root.setAttribute('role', 'dialog'); modal.root.setAttribute('aria-label', 'Welcome to Janiverse');
     const lead = element('p', 'jb-welcome-lead', 'A familiar way to use Lumiverse.');
-    const steps = element('ol', 'jb-welcome-steps');
-    for (const text of ['Open Janiverse Home for your characters and My Chats.', 'Set up your API when you’re ready to start chatting.', 'Bring your old cards and conversations through the import guide.']) steps.append(element('li', '', text));
+    const steps = element('ul', 'jb-welcome-steps');
+    for (const text of ['Janiverse Home has your characters, My Chats and a short setup checklist: connect your AI, then add a card.', 'Coming from JanitorAI? “Where did it go?” finds familiar features by their old names.', 'Guides for everything else are in Help.']) steps.append(element('li', '', text));
     const permissions = element('p', 'jb-welcome-hint', 'No permissions enabled yet? That’s normal. Janiverse asks when you choose a feature.');
     const panel = element('p', 'jb-welcome-hint', 'If the Extensions panel is covering the page, close it with its ×.');
     const data = element('p', 'jb-welcome-data', 'Your characters, chats and settings stay in Lumiverse.');
     const status = element('p', 'jb-welcome-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
     const actions = element('div', 'jb-welcome-actions');
-    const home = button('Open Janiverse Home', true), api = button('API settings'), importer = button('Import old cards & chats'), later = button('Got it');
-    const allButtons = [home, api, importer, later];
+    const home = button('Open Janiverse Home', true), glossary = button('Where did it go?'), later = button('Got it');
+    const allButtons = [home, glossary, later];
     const alive = () => !disposed && current === session && !session.closed;
     const setBusy = (value: boolean) => { session.busy = value; for (const node of allButtons) node.disabled = value; modal.root.setAttribute('aria-busy', String(value)); };
-    async function act(action: () => boolean | void | Promise<boolean | void>, kind: 'home' | 'api' | 'import') {
+    async function act(action: () => boolean | void | Promise<boolean | void>, kind: 'home' | 'glossary') {
       if (!alive() || session.busy) return;
       setBusy(true); status.textContent = kind === 'home' ? 'Opening Janiverse Home…' : '';
       try {
@@ -63,15 +62,14 @@ export function createWelcome(ctx: SpindleFrontendContext, options: WelcomeOptio
         acknowledge(); modal.dismiss();
       } catch {
         if (!alive()) return;
-        status.textContent = kind === 'home' ? 'Janiverse Home could not open. Try again.' : `Could not open ${kind === 'api' ? 'API settings' : 'the import guide'}. Try again.`;
+        status.textContent = kind === 'home' ? 'Janiverse Home could not open. Try again.' : 'Could not open “Where did it go?”. Try again.';
         if (kind === 'home') home.textContent = 'Retry opening Janiverse Home';
       } finally { if (alive()) setBusy(false); }
     }
     home.addEventListener('click', () => { void act(() => options.openHome(), 'home'); });
-    api.addEventListener('click', () => { void act(() => options.openApi(), 'api'); });
-    importer.addEventListener('click', () => { void act(() => options.openImport(), 'import'); });
+    glossary.addEventListener('click', () => { void act(() => options.openGlossary(), 'glossary'); });
     later.addEventListener('click', () => { if (alive()) modal.dismiss(); });
-    actions.append(home, api, importer, later); modal.root.append(lead, steps, permissions, panel, data, status, actions);
+    actions.append(home, glossary, later); modal.root.append(lead, steps, permissions, panel, data, status, actions);
     modal.onDismiss(() => {
       if (session.closed) return; session.closed = true;
       if (current === session) current = undefined;

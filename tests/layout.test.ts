@@ -467,15 +467,14 @@ test('native chat tools are the default and the home menu or chat Help can open 
   expect(header.querySelector('.jb-memory-button')).toBeNull();
   expect([...header.querySelectorAll('button')].filter(button => button.textContent === 'Chat Memory')).toHaveLength(1);
   findButton('Help', roots.get('landing_header')!).click();
-  findButton('Chat controls', document.querySelector('.jb-home-help')!).click();
-  findButton('Extras', document.querySelector('.jb-chat-help')!).click();
+  findButton('Explore', document.querySelector('.jb-chat-help')!).click();
   document.querySelector<HTMLInputElement>('input[value="janitorai"]')!.click();
   expect(document.documentElement.getAttribute('data-jb-tools')).toBe('false');
   expect(document.documentElement.getAttribute('data-jb-composer')).toBe('true');
   findButton('Close', document.querySelector('.jb-chat-help')!).click();
   expect(header.querySelector('.jb-chat-help-button')!.getAttribute('aria-label')).toBe('Chat tools & help');
   header.querySelector<HTMLButtonElement>('.jb-chat-help-button')!.click();
-  findButton('Extras', document.querySelector('.jb-chat-help')!).click();
+  findButton('Explore', document.querySelector('.jb-chat-help')!).click();
   document.querySelector<HTMLInputElement>('input[value="lumiverse"]')!.click();
   expect(document.documentElement.getAttribute('data-jb-tools')).toBe('true');
   expect(document.documentElement.getAttribute('data-jb-composer')).toBe('false');
@@ -488,7 +487,7 @@ test('familiar composer opens extension discovery without requesting generation 
   ctx.composer = { getState: () => ({ mounted: true, chatId: 'chat-1', text: 'An unsent draft' }), onChange: () => () => {}, focus() {} };
   ctx.sendToBackend = (payload: unknown) => sent.push(payload);
   start(); await flush(); roots.get('chat_header_left')!.querySelector<HTMLButtonElement>('.jb-chat-help-button')!.click();
-  findButton('Extras', document.querySelector('.jb-chat-help')!).click();
+  findButton('Explore', document.querySelector('.jb-chat-help')!).click();
   document.querySelector<HTMLInputElement>('input[value="janitorai"]')!.click(); findButton('Close', document.querySelector('.jb-chat-help')!).click();
   document.querySelector<HTMLButtonElement>('.jb-assist-toggle')!.click(); await flush();
   const guide = document.querySelector('.jb-chat-help')!;
@@ -938,7 +937,7 @@ test('Add API connection opens the native Connections drawer without loading the
   ctx.permissions.request = async () => { permissionRequests++; return []; };
   start(); await flush();
   const previousRequests = requests.length;
-  findButton('1. Add API connection', roots.get('landing_hero')!).click(); await flush();
+  roots.get('landing_hero')!.querySelector<HTMLButtonElement>('[data-step=connection]')!.click(); await flush();
   expect(calls).toEqual([{ ref: { kind: 'drawer_tab', id: 'connections' }, params: undefined }]);
   expect(document.querySelector('.jb-api-settings')).toBeNull();
   expect(requests).toHaveLength(previousRequests);
@@ -960,7 +959,7 @@ test('Create a persona opens a writing guide and form without requesting permiss
   ctx.permissions.request = async () => { permissionRequests++; return []; };
   start(); await flush();
   const previousRequests = requests.length;
-  findButton('3. Create a persona', roots.get('landing_hero')!).click(); await flush();
+  roots.get('landing_hero')!.querySelector<HTMLButtonElement>('[data-step=persona]')!.click(); await flush();
   expect(calls).toEqual([]);
   expect(requests).toHaveLength(previousRequests);
   expect(permissionRequests).toBe(0);
@@ -979,7 +978,7 @@ test('the optional preset or prompt shortcut opens its editor without saving set
   let permissionRequests = 0;
   ctx.permissions.request = async () => { permissionRequests++; return []; };
   start(); await flush();
-  findButton('4. Preset or prompt (optional)', roots.get('landing_hero')!).click(); await flush();
+  roots.get('landing_hero')!.querySelector<HTMLButtonElement>('[data-step=prompt]')!.click(); await flush();
   expect(document.querySelector('.jb-settings-prompt')).not.toBeNull();
   expect(permissionRequests).toBe(0);
   expect(requests.every(request => !request.options.method || request.options.method === 'GET')).toBe(true);
@@ -1000,7 +999,7 @@ test('card import stays regular with JAR installed; only the explicit history sh
   start(); await flush();
   const summary = document.querySelector('.jb-more > summary')!; let menuScrolled = false;
   summary.scrollIntoView = () => { menuScrolled = true; };
-  findButton('2. Add a card').click(); await flush();
+  document.querySelector<HTMLButtonElement>('[data-step=card]')!.click(); await flush();
   expect(document.querySelector('.jb-card-methods')).toBeNull();
   expect(menuScrolled).toBe(true);
   expect(document.querySelector<HTMLDetailsElement>('.jb-more')!.open).toBe(true);
@@ -1047,7 +1046,7 @@ test('without an invocable JAR drawer the Basics card guide teaches the menu bef
   ctx.permissions.getGranted = async () => { permissionsRead++; return []; };
   ctx.permissions.request = async () => { permissionRequests++; return []; };
   start(); await flush(); const priorRequests = requests.length;
-  findButton('2. Add a card').click(); await flush();
+  document.querySelector<HTMLButtonElement>('[data-step=card]')!.click(); await flush();
   expect(document.querySelector('[role=dialog]')).toBeNull();
   expect(document.querySelector('.jb-card-menu-guide')).not.toBeNull();
   expect(requests).toHaveLength(priorRequests); expect(calls).toHaveLength(0);
@@ -1113,9 +1112,10 @@ test('Home More keeps five everyday actions and moves setup guides into Help', a
   start(); await flush(); const beforeRequests = requests.length;
   const more = roots.get('landing_header')!.querySelector<HTMLDetailsElement>('.jb-more')!; more.open = true;
   expect([...more.querySelectorAll('button')].map(node => node.textContent)).toEqual(['Import characters', 'Import old chats', 'API Settings', 'Prompt & generation', 'Help']);
-  findButton('Help', more).click(); await flush(); const help = document.querySelector('.jb-home-help')!;
-  expect([...help.querySelectorAll(':scope > button')].map(node => node.textContent)).toEqual(['Where did it go? JanitorAI → Lumiverse', 'Setup checklist', 'API connection guide', 'Card import guide', 'Old chat import guide', 'Create a persona', 'Preset & generation guide', 'Chat controls']);
-  expect(help.querySelector<HTMLDetailsElement>('.jb-home-help-optional')!.open).toBe(false);
+  findButton('Help', more).click(); await flush(); const help = document.querySelector('.jb-chat-help')!;
+  expect(help.getAttribute('aria-label')).toBe('Help'); expect(findButton('Start here', help).getAttribute('aria-pressed')).toBe('true');
+  expect(findButton('Where did it go? Search JanitorAI terms', help)).not.toBeNull();
+  expect([...help.querySelectorAll('.jb-start-guide button')].map(node => node.textContent)).toEqual(['Show checklist', 'API connection guide', 'Card import guide', 'Old chat import guide', 'Create a persona']);
   expect(more.open).toBe(false); expect(calls).toHaveLength(0); expect(requests).toHaveLength(beforeRequests);
   findButton('Card import guide', help).click(); await flush();
   expect(help.isConnected).toBe(false); expect(more.open).toBe(true); expect(document.querySelector('.jb-card-menu-guide')).not.toBeNull();
@@ -1125,8 +1125,10 @@ test('Home More keeps five everyday actions and moves setup guides into Help', a
 test('Help restores the hidden checklist without repeating first-run orientation', async () => {
   start(); await flush(); findButton('Do this later', roots.get('landing_hero')!).click(); await flush();
   findButton('Help', roots.get('landing_header')!).click(); await flush();
-  findButton('Setup checklist', document.querySelector('.jb-home-help')!).click(); await flush();
-  expect(document.querySelector('.jb-home-help')).toBeNull(); expect(document.querySelector('.jb-welcome')).toBeNull();
+  expect(roots.get('landing_hero')!.querySelector<HTMLElement>('.jb-discover')!.hidden).toBe(true);
+  findButton('Show checklist', document.querySelector('.jb-chat-help')!).click(); await flush();
+  expect(document.querySelector('.jb-chat-help')).toBeNull(); expect(document.querySelector('.jb-welcome')).toBeNull();
+  expect(roots.get('landing_hero')!.querySelector<HTMLElement>('.jb-discover')!.hidden).toBe(false);
   expect(roots.get('landing_hero')!.querySelector('h2')!.textContent).toBe('Let’s do the basics.');
   expect(document.querySelector<HTMLElement>('.jb-setup-checklist')!.hidden).toBe(false); expect(calls).toHaveLength(0);
 });
@@ -1134,12 +1136,12 @@ test('Help restores the hidden checklist without repeating first-run orientation
 test('Home Help hands off to persistent task guides and replaces an old guide without adding native writes', async () => {
   let permissionRequests = 0; ctx.permissions.request = async () => { permissionRequests++; return []; };
   start(); await flush(); const header = roots.get('landing_header')!;
-  findButton('Help', header).click(); await flush(); findButton('Preset & generation guide', document.querySelector('.jb-home-help')!).click(); await flush();
+  findButton('Help', header).click(); await flush(); const firstHelp = document.querySelector('.jb-chat-help')!; findButton('AI settings', firstHelp).click(); findButton('Preset guide', firstHelp).click(); await flush();
   const presetGuide = document.querySelector<HTMLElement>('.jb-tutorial-companion')!; expect(presetGuide.dataset.feature).toBe('presets'); expect(calls).toHaveLength(0);
   findButton('Open preset editor', presetGuide).click(); await flush(); expect(calls.at(-1)).toEqual({ ref: { kind: 'drawer_tab', id: 'loom' }, params: undefined }); expect(presetGuide.isConnected).toBe(true);
   findButton('Help', header).click(); await flush(); expect(presetGuide.isConnected).toBe(false);
-  const help = document.querySelector('.jb-home-help')!; help.querySelector<HTMLDetailsElement>('.jb-home-help-optional')!.open = true;
-  findButton('Add world details', help).click(); await flush(); const bookGuide = document.querySelector<HTMLElement>('.jb-tutorial-companion')!; expect(bookGuide.dataset.feature).toBe('lorebooks');
+  const help = document.querySelector('.jb-chat-help')!; findButton('Story tools', help).click();
+  findButton('Set up a Lorebook', help).click(); await flush(); const bookGuide = document.querySelector<HTMLElement>('.jb-tutorial-companion')!; expect(bookGuide.dataset.feature).toBe('lorebooks');
   findButton('Open Lorebooks', bookGuide).click(); await flush(); expect(calls.at(-1)).toEqual({ ref: { kind: 'drawer_tab', id: 'lorebook' }, params: undefined }); expect(bookGuide.isConnected).toBe(true);
   expect(requests.every(request => !request.options.method || request.options.method === 'GET')).toBe(true); expect(permissionRequests).toBe(0);
 });
@@ -1162,8 +1164,8 @@ test('Home Help stays available after first-run dismissal without routing, reque
   expect(document.querySelector('.jb-welcome')).toBeNull(); expect(saved.get('onboarding:welcome_completed_v1')).toBe(true); expect(writes).toBe(1);
   const more = roots.get('landing_header')!.querySelector('.jb-more') as HTMLDetailsElement; more.open = true;
   findButton('Help', more).click(); await flush();
-  const help = document.querySelector('.jb-home-help')!; expect(help).not.toBeNull(); expect(document.querySelector('.jb-welcome')).toBeNull();
-  expect(findButton('Setup checklist', help)).not.toBeNull(); expect(dom.window.location.pathname).toBe('/characters');
+  const help = document.querySelector('.jb-chat-help')!; expect(help).not.toBeNull(); expect(document.querySelector('.jb-welcome')).toBeNull();
+  expect(findButton('Show checklist', help)).not.toBeNull(); expect(dom.window.location.pathname).toBe('/characters');
   expect(calls).toHaveLength(0); expect(permissionRequests).toBe(0); expect(native.outerHTML).toBe(nativeMarkup);
   stop!(); stop = undefined; expect(help.isConnected).toBe(false); expect(writes).toBe(1);
 });

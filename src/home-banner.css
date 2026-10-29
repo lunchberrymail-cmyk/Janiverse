@@ -1,71 +1,30 @@
-/* One optional feature at a time, in the familiar home-page banner position. */
+/* The setup checklist, in the familiar home-page banner position. */
 .jb-discover{position:relative;isolation:isolate;overflow:hidden;height:350px;min-height:350px;margin:0 0 32px;border:1px solid #7b629280;border-radius:14px;background:radial-gradient(ellipse at 84% 40%,#493d746b,transparent 44%),linear-gradient(110deg,#151622,#191b30 60%,#121522);box-shadow:0 6px 20px #0002;color:#f4eff9}
 .jb-discover::before{content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:.6;background-image:radial-gradient(circle,#dfd0ffb3 0 1px,transparent 2px),radial-gradient(circle,#c3b9ea66 0 1px,transparent 2px);background-size:127px 113px,181px 173px;background-position:70% 20%,90% 60%;mask-image:linear-gradient(90deg,transparent 28%,#000 70%)}
 .jb-discover-content{position:relative;z-index:2;box-sizing:border-box;display:flex;flex-direction:column;align-items:flex-start;height:100%;min-width:0;max-width:750px;padding:28px 36px 22px}
 .jb-discover-eyebrow{margin:0 0 12px;font:600 11px/1.5 Arial,Helvetica,sans-serif;letter-spacing:1.7px;color:#c5b5df}
 .jb-discover-title{margin:0 0 12px;font:500 clamp(28px,3.1vw,42px)/1.12 Georgia,'Times New Roman',serif;letter-spacing:-.7px;color:#faf5ff}
 .jb-discover-description{max-width:580px;margin:0 0 21px;font-size:15px;line-height:1.6;color:#c9c5dc}
-.jb-lunch-picks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:650px;margin:0 0 20px}
-.jb-lunch-pick{min-width:0;padding:12px 14px 4px;border:1px solid #b69ac433;border-radius:9px;background:#ffffff06}
-.jb-lunch-pick h3{margin:0 0 5px;color:#f1e5fa;font:600 15px/1.35 Arial,Helvetica,sans-serif;overflow-wrap:anywhere}
-.jb-lunch-pick p,.jb-lunch-picks-empty{margin:0;color:#c9c5dc;font:13px/1.5 Arial,Helvetica,sans-serif;overflow-wrap:anywhere}
-.jb-lunch-pick a{display:inline-flex;align-items:center;min-height:44px;max-width:100%;color:#dfb9f2;font:600 12px/1.4 Arial,Helvetica,sans-serif;text-underline-offset:3px}
-.jb-lunch-pick a:hover{color:#f5dcff}
-.jb-lunch-pick a:focus-visible{outline:2px solid #e7baf9;outline-offset:3px}
-@media(max-width:500px){.jb-lunch-picks{grid-template-columns:minmax(0,1fr);gap:9px}.jb-lunch-pick{padding:11px 13px 2px}}
-.jb-discover-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px 20px}
 .jb-discover :is(button){font:inherit;cursor:pointer}
-.jb-discover-primary{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:44px;padding:10px 18px;border:1px solid #d4a9e8;border-radius:7px;background:linear-gradient(#bc91d3,#a174bd);box-shadow:0 2px 10px #c395d82a;color:#21182b;font-size:14px!important;font-weight:650!important}
-.jb-discover-primary:hover{background:#cea5e2}
-.jb-discover-import{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:6px 0;border:0;background:transparent;color:#c9bddc;font-size:13px!important}
-.jb-discover-import:hover,.jb-discover-library:hover{color:#f0d5ff;text-decoration:underline;text-underline-offset:3px}
-.jb-discover-import .jb-menu-icon{width:17px;height:17px;flex-basis:17px}
-.jb-discover-primary .jb-menu-icon{width:18px;height:18px;flex-basis:18px}
 .jb-discover-footer{display:flex;align-items:center;gap:18px;min-height:26px;margin-top:auto;color:#a59ab9;font-size:11px}
-.jb-discover-next{display:inline-flex;align-items:center;gap:7px;padding:4px 0;border:0;background:transparent;color:#c5b5de;font-size:12px!important}
-.jb-discover-next:hover{color:#f0d5ff}
-.jb-discover-next .jb-menu-icon{width:15px;height:15px;flex-basis:15px}
 .jb-discover-status{max-width:580px;margin:10px 0 0;font-size:12px;line-height:1.5;color:#e0c8ef}
 .jb-discover-status:empty{display:none}
-.jb-discover-guide{max-width:580px;margin-top:15px;color:#c9c5dc;font:13px/1.6 Arial,Helvetica,sans-serif}
-.jb-discover-guide>summary{display:flex;align-items:center;gap:8px;min-height:36px;cursor:pointer;color:#d9c5ec;font-size:12px;list-style:none}
-.jb-discover-guide>summary::before{content:'+';font-size:17px}
-.jb-discover-guide[open]>summary::before{content:'−'}
-.jb-discover-guide>summary::-webkit-details-marker{display:none}
-.jb-discover-guide>summary:focus-visible{outline:2px solid #e7baf9;outline-offset:3px}
-.jb-discover-guide ol{margin:6px 0 0;padding-left:20px}
-.jb-discover-guide li+li{margin-top:7px}
-@media(max-width:600px),(pointer:coarse){.jb-discover-guide>summary,.jb-discover-next,.jb-discover-import{min-height:44px}}
-.jb-discover-library{margin:5px 0 0;padding:4px 0;border:0;background:transparent;color:#c9bddc;font-size:12px!important}
-.jb-discover [hidden]{display:none!important}
+.jb-discover[hidden],.jb-discover [hidden]{display:none!important}
 .jb-discover button:focus-visible{outline:2px solid #e7baf9;outline-offset:4px}
 .jb-discover button:disabled{opacity:.5;cursor:wait}
-.jb-discover-art{position:absolute;right:6%;top:25px;width:235px;height:250px;pointer-events:none;opacity:.85}
-.jb-discover-card{position:absolute;display:flex;align-items:center;flex-direction:column;width:134px;height:188px;padding:32px 20px 18px;border:1px solid #c2a0e169;border-radius:11px;background:linear-gradient(155deg,#6e5687,#322c49 85%);box-shadow:0 12px 30px #0004}
-.jb-discover-card>.jb-menu-icon{width:69px;height:69px;margin:0 0 22px;flex:0 0 auto;color:#dfcbed;stroke-width:1.2}
-.jb-discover-card-line{height:5px;width:84%;margin-top:9px;border-radius:5px;background:#d6c4e547}
-.jb-discover-card-line-short{width:58%;opacity:.7}
-.jb-discover-card-back{left:78px;top:20px;transform:rotate(17deg);opacity:.55}
-.jb-discover-card-middle{left:0;top:10px;transform:rotate(-16deg);opacity:.7}
-.jb-discover-card-front{left:44px;top:30px;transform:rotate(3deg);background:linear-gradient(145deg,#89709e,#413550 78%)}
 @media(max-width:1100px){.jb-discover-content{max-width:70%;padding:28px}.jb-discover-art{right:2%;transform:scale(.9);transform-origin:right center}.jb-discover-description{font-size:14px}}
 @media(max-width:800px){.jb-discover{height:400px;min-height:400px;margin-bottom:26px}.jb-discover-content{max-width:100%;padding:25px 22px}.jb-discover-title{max-width:330px;font-size:31px}.jb-discover-description{max-width:520px}.jb-discover-art{display:none}.jb-discover-actions{gap:8px 18px}.jb-discover-eyebrow{font-size:10px}.jb-discover::before{mask-image:linear-gradient(90deg,transparent,#000);opacity:.25}}
 @media(prefers-reduced-motion:reduce){.jb-discover *{scroll-behavior:auto}}
 .jb-discover-footer{flex-wrap:wrap;gap:8px 18px;padding-top:16px;flex-shrink:0}
 .jb-discover-tutorial{display:inline-flex;align-items:center;min-height:44px;padding:4px 0;border:0;background:transparent;color:#dac5eb;font-size:12px!important;text-decoration:underline;text-underline-offset:3px}
 .jb-discover-tutorial:hover{color:#f5dcff}
-.jb-lunch-panel{padding:18px;color:#ded5e6}
-.jb-lunch-panel>p{margin:0 0 20px;font:14px/1.6 Arial,Helvetica,sans-serif}
-.jb-lunch-panel .jb-lunch-picks{max-width:none}
 @media(max-width:500px){.jb-discover{height:470px;min-height:470px}.jb-discover-content{padding:24px 21px}.jb-discover-title{max-width:100%;font-size:28px}.jb-discover-description{font-size:14px;line-height:1.5;margin-bottom:16px}.jb-discover-eyebrow{margin-bottom:9px;letter-spacing:1.3px}.jb-discover-footer{gap:2px 18px;width:100%}.jb-discover-progress{flex-basis:100%}}
 
-/* The first idea gives setup steps the full banner width and grows on phones. */
+/* Setup steps get the full banner width and grow on phones. */
 .jb-discover-basics{height:auto;min-height:350px}
 .jb-discover-basics .jb-discover-content{height:auto;min-height:350px;max-width:none;padding:24px 28px}
-.jb-discover-basics .jb-discover-art{display:none}
 .jb-discover-basics .jb-discover-title{max-width:none}
 .jb-discover-basics .jb-discover-description{max-width:680px;margin-bottom:16px}
-.jb-discover-basics .jb-discover-actions{gap:8px 20px}
 .jb-discover-basics .jb-discover-footer{margin-top:16px;padding-top:0}
 @media(max-width:500px){.jb-discover-basics{min-height:0}.jb-discover-basics .jb-discover-content{min-height:0;padding:24px 21px}.jb-discover-basics .jb-discover-actions{align-items:flex-start;flex-direction:column;gap:4px}.jb-discover-basics .jb-discover-import{text-align:left}}
 
