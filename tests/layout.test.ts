@@ -40,6 +40,9 @@ let connectionProjection: { activeProfileId: string | null; provider: string | n
 let characterResult: (id: string) => Promise<any>;
 let originalDocument: any, originalLocation: any, originalFetch: any, originalDOMParser: any;
 
+// Stands in for the host window's own close (×) control.
+const modalDismiss = new WeakMap<Element, () => void>();
+function closeModal(selector: string) { modalDismiss.get(document.querySelector(selector)!)!(); }
 function findButton(label: string, root: ParentNode = document): HTMLButtonElement {
   const node = [...root.querySelectorAll('button')].find(button => button.textContent === label);
   if (!node) throw new Error(`Missing button: ${label}`);
@@ -102,9 +105,9 @@ beforeEach(() => {
       showModal: ({ title }: { title: string }) => {
         const root = document.createElement('section'); root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', title); document.body.append(root);
         const listeners = new Set<() => void>(); let dismissed = false;
-        return { root, onDismiss: (fn: () => void) => { listeners.add(fn); return () => listeners.delete(fn); }, dismiss: () => {
-          if (dismissed) return; dismissed = true; listeners.forEach(fn => fn()); root.remove();
-        } };
+        const dismiss = () => { if (dismissed) return; dismissed = true; listeners.forEach(fn => fn()); root.remove(); };
+        modalDismiss.set(root, dismiss);
+        return { root, onDismiss: (fn: () => void) => { listeners.add(fn); return () => listeners.delete(fn); }, dismiss };
       },
     },
     components: {
@@ -733,7 +736,7 @@ test('the separate explicit chat action starts a new chat rather than resuming t
   expect(calls).toEqual([{ ref: { kind: 'entity_action', id: 'character_chat' }, params: { characterId: 'char_0', mode: 'new' } }]);
   expect(document.querySelector('[role=dialog]')).toBeNull();
   (document.querySelector('.jb-card') as HTMLElement).click(); await flush();
-  expect(calls).toHaveLength(1); findButton('Close', document.querySelector('.jb-preview')!).click();
+  expect(calls).toHaveLength(1); closeModal('.jb-preview');
 });
 
 test('Continue old chat opens a picker and resumes the chosen conversation without creating another', async () => {
@@ -779,7 +782,13 @@ test('Read Creator’s Notes stays on Home, renders the selected full note, and 
   expect(calls).toEqual([{ ref: { kind: 'modal', id: 'character_editor' }, params: { id: 'char_0' } }]);
   expect(document.querySelector('[role=dialog]')).toBeNull();
   (document.querySelector('.jb-card') as HTMLElement).click(); await flush();
-  findButton('Close', document.querySelector('.jb-profile-window')!).click();
+  const row = document.querySelector('.jb-profile-window .jb-profile-controls .jb-preview-actions')!;
+  expect([...row.querySelectorAll('button')].map(node => node.textContent).slice(-2)).toEqual(['Edit card', 'Delete card']);
+  expect([...document.querySelectorAll('.jb-profile-window button')].some(node => node.textContent === 'Close')).toBe(false);
+  findButton('Delete card', row as HTMLElement).click();
+  expect(document.querySelector<HTMLElement>('.jb-profile-removal .jb-delete-confirmation')!.hidden).toBe(false);
+  findButton('Cancel', document.querySelector('.jb-profile-window')!).click(); expect(findButton('Delete card', row as HTMLElement).hidden).toBe(false);
+  findButton('Edit card', row as HTMLElement).click(); await flush();
   expect(document.querySelector('[role=dialog]')).toBeNull(); expect(document.querySelectorAll('.jb-card')).toHaveLength(24);
 });
 
@@ -860,7 +869,7 @@ test('closing a card while its favorite preference is loading prevents a delayed
   start(); await flush(); (document.querySelectorAll('.jb-card')[1] as HTMLElement).click(); await flush();
   findButton('Favorite').click(); await flush();
   const request = requests.find(request => request.url.pathname === '/api/v1/settings/favorites')!;
-  findButton('Close', document.querySelector('.jb-preview')!).click();
+  closeModal('.jb-preview');
   expect(request.signal?.aborted).toBe(true);
   pending.resolve({ ok: true, status: 200, json: async () => ({ value: [] }) }); await flush();
   expect(requests.some(request => request.options.method === 'PUT')).toBe(false);
@@ -880,7 +889,7 @@ test('favorite writes from replacement card windows wait for a previous native s
   };
   start(); await flush(); (document.querySelectorAll('.jb-card')[1] as HTMLElement).click(); await flush();
   findButton('Favorite').click(); await flush();
-  findButton('Close', document.querySelector('.jb-preview')!).click();
+  closeModal('.jb-preview');
   (document.querySelectorAll('.jb-card')[2] as HTMLElement).click(); await flush();
   findButton('Favorite').click(); await flush();
   expect(requests.filter(request => request.url.pathname === '/api/v1/settings/favorites' && request.options.method !== 'PUT')).toHaveLength(1);

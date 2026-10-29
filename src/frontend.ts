@@ -643,13 +643,13 @@ export function setup(ctx: SpindleFrontendContext) {
       });
     });
     edit.disabled = !ctx.host.surfaces?.list(['modal']).some(s => s.id === 'character_editor' && s.invocable !== false);
-    actions.append(favoriteControl(characterId, { isCurrent: () => modal === current, onDispose: cleanup => { current.onDismiss(cleanup); } }, localStatus), edit, button('Close', () => current.dismiss()));
+    actions.append(favoriteControl(characterId, { isCurrent: () => modal === current, onDispose: cleanup => { current.onDismiss(cleanup); } }, localStatus), edit);
     const removal = el('div', 'jb-profile-removal');
     const stopRemoval = mountCharacterDelete(ctx, removal, { id: characterId, name }, () => {
       libraryCache = undefined; signatures.delete(characterId); notePreviews.delete(characterId);
       if (modal === current) current.dismiss();
       if (!disposed) { void loadCharacters(); void loadRecent(); }
-    });
+    }, actions);
     current.onDismiss(stopRemoval);
     if (copies.length > 1) {
       const picker = el('div', 'jb-profile-copies'); const label = el('label', '', 'Saved copy');

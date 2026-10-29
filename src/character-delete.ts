@@ -5,7 +5,7 @@ const record = (value: unknown): Record<string, unknown> => value && typeof valu
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, text = '', className = '') { const node = document.createElement(tag); node.textContent = text; node.className = className; return node; }
 
 /** One selected saved record, confirmed by the host's durable deletion operation. */
-export function mountCharacterDelete(ctx: SpindleFrontendContext, root: HTMLElement, character: { id: string; name: string }, onDeleted: () => void) {
+export function mountCharacterDelete(ctx: SpindleFrontendContext, root: HTMLElement, character: { id: string; name: string }, onDeleted: () => void, buttonHost: HTMLElement = root) {
   let disposed = false, busy = false, operationId: string | undefined;
   const controller = new AbortController();
   const open = el('button', 'Delete card', 'jb-button jb-delete-card'); open.type = 'button';
@@ -13,7 +13,7 @@ export function mountCharacterDelete(ctx: SpindleFrontendContext, root: HTMLElem
   const warning = el('p', `Delete “${character.name}”? This deletes this saved copy and its chats, and removes it from groups. Other saved copies stay in your library.`);
   const identity = el('small', `Selected copy: ${character.id}`), status = el('p', '', 'jb-status'); status.setAttribute('role', 'status');
   const remove = el('button', 'Delete this copy', 'jb-button jb-delete-card'), cancel = el('button', 'Cancel', 'jb-button'); remove.type = cancel.type = 'button';
-  confirmation.append(warning, identity, remove, cancel, status); root.append(open, confirmation);
+  confirmation.append(warning, identity, remove, cancel, status); buttonHost.append(open); root.append(confirmation);
   const render = () => { remove.disabled = cancel.disabled = busy; remove.textContent = busy ? 'Deleting…' : operationId ? 'Check deletion status' : 'Delete this copy'; };
   open.addEventListener('click', () => { if (disposed || busy) return; open.hidden = true; confirmation.hidden = false; cancel.focus(); });
   cancel.addEventListener('click', () => { if (disposed || busy) return; confirmation.hidden = true; open.hidden = false; open.focus(); });
