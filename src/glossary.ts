@@ -17,7 +17,7 @@ type Options = {
 
 export const glossary: GlossaryEntry[] = [
   { janitor: 'Bots', aliases: ['characters', 'bot list'], lumiverse: 'Characters', detail: 'Your saved cards. Janiverse Home shows them as a gallery; the Chars tab in Lumiverse’s sidebar is the full library.', show: { ref: { kind: 'drawer_tab', id: 'characters' }, label: 'Open Characters' } },
-  { janitor: 'Create a Character', aliases: ['make a bot', 'new bot'], lumiverse: 'Create a Character', detail: 'Janiverse’s form saves a normal Lumiverse card. Lumiverse’s Creator Workshop has more fields.', show: { action: 'createCharacter' } },
+  { janitor: 'Create a Character', aliases: ['make a bot', 'new bot'], lumiverse: 'Same name, in Janiverse’s header', detail: 'Janiverse’s form saves a normal Lumiverse card. Lumiverse’s Creator Workshop has more fields.', show: { action: 'createCharacter', label: 'Open the form' } },
   { janitor: 'Bot link or card file', aliases: ['import', 'download bot', 'png card'], lumiverse: 'Import characters', detail: 'Bring JanitorAI cards over as files or links. Cards don’t include old messages.', show: { action: 'importCards', label: 'Import characters' } },
   { janitor: 'Old chat history', aliases: ['export chat', 'chat history', 'jar'], lumiverse: 'Import old chats (JAR Bridge)', detail: 'Old conversations need the optional JAR Bridge extension; cards and chats import separately.', show: { action: 'importHistory', label: 'Import old chats' } },
   { janitor: 'My Chats', aliases: ['recent chats', 'chat list'], lumiverse: 'My Chats', detail: 'Every conversation grouped by character. Lumiverse’s own Home also lists recent chats.', show: { action: 'myChats', label: 'Open My Chats' } },
