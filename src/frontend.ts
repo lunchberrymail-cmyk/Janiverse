@@ -59,6 +59,12 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') 
 function button(text: string, action: () => void, cls = 'jb-button') {
   const node = el('button', cls, text); node.type = 'button'; node.addEventListener('click', action); return node;
 }
+/** Menus hang from the right of their button; on a phone the button can sit at the left edge, so slide the menu back on screen. */
+function keepMenuOnScreen(menu: HTMLElement) {
+  menu.style.right = '';
+  const left = menu.getBoundingClientRect().left;
+  if (left < 8) menu.style.right = `${left - 8}px`;
+}
 function plain(value = '') { return value.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim(); }
 function payload(value: unknown): Record<string, unknown> { return value && typeof value === 'object' ? value as Record<string, unknown> : {}; }
 
@@ -294,7 +300,7 @@ export function setup(ctx: SpindleFrontendContext) {
     if (label === 'Import characters') { importMenuItem = item; item.setAttribute('aria-label', label); }
     menu.append(item);
   }
-  more.append(moreLabel, menu);
+  more.append(moreLabel, menu); more.addEventListener('toggle', () => { if (more.open) keepMenuOnScreen(menu); });
   const cardSetup = createCardSetup(ctx, {
     showImportMenu: () => { setView('browse'); moreLabel.scrollIntoView({ block: 'nearest', inline: 'nearest' }); more.open = true; importMenuItem?.classList.add('jb-card-import-target'); importMenuItem?.focus({ preventScroll: true }); },
     clearImportMenu: () => { if (importMenuItem?.classList.contains('jb-card-import-target')) { importMenuItem.classList.remove('jb-card-import-target'); more.open = false; } },
@@ -322,7 +328,7 @@ export function setup(ctx: SpindleFrontendContext) {
   chatAction('Customize', openCustomize, 'customize');
   chatAction('New Chat', () => { const characterId = ctx.getActiveChat()?.characterId; if (characterId) void invoke({ kind: 'entity_action', id: 'character_chat' }, { characterId, mode: 'new' }); }, 'new-chat');
   chatAction('All Chats', () => setView('chats'), 'all-chats');
-  chatMenu.append(chatMenuLabel, chatMenuItems); chatRight.append(api, helpButton, chatMenu); chatBar.append(back, chatRight);
+  chatMenu.append(chatMenuLabel, chatMenuItems); chatMenu.addEventListener('toggle', () => { if (chatMenu.open) keepMenuOnScreen(chatMenuItems); }); chatRight.append(api, helpButton, chatMenu); chatBar.append(back, chatRight);
   chatMenu.addEventListener('keydown', event => {
     if (event.key === 'Escape' && chatMenu.open) { event.preventDefault(); event.stopPropagation(); chatMenu.open = false; chatMenuLabel.focus(); return; }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;

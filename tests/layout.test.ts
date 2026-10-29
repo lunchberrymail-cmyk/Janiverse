@@ -1089,6 +1089,15 @@ test('first-install welcome on native Characters waits for an explicit Home clic
   expect(native.outerHTML).toBe(nativeMarkup);
 });
 
+test('on a phone, More slides its menu back on screen when the button sits at the left edge', async () => {
+  start(); await flush();
+  const more = roots.get('landing_header')!.querySelector<HTMLDetailsElement>('.jb-more')!; const menu = more.querySelector<HTMLElement>('.jb-more-menu')!;
+  menu.getBoundingClientRect = () => ({ left: -120 } as DOMRect);
+  more.open = true; more.dispatchEvent(new dom.window.Event('toggle')); expect(menu.style.right).toBe('-128px');
+  more.open = false; menu.getBoundingClientRect = () => ({ left: 40 } as DOMRect);
+  more.open = true; more.dispatchEvent(new dom.window.Event('toggle')); expect(menu.style.right).toBe('');
+});
+
 test('Home More keeps five everyday actions and moves setup guides into Help', async () => {
   start(); await flush(); const beforeRequests = requests.length;
   const more = roots.get('landing_header')!.querySelector<HTMLDetailsElement>('.jb-more')!; more.open = true;
