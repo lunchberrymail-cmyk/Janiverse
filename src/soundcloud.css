@@ -15,3 +15,20 @@
 .jb-soundcloud :is(a, button):focus-visible { outline: 2px solid #b9a0da; outline-offset: 2px; }
 @media (max-width: 480px) { .jb-soundcloud .jb-soundcloud-bar { gap: 6px; } }
 @media (max-width: 600px), (pointer: coarse) { .jb-soundcloud :is(.jb-soundcloud-play, .jb-soundcloud-show, .jb-soundcloud-close, .jb-soundcloud-open) { display: inline-flex; align-items: center; min-height: 44px; padding-inline: 10px; font-size: 12px; } }
+
+.jb-soundtrack-editor { min-width: 0; margin: 0 0 14px; border: 1px solid #79668e66; border-radius: 8px; background: #332e3b66; color: #d7cbe9; }
+.jb-soundtrack-editor > summary { padding: 11px 13px; font-size: 13px; cursor: pointer; }
+.jb-soundtrack-editor > :is(.jb-soundtrack-field,.jb-soundtrack-fields) { padding: 0 13px 13px; }
+.jb-soundtrack-fields { min-width: 0; margin: 0; border: 0; }
+.jb-soundtrack-field { display: grid; gap: 8px; min-width: 0; }
+.jb-soundtrack-field textarea { width: 100%; min-height: 64px; resize: vertical; font: inherit; font-size: 13px; }
+.jb-soundtrack-field > button { justify-self: start; }
+.jb-soundtrack-field > .jb-settings-status { margin: 0; }
+.jb-soundtrack-help { font-size: 12px; }
+.jb-soundtrack-help summary { cursor: pointer; }
+.jb-soundtrack-help p { margin-top: 8px; }
+.jb-soundtrack-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-top: 12px; }
+.jb-soundtrack-editor > .jb-settings-status { margin: 0 13px 13px; }
+.jb-soundtrack-editor [hidden] { display: none !important; }
+.jb-soundtrack-editor :is(button,summary,textarea):focus-visible { outline: 2px solid #b9a0da; outline-offset: 2px; }
+@media (max-width: 600px), (pointer: coarse) { .jb-soundtrack-editor :is(button,summary) { min-height: 44px; } }

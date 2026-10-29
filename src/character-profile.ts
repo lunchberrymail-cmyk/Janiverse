@@ -3,6 +3,7 @@ import { profileMarkup } from './my-chats';
 import { creatorAttribution } from './creator-attribution';
 import { mountProfileLorebooks } from './profile-lorebooks';
 import { createSoundCloud } from './soundcloud';
+import { mountSoundtrackEditor } from './soundtrack-field';
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') {
   const node = document.createElement(tag); node.className = cls; node.textContent = text; return node;
@@ -15,11 +16,13 @@ export function mountCharacterProfile(ctx: SpindleFrontendContext, root: HTMLEle
   let stopNotes: (() => void) | undefined;
   let stopLorebooks: (() => void) | undefined;
   let soundtrack: ReturnType<typeof createSoundCloud> | undefined;
+  let stopSoundtrackEditor: (() => void) | undefined;
   root.classList.add('jb-character-profile');
   function clear() {
     stopNotes?.(); stopNotes = undefined;
     stopLorebooks?.(); stopLorebooks = undefined;
     soundtrack?.destroy(); soundtrack = undefined;
+    stopSoundtrackEditor?.(); stopSoundtrackEditor = undefined;
     if (injection) {
       try { ctx.dom.uninject(injection); } catch { injection.remove(); }
       injection = undefined;
@@ -87,6 +90,7 @@ export function mountCharacterProfile(ctx: SpindleFrontendContext, root: HTMLEle
       if (tags.childElementCount) meta.append(tags);
       if (meta.childElementCount) card.append(meta);
       soundtrack = createSoundCloud(ctx, { characterId, character }); sidebar.append(soundtrack.root);
+      stopSoundtrackEditor = mountSoundtrackEditor(ctx, sidebar, character, () => soundtrack?.refresh());
       if (options.controls) sidebar.append(options.controls);
       const lorebooks = el('section', 'jb-profile-lorebooks'); sidebar.append(lorebooks);
       stopLorebooks = mountProfileLorebooks(lorebooks, character.extensions);

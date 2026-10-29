@@ -62,6 +62,19 @@ test('required fields validate before any permission check or native write', asy
   expect(checks).toBe(0); expect(requests).toHaveLength(0); expect(permissionRequests).toEqual([]);
 });
 
+test('an optional song accepts embed code, saves only its track, and never starts playback', async () => {
+  draft(); control('soundcloud_track').value = '<iframe src="https://w.soundcloud.com/player/?url=https%3A//api.soundcloud.com/tracks/123&amp;auto_play=true"></iframe>';
+  submit(); await settle();
+  expect(JSON.parse(String(requests[0].init.body)).extensions).toEqual({ janiverse: { soundcloud_track_id: 'https://api.soundcloud.com/tracks/123' } });
+  expect(root().querySelector('iframe,script')).toBeNull(); expect(requests).toHaveLength(1);
+});
+
+test('invalid optional songs reveal the attachment field before permissions or character creation', async () => {
+  draft(); control('soundcloud_track').value = 'https://soundcloud.com/artist/sets/playlist'; submit(); await settle();
+  expect(control('soundcloud_track').getAttribute('aria-invalid')).toBe('true'); expect(control('soundcloud_track').closest('details')?.open).toBe(true);
+  expect(checks).toBe(0); expect(requests).toEqual([]);
+});
+
 test('only explicit Create can request Characters, denial preserves the draft, and enabling alone does not save', async () => {
   draft(); grants = []; permissionResult = async () => [];
   submit(); await settle(); expect(permissionRequests).toEqual([['characters']]); expect(requests).toHaveLength(0); expect(control('name').value).toBe('Mira'); expect(control('name').closest('fieldset')?.disabled).toBe(false);
@@ -157,7 +170,7 @@ test('General and Definition navigation uses accessible local anchors and follow
   const general = [...nav.querySelectorAll('a')].find(item => item.textContent === 'General')!; const definition = [...nav.querySelectorAll('a')].find(item => item.textContent === 'Definition')!;
   expect(general.getAttribute('aria-current')).toBe('location'); definition.click(); expect(definition.getAttribute('aria-current')).toBe('location'); expect(general.hasAttribute('aria-current')).toBe(false); expect(document.activeElement?.textContent).toBe('Definition'); expect(dom.window.location.hash).toBe('');
   general.click(); expect(document.activeElement?.textContent).toBe('Create a character');
-  expect([...root().querySelectorAll('.jb-character-fields input:not([type=file]), .jb-character-fields textarea')].map(item => item.getAttribute('name'))).toEqual(['name', 'chat_name', 'creator_notes', 'tags', 'description', 'scenario', 'first_mes', 'mes_example', 'creator']);
+  expect([...root().querySelectorAll('.jb-character-fields input:not([type=file]), .jb-character-fields textarea')].map(item => item.getAttribute('name'))).toEqual(['name', 'chat_name', 'creator_notes', 'tags', 'soundcloud_track', 'description', 'scenario', 'first_mes', 'mes_example', 'creator']);
   expect(control('name').closest('label')?.textContent).toContain('Title'); expect(control('creator_notes').closest('label')?.textContent).toContain('Bio'); expect(control('scenario').closest('details')).toBeNull(); expect(control('mes_example').closest('details')).toBeNull();
   expect(requests).toHaveLength(0); expect(checks).toBe(0);
 });

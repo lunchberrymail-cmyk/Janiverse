@@ -1,5 +1,6 @@
 import type { SpindleFrontendContext, SpindleModalHandle } from 'lumiverse-spindle-types';
 import { icon } from './icons';
+import { createSoundtrackField } from './soundtrack-field';
 
 type Options = { onCreated?: (id: string) => void; openCharacter?: (id: string) => void; nativeWay?: (target: HTMLElement, close: () => void) => void };
 type Session = { modal: SpindleModalHandle; abort: AbortController; closed: boolean; previewUrl?: string };
@@ -68,6 +69,8 @@ export function createCharacterCreate(ctx: SpindleFrontendContext, options: Opti
     fileInput.addEventListener('change', () => { selectPortrait(fileInput.files?.[0]); fileInput.value = ''; });
     const bio = field('creator_notes', 'Bio', 'Shown on your character card as the creator’s note. Introduce the character and the story to your readers.', true); bio.input.placeholder = 'A short introduction, story hook, or a note for the people chatting with your character…'; bio.input.classList.add('jb-character-bio');
     const tags = field('tags', 'Tags', 'Optional. Separate tags with commas.'); tags.input.placeholder = 'fantasy, original character, adventure'; tags.input.maxLength = 1000;
+    const soundtrack = createSoundtrackField();
+    const soundtrackPanel = el('details', 'jb-soundtrack-editor'); soundtrackPanel.append(el('summary', '', 'Attach a song (optional)'), soundtrack.root);
     const definition = field('description', 'Personality', 'Describe who they are, how they speak, and how they behave. This guides the AI.', true, true); definition.input.placeholder = 'Name, appearance, personality, background, relationships, speaking style…'; definition.input.classList.add('jb-character-definition');
     const messages = el('section', 'jb-character-initial-messages'); const messagesLabel = el('div', 'jb-settings-label', 'Initial messages'); messagesLabel.id = `${prefix}-messages-label`; messagesLabel.append(el('small', '', 'Required'));
     const messagesHelp = el('p', 'jb-settings-help', 'The first message that starts a new chat. Add alternatives to offer different openings. Use {{char}} for your character and {{user}} for the user.');
@@ -97,7 +100,7 @@ export function createCharacterCreate(ctx: SpindleFrontendContext, options: Opti
     const creator = field('creator', 'Creator Name', 'Optional. The author credit shown on your character card.'); creator.input.maxLength = 200;
     advancedFields.append(creator.wrap); advanced.append(advancedFields);
     const definitionIntro = el('p', 'jb-settings-help jb-character-definition-intro', 'Shape how your character behaves and the story they share with the user.');
-    fields.append(portraitBox, name.wrap, chatName.wrap, bio.wrap, tags.wrap, definitionHeading, definitionIntro, definition.wrap, scenario.wrap, messages, examples.wrap, advanced);
+    fields.append(portraitBox, name.wrap, chatName.wrap, bio.wrap, tags.wrap, soundtrackPanel, definitionHeading, definitionIntro, definition.wrap, scenario.wrap, messages, examples.wrap, advanced);
     function updateCard() { const title = name.input.value.trim(); cardTitle.textContent = title || 'Your character'; cardLetter.textContent = title ? Array.from(title)[0].toLocaleUpperCase() : '?'; cardBio.textContent = bio.input.value.trim() || 'Your character’s bio will appear here.'; cardTags.replaceChildren(...[...new Set(tags.input.value.split(',').map(value => value.trim()).filter(Boolean))].slice(0, 6).map(tag => el('span', '', tag))); }
     for (const input of [name.input, bio.input, tags.input]) input.addEventListener('input', updateCard);
     const status = el('p', 'jb-settings-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite'); status.id = `${prefix}-status`; form.setAttribute('aria-describedby', status.id);
@@ -142,6 +145,7 @@ export function createCharacterCreate(ctx: SpindleFrontendContext, options: Opti
       }
       const emptyGreeting = greetingItems.findIndex((item, index) => index > 0 && !item.field.input.value.trim());
       if (emptyGreeting > 0) { showGreeting(emptyGreeting); greetingItems[emptyGreeting].field.input.setAttribute('aria-invalid', 'true'); greetingItems[emptyGreeting].field.input.focus(); message('Write this alternate initial message, or remove it.', 'error'); return false; }
+      if (!soundtrack.validate()) { soundtrackPanel.open = true; soundtrack.input.focus(); return false; }
       return true;
     }
     function notify() { if (!current() || !created || notified) return; notified = true; try { options.onCreated?.(created.id); } catch { /* A refresh callback must never turn a saved card into a retryable create. */ } }
@@ -173,7 +177,7 @@ export function createCharacterCreate(ctx: SpindleFrontendContext, options: Opti
         name: name.input.value.trim(), creator_notes: bio.input.value, description: definition.input.value, first_mes: greeting.input.value,
         scenario: scenario.input.value, mes_example: examples.input.value, creator: creator.input.value.trim(), alternate_greetings: greetingItems.slice(1).map(item => item.field.input.value),
         tags: [...new Set(tags.input.value.split(',').map(value => value.trim()).filter(Boolean))], library_scope: 'mine',
-        extensions: chatName.input.value.trim() ? { alternate_character_name: chatName.input.value.trim() } : {},
+        extensions: { ...(chatName.input.value.trim() ? { alternate_character_name: chatName.input.value.trim() } : {}), ...(soundtrack.getTrack() ? { janiverse: { soundcloud_track_id: soundtrack.getTrack() } } : {}) },
       };
       try {
         if (!await permission(!attemptedPermission) || !await permission() || !current()) return;

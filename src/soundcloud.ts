@@ -42,10 +42,32 @@ export function soundCloudTrackUrl(value: unknown): string | null {
   } catch { return null; }
 }
 
+/** Extract only a public track; pasted embed HTML is never mounted or executed. */
+export function soundCloudTrackInput(value: string): string | null {
+  const input = value.trim();
+  const direct = soundCloudTrackUrl(input); if (direct) return direct;
+  if (!input || input.length > 12_000) return null;
+  let source = input;
+  if (/^<iframe\b/i.test(input)) {
+    const template = document.createElement('template'); template.innerHTML = input;
+    const frames = template.content.querySelectorAll('iframe');
+    if (frames.length !== 1 || template.content.firstElementChild !== frames[0]) return null;
+    source = frames[0].getAttribute('src') ?? '';
+  }
+  try {
+    const url = new URL(source);
+    if (url.origin !== PLAYER_ORIGIN || url.username || url.password || url.pathname !== '/player/' || url.searchParams.getAll('url').length !== 1) return null;
+    return soundCloudTrackUrl(url.searchParams.get('url'));
+  } catch { return null; }
+}
+
 /** Explicit known card fields; arbitrary card markup is never treated as an embed. */
 export function characterSoundCloudTrack(character: unknown): string | null {
   const root = record(character);
   const extensions = record(root.extensions ?? record(root.data).extensions);
+  const local = record(extensions.janiverse);
+  // A saved null explicitly removes an imported soundtrack without destroying its source metadata.
+  if (Object.prototype.hasOwnProperty.call(local, 'soundcloud_track_id')) return soundCloudTrackUrl(local.soundcloud_track_id);
   for (const namespace of ['jar_bridge', 'janitor_ai', 'janitorai', 'janitor']) {
     const track = soundCloudTrackUrl(record(extensions[namespace]).soundcloud_track_id);
     if (track) return track;
@@ -140,7 +162,7 @@ export function createSoundCloud(ctx: SpindleFrontendContext, options: { charact
   const cleanups: Array<() => void> = [];
   const root = el('section', 'jb-soundcloud'); root.hidden = true; root.setAttribute('aria-label', 'Character soundtrack');
   const bar = el('div', 'jb-soundcloud-bar');
-  const label = el('span', 'jb-soundcloud-label', 'SoundCloud track');
+  const label = el('span', 'jb-soundcloud-label', 'Optional SoundCloud track');
   const play = el('button', 'jb-soundcloud-play', 'Play'); play.type = 'button'; play.setAttribute('aria-pressed', 'false');
   const showPlayer = el('button', 'jb-soundcloud-show', 'Player'); showPlayer.type = 'button'; showPlayer.title = 'Open SoundCloud’s controls inside this chat';
   const open = el('a', 'jb-soundcloud-open', 'SoundCloud ↗'); open.target = '_blank'; open.rel = 'noopener noreferrer'; open.referrerPolicy = 'no-referrer';
@@ -175,7 +197,7 @@ export function createSoundCloud(ctx: SpindleFrontendContext, options: { charact
   }
   function clear() {
     closePlayer(); source = undefined; headerBlocked = false; root.hidden = true;
-    root.removeAttribute('title'); open.removeAttribute('href'); label.textContent = 'SoundCloud track'; label.removeAttribute('title'); message('');
+    root.removeAttribute('title'); open.removeAttribute('href'); label.textContent = 'Optional SoundCloud track'; label.removeAttribute('title'); message('');
   }
   function active() {
     if (options.characterId) return { chatId: `profile:${options.characterId}`, characterId: options.characterId };
