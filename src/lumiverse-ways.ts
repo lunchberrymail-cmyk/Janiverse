@@ -8,7 +8,7 @@ export type LumiverseWay = { id: string; janiverse: string; lumiverse: string; w
 const drawer = (id: string): SpindleHostSurfaceRef => ({ kind: 'drawer_tab', id });
 
 export const lumiverseWays: readonly LumiverseWay[] = [
-  { id: 'memory', janiverse: 'Chat Memory', lumiverse: 'Author’s Note', where: 'In a chat: reply toolbar → Extras (⋯) → Author’s Note. It saves as you type.', tutorial: 'authorsNote', needsChat: true },
+  { id: 'memory', janiverse: 'Chat Memory', lumiverse: 'Author’s Note', where: 'In a chat: reply toolbar → Tools (wrench) → Author’s Note. It saves as you type.', tutorial: 'authorsNote', needsChat: true },
   { id: 'character', janiverse: 'Create a Character form', lumiverse: 'Character editor', where: 'Chars → + → Create New.', tutorial: 'character' },
   { id: 'import', janiverse: 'Import characters', lumiverse: 'Character import', where: 'Chars → + → Import File or Import URLs.', ref: drawer('characters') },
   { id: 'prompt', janiverse: 'Prompt and generation settings', lumiverse: 'Preset', where: 'Preset in the sidebar. Samplers holds temperature, context and reply length.', tutorial: 'presets' },

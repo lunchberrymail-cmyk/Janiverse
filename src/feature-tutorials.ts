@@ -129,11 +129,11 @@ export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
     title: 'Use Author’s Note in Lumiverse', intro: 'Janiverse’s Chat Memory edits this note. Here is where it lives without Janiverse.',
     prerequisites: ['Open the chat you want to change.', 'Each chat has its own note.'],
     scenes: [
-      { title: 'Open Extras', instruction: 'In your chat, find the reply toolbar above the message box and choose Extras (⋯).', result: 'A menu opens with Author’s Note among its options.', screenshot: '', action: toolbar },
+      { title: 'Open Tools', instruction: 'In your chat, find the reply toolbar above the message box and choose Tools (wrench icon).', result: 'A menu opens with Chat Settings and Author’s Note among its options.', screenshot: '', action: toolbar },
       { title: 'Open Author’s Note', instruction: 'Choose Author’s Note.', result: 'A panel opens with the same text you wrote in Chat Memory.', screenshot: '' },
       { title: 'Write and place it', instruction: 'Type the facts the AI should keep in mind. Depth from latest message and Role match Chat Memory’s Insertion depth and Message role.', result: 'It saves as you type. The title shows · Active while the note has text.', screenshot: '' },
     ],
-    help: ['No Extras button? Use Show reply toolbar, or open Customize composer (sliders) above the message box to reveal it.', 'Empty the text to turn the note off for this chat.'],
+    help: ['No Tools button? Use Show reply toolbar, or open Customize composer (sliders) above the message box and show Tools.', 'Empty the text to turn the note off for this chat.'],
   },
   extensions: {
     title: 'Add and manage extensions', intro: 'Install from the author’s repository, then choose which tools to enable.',

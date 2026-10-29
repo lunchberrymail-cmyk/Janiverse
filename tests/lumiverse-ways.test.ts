@@ -24,7 +24,7 @@ test('Chat Memory’s note names Author’s Note and its guide closes the Janive
   const target = document.createElement('div'); let closed = 0;
   mountLumiverseWay(target, 'memory', { show: way => { shown.push(way.id); } }, () => { closed++; });
   expect(target.textContent).toContain('Leaving Janiverse later? In Lumiverse this is Author’s Note.');
-  expect(target.textContent).toContain('Extras (⋯) → Author’s Note');
+  expect(target.textContent).toContain('Tools (wrench) → Author’s Note');
   button('Show me how', target).click(); await settle();
   expect(closed).toBe(1); expect(shown).toEqual(['memory']);
 });
@@ -56,5 +56,5 @@ test('the list remembers what was learned and shows how to leave once everything
 test('every guide named by the list exists, and Summary and Cortex are taught as alternatives', () => {
   for (const way of lumiverseWays) if (way.tutorial) expect(featureTutorials[way.tutorial]).toBeDefined();
   expect(featureTutorials.memory.intro).toContain('Don’t use both');
-  expect(JSON.stringify(featureTutorials.authorsNote)).toContain('Extras (⋯)');
+  expect(JSON.stringify(featureTutorials.authorsNote)).toContain('Tools (wrench icon)');
 });
