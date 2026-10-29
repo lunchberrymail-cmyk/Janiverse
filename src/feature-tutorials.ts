@@ -6,7 +6,7 @@ import { record } from './setup-data';
 
 export const HISTORY_GUIDE_KEY = 'onboarding:history_guide_v2';
 
-export type TutorialFeature = 'connections' | 'import' | 'history' | 'presets' | 'memory' | 'lorebooks' | 'group' | 'voice' | 'extensions';
+export type TutorialFeature = 'connections' | 'import' | 'history' | 'presets' | 'memory' | 'lorebooks' | 'group' | 'voice' | 'extensions' | 'character';
 export type TutorialHighlight = { x: number; y: number; width: number; height: number };
 export type TutorialScreenshot = {
   src: string; alt: string; caption?: string;
@@ -112,6 +112,18 @@ export const featureTutorials: Readonly<Record<TutorialFeature, Tutorial>> = {
       { title: 'Record and review', instruction: 'Use the microphone in the message box. Allow access, record, stop, and review the transcript before sending.', result: 'Your speech becomes a message draft. Sending the draft is a separate choice.', screenshot: 'voice-compose' },
     ],
     help: ['Playback failure? Check the TTS connection, key, model, voice, output volume and browser audio permissions. Create a connection under Connections → Text-to-Speech → New TTS Connection, then choose it in Settings → Voice. Close Settings before working in the Connections drawer.', 'Dictation failure? Check the microphone device/permission and selected STT provider. Whistle’s status offers preparation progress and Try again; an insecure HTTP phone connection may need HTTPS.', 'Whistle uses your device’s processing power and needs no API key. Cloud transcription and Web Speech API follow their provider/browser behavior.', 'Review Auto-submit after silence if you want to control submission. Group member menu → Voice… sets a voice override for that member in the chat.'],
+  },
+  character: {
+    title: 'Create a character in Lumiverse', intro: 'Lumiverse’s own editor has every character field. It saves as you type.',
+    prerequisites: ['Nothing to install. The editor is part of Lumiverse.', 'Create New saves a blank card called New Character right away. Delete it from Chars if you change your mind.'],
+    scenes: [
+      { title: 'Start a new card', instruction: 'In Chars, choose the + button beside the search box (Add character), then Create New.', result: 'A card called New Character opens in the editor.', screenshot: '', action: { label: 'Open Characters', destination: drawer('characters'), fallback: 'Open Chars from Lumiverse’s sidebar.' } },
+      { title: 'Name and portrait', instruction: 'Replace New Character with your character’s name at the top of the editor. Click or drop an image on the avatar to add a portrait.', result: 'Changes save automatically. There is no Save button.', screenshot: '' },
+      { title: 'Personality and scenario', instruction: 'Open Core Prompts. JanitorAI’s Personality goes in Description; Scenario goes in Scenario. Lumiverse’s separate Personality field is optional.', result: 'The AI reads these fields in every chat with this character.', screenshot: '' },
+      { title: 'First message and examples', instruction: 'Open Greetings. JanitorAI’s Initial Message goes in First Message, and Example Dialogs go in Message Examples. Alternate Greetings add more openings to choose from.', result: 'A new chat starts with the first message.', screenshot: '' },
+      { title: 'Creator’s note and tags', instruction: 'Open Identity for Creator Notes and Tags. When you are done, start a chat from the card on Home or in Chars.', result: 'Your character appears on Janiverse Home like any other card.', screenshot: '' },
+    ],
+    help: ['Can’t find a field? JanitorAI’s Personality is Description here. Lumiverse’s Personality field is a separate, optional summary.', 'Prefer one page? Use Create a Character → Use the familiar form instead. Both save a normal Lumiverse card.', 'Made an extra New Character by accident? Delete it from Chars or from its profile on Home.'],
   },
   extensions: {
     title: 'Add and manage extensions', intro: 'Install from the author’s repository, then choose which tools to enable.',

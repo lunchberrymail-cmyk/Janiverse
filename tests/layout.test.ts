@@ -1189,3 +1189,16 @@ test('a failed shortcut inside a chat floats its message, and Home keeps it in t
   (document.querySelector('.jb-recent-card') as HTMLButtonElement | null)?.click(); await flush();
   expect(document.querySelector('.jb-toast')).toBeNull();
 });
+
+test('Create a Character offers the familiar form or Lumiverse’s editor with its guide', async () => {
+  start(); await flush();
+  findButton('Create a Character').click(); await flush();
+  const choice = document.querySelector('.jb-character-choice')!; expect(choice).not.toBeNull(); expect(calls).toHaveLength(0);
+  findButton('Use the familiar form', choice).click(); await flush();
+  expect(document.querySelector('.jb-character-create')).not.toBeNull(); expect(calls).toHaveLength(0);
+  findButton('Create a Character').click(); await flush();
+  findButton('Open with a guide', document.querySelector('.jb-character-choice')!).click(); await flush();
+  expect(calls).toEqual([{ ref: { kind: 'drawer_tab', id: 'characters' }, params: undefined }]);
+  expect(document.querySelector('.jb-character-choice')).toBeNull();
+  expect(document.querySelector<HTMLElement>('.jb-tutorial-companion')!.dataset.feature).toBe('character');
+});

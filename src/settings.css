@@ -356,3 +356,9 @@
 .jb-glossary-link{margin-left:4px}
 @media(max-width:520px){.jb-glossary-row{grid-template-columns:minmax(0,1fr)}.jb-glossary-row>.jb-button{grid-column:1;grid-row:auto;justify-self:start}}
 .jb-extension-picks-title{margin:18px 0 4px;font-size:15px}
+.jb-character-choice-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.jb-character-choice-option{display:flex;flex-direction:column;gap:8px;padding:14px;border:1px solid #4a4152;border-radius:10px}
+.jb-character-choice-option h3{margin:0;font-size:16px}
+.jb-character-choice-option p{flex:1;margin:0;color:#bcb8c7;font-size:13px;line-height:1.5}
+.jb-character-choice-option .jb-button{align-self:flex-start}
+@media(max-width:520px){.jb-character-choice-list{grid-template-columns:minmax(0,1fr)}}

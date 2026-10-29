@@ -48,6 +48,7 @@ import { tutorialScreenshots } from './tutorial-screenshots';
 import { readOptionalState, subscribeOptionalState } from './optional-state';
 import { createWelcome } from './welcome';
 import { openGlossary } from './glossary';
+import { openCharacterChoice } from './character-choice';
 import { createChatSetup } from './chat-setup';
 import { groupCharacters, type CharacterGroup, type CharacterSignatureCache, type CharacterSummary } from './character-library';
 
@@ -69,7 +70,7 @@ export function setup(ctx: SpindleFrontendContext) {
   let searchTimer: ReturnType<typeof setTimeout> | undefined, controller: AbortController | undefined;
   let libraryRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   let modal: SpindleModalHandle | undefined;
-  let glossaryWindow: SpindleModalHandle | undefined;
+  let glossaryWindow: SpindleModalHandle | undefined, createChoice: SpindleModalHandle | undefined;
   let tutorialWindow: ReturnType<typeof openFeatureTutorial> | undefined;
   let tutorialRequest = 0;
   const cleanups: Array<() => void> = [];
@@ -233,13 +234,22 @@ export function setup(ctx: SpindleFrontendContext) {
       onClose: () => { if (request === tutorialRequest) tutorialWindow = undefined; },
     });
   }
+  function openCreateChoice() {
+    if (disposed) return;
+    createChoice?.dismiss();
+    const opened = openCharacterChoice(ctx, {
+      openForm: () => characterCreate.open(),
+      openEditor: async () => { if (!await invoke({ kind: 'drawer_tab', id: 'characters' })) return false; if (!disposed) openTutorial('character'); },
+    });
+    createChoice = opened; opened.onDismiss(() => { if (createChoice === opened) createChoice = undefined; });
+  }
   function openGlossaryWindow() {
     if (disposed) return;
     cardSetup.close(); tutorialWindow?.destroy(); glossaryWindow?.dismiss();
     const opened = openGlossary(ctx, { invoke, actions: {
       home: () => { setView('browse'); },
       myChats: () => { setView('chats'); },
-      createCharacter: () => { characterCreate.open(); },
+      createCharacter: () => { openCreateChoice(); },
       importCards: () => { openImport(); },
       importHistory: async () => { if (!await openHistory().catch(() => false) && !disposed) openTutorial('history'); },
       prompt: () => { openPrompt('prompt'); },
@@ -286,7 +296,7 @@ export function setup(ctx: SpindleFrontendContext) {
     openImportGuide: () => launchTutorial('import'),
     openCharacters: () => invoke({ kind: 'drawer_tab', id: 'characters' }),
   });
-  const create = button('Create a Character', () => characterCreate.open(), 'jb-create-link');
+  const create = button('Create a Character', () => openCreateChoice(), 'jb-create-link');
   masthead.append(nav);
   mounts[0].append(createBrand(() => { if (!disposed) setView('browse'); }), masthead);
 
@@ -711,7 +721,7 @@ export function setup(ctx: SpindleFrontendContext) {
   try { if (consumePersonaSetupHandoff(window.sessionStorage)) void invoke({ kind: 'drawer_tab', id: 'personas' }); }
   catch { /* Storage can be unavailable; ordinary setup still works. */ }
   return () => {
-    disposed = true; clearTimeout(toastTimer); toast?.remove(); request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); glossaryWindow?.dismiss(); tutorialWindow?.destroy(); cardSetup.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); chatSetup.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
+    disposed = true; clearTimeout(toastTimer); toast?.remove(); request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); glossaryWindow?.dismiss(); createChoice?.dismiss(); tutorialWindow?.destroy(); cardSetup.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); chatSetup.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
     cleanups.reverse().forEach(cleanup => cleanup()); mounts.forEach(root => root.replaceChildren());
     if (oldView === null) document.documentElement.removeAttribute('data-janitor-bridge-view'); else document.documentElement.setAttribute('data-janitor-bridge-view', oldView);
     chatTools.destroy();
