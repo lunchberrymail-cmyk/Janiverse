@@ -341,3 +341,17 @@
 .jb-sampler-guide-actions .jb-button{min-height:40px;white-space:normal}
 .jb-sampler-guide-steps{margin:8px 0;padding-left:22px;line-height:1.55}
 .jb-sampler-guide-steps li{margin:4px 0}
+.jb-glossary-intro{margin:0 0 10px;color:#cbc5d3;font-size:13px;line-height:1.5}
+.jb-glossary-search{width:100%;box-sizing:border-box;margin-bottom:8px}
+.jb-glossary-list{display:flex;flex-direction:column;gap:8px}
+.jb-glossary-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 12px;padding:10px 12px;border:1px solid #4a4152;border-radius:9px}
+.jb-glossary-row[hidden]{display:none}
+.jb-glossary-names{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;min-width:0}
+.jb-glossary-janitor{margin:0;font-size:15px}
+.jb-glossary-arrow{color:#a99bb6}
+.jb-glossary-lumiverse{color:#dbb6f3}
+.jb-glossary-detail{grid-column:1;margin:0;color:#bcb8c7;font-size:13px;line-height:1.5}
+.jb-glossary-row>.jb-button{grid-column:2;grid-row:1/3;white-space:nowrap}
+.jb-glossary-empty{color:#bcb8c7;font-size:13px}
+.jb-glossary-link{margin-left:4px}
+@media(max-width:520px){.jb-glossary-row{grid-template-columns:minmax(0,1fr)}.jb-glossary-row>.jb-button{grid-column:1;grid-row:auto;justify-self:start}}

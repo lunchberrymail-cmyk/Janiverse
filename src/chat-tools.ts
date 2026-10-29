@@ -14,6 +14,7 @@ type Options = {
   openPersonas(): void | Promise<boolean>;
   openTutorial?(feature: TutorialFeature): void;
   beforeOpenHelp?(): void;
+  openGlossary?(): void;
   invoke(ref: SpindleHostSurfaceRef): Promise<boolean>;
 };
 const recommendations: Array<{ goal: string; pick: LunchPick }> = [
@@ -65,6 +66,10 @@ export function createChatTools(ctx: SpindleFrontendContext, options: Options) {
     root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Chat help');
     const active = () => !disposed && modal === current;
     const heading = node('p', 'jb-chat-guide-intro', 'Coming from JanitorAI? Find your familiar controls here.');
+    if (options.openGlossary) {
+      const where = node('button', 'jb-text-button jb-glossary-link', 'Where did it go? Search JanitorAI terms'); where.type = 'button';
+      where.addEventListener('click', () => { if (!active()) return; current.dismiss(); options.openGlossary?.(); }); heading.append(' ', where);
+    }
     const tabs = node('nav', 'jb-chat-guide-tabs'); tabs.setAttribute('aria-label', 'Chat help topics');
     const native = node('section', 'jb-native-guide'), generation = node('section', 'jb-generation-guide'), story = node('section', 'jb-story-guide'), extensions = node('section', 'jb-extension-guide');
     const sections = new Map<GuideView, HTMLElement>([['lumiverse', native], ['generation', generation], ['story', story], ['extensions', extensions]]);

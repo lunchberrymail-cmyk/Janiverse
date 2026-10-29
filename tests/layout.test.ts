@@ -1114,7 +1114,7 @@ test('Home More keeps five everyday actions and moves setup guides into Help', a
   const more = roots.get('landing_header')!.querySelector<HTMLDetailsElement>('.jb-more')!; more.open = true;
   expect([...more.querySelectorAll('button')].map(node => node.textContent)).toEqual(['Import characters', 'Import old chats', 'API Settings', 'Prompt & generation', 'Help']);
   findButton('Help', more).click(); await flush(); const help = document.querySelector('.jb-home-help')!;
-  expect([...help.querySelectorAll(':scope > button')].map(node => node.textContent)).toEqual(['Setup checklist', 'API connection guide', 'Card import guide', 'Old chat import guide', 'Create a persona', 'Preset & generation guide', 'Chat controls']);
+  expect([...help.querySelectorAll(':scope > button')].map(node => node.textContent)).toEqual(['Where did it go? JanitorAI → Lumiverse', 'Setup checklist', 'API connection guide', 'Card import guide', 'Old chat import guide', 'Create a persona', 'Preset & generation guide', 'Chat controls']);
   expect(help.querySelector<HTMLDetailsElement>('.jb-home-help-optional')!.open).toBe(false);
   expect(more.open).toBe(false); expect(calls).toHaveLength(0); expect(requests).toHaveLength(beforeRequests);
   findButton('Card import guide', help).click(); await flush();

@@ -47,6 +47,7 @@ import { openFeatureTutorial, type TutorialFeature } from './feature-tutorials';
 import { tutorialScreenshots } from './tutorial-screenshots';
 import { readOptionalState, subscribeOptionalState } from './optional-state';
 import { createWelcome } from './welcome';
+import { openGlossary } from './glossary';
 import { createChatSetup } from './chat-setup';
 import { groupCharacters, type CharacterGroup, type CharacterSignatureCache, type CharacterSummary } from './character-library';
 
@@ -68,7 +69,7 @@ export function setup(ctx: SpindleFrontendContext) {
   let searchTimer: ReturnType<typeof setTimeout> | undefined, controller: AbortController | undefined;
   let libraryRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   let modal: SpindleModalHandle | undefined;
-  let homeHelp: SpindleModalHandle | undefined;
+  let homeHelp: SpindleModalHandle | undefined, glossaryWindow: SpindleModalHandle | undefined;
   let tutorialWindow: ReturnType<typeof openFeatureTutorial> | undefined;
   let tutorialRequest = 0;
   const cleanups: Array<() => void> = [];
@@ -109,6 +110,7 @@ export function setup(ctx: SpindleFrontendContext) {
     openPersonas: () => invoke({ kind: 'drawer_tab', id: 'personas' }),
     openTutorial,
     beforeOpenHelp: () => { tutorialWindow?.destroy(); cardSetup.close(); },
+    openGlossary: () => openGlossaryWindow(),
     invoke,
   });
   const promptSettings = createPromptSettings(settingsWindow.context('settings'), {
@@ -229,6 +231,23 @@ export function setup(ctx: SpindleFrontendContext) {
       onClose: () => { if (request === tutorialRequest) tutorialWindow = undefined; },
     });
   }
+  function openGlossaryWindow() {
+    if (disposed) return;
+    cardSetup.close(); tutorialWindow?.destroy(); homeHelp?.dismiss(); glossaryWindow?.dismiss();
+    const opened = openGlossary(ctx, { invoke, actions: {
+      home: () => { setView('browse'); },
+      myChats: () => { setView('chats'); },
+      createCharacter: () => { characterCreate.open(); },
+      importCards: () => { openImport(); },
+      importHistory: async () => { if (!await openHistory().catch(() => false) && !disposed) openTutorial('history'); },
+      prompt: () => { openPrompt('prompt'); },
+      generation: () => { openPrompt('generation'); },
+      memory: () => { const chatId = ctx.getActiveChat()?.chatId; if (!chatId) return false; openMemory(chatId); },
+      customize: () => { openCustomize(); },
+      replies: () => { chatTools.openHelp(); },
+    } });
+    glossaryWindow = opened; opened.onDismiss(() => { if (glossaryWindow === opened) glossaryWindow = undefined; });
+  }
   function openHomeHelp() {
     if (disposed) return;
     cardSetup.close(); tutorialWindow?.destroy(); homeHelp?.dismiss();
@@ -236,6 +255,7 @@ export function setup(ctx: SpindleFrontendContext) {
     panel.root.classList.add('jb-home-help'); panel.root.setAttribute('aria-label', 'Home help');
     panel.onDismiss(() => { if (homeHelp === panel) homeHelp = undefined; });
     for (const [label, picture, action] of [
+      ['Where did it go? JanitorAI → Lumiverse', 'arrow', () => openGlossaryWindow()],
       ['Setup checklist', 'tools', () => { setView('browse'); homeBanner.reviewSetup(); }],
       ['API connection guide', 'settings', () => openTutorial('connections')],
       ['Card import guide', 'import', () => openTutorial('import')],
@@ -715,7 +735,7 @@ export function setup(ctx: SpindleFrontendContext) {
   try { if (consumePersonaSetupHandoff(window.sessionStorage)) void invoke({ kind: 'drawer_tab', id: 'personas' }); }
   catch { /* Storage can be unavailable; ordinary setup still works. */ }
   return () => {
-    disposed = true; clearTimeout(toastTimer); toast?.remove(); request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); homeHelp?.dismiss(); tutorialWindow?.destroy(); cardSetup.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); chatSetup.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
+    disposed = true; clearTimeout(toastTimer); toast?.remove(); request++; recentRequest++; titleRequest++; connectionRequest++; tutorialRequest++; notePreviews.clear(); signatures.clear(); libraryCache = undefined; controller?.abort(); clearTimeout(searchTimer); clearTimeout(libraryRefreshTimer); clearInterval(routeTimer); modal?.dismiss(); homeHelp?.dismiss(); glossaryWindow?.dismiss(); tutorialWindow?.destroy(); cardSetup.destroy(); characterCreate.destroy(); personaCreate.destroy(); customize.destroy(); soundCloud.destroy(); chatSetup.destroy(); myChats.destroy(); homeBanner.destroy(); cardImport.destroy(); composer.destroy(); memory.destroy(); promptSettings.destroy(); settingsWindow.destroy();
     cleanups.reverse().forEach(cleanup => cleanup()); mounts.forEach(root => root.replaceChildren());
     if (oldView === null) document.documentElement.removeAttribute('data-janitor-bridge-view'); else document.documentElement.setAttribute('data-janitor-bridge-view', oldView);
     chatTools.destroy();
