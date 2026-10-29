@@ -1175,3 +1175,15 @@ test('a favorite change in All characters keeps the current gallery page', async
   expect(document.querySelector('.jb-paging span')!.textContent).toBe('25–48 of 72');
   expect(document.querySelector('.jb-card')!.getAttribute('data-character-id')).toBe('char_24');
 });
+
+test('a failed shortcut inside a chat floats its message, and Home keeps it in the status line', async () => {
+  dom.window.history.replaceState({}, '', '/chat/active_chat');
+  activeChat = { chatId: 'active_chat', characterId: 'char_current' }; start(); await flush();
+  ctx.host.surfaces.invoke = async () => { throw new Error('drawer unavailable'); };
+  (roots.get('chat_header_left')!.querySelector('.jb-chat-title') as HTMLButtonElement).click(); await flush();
+  expect(document.querySelector('.jb-toast')!.textContent).toBe('Could not open that tool. Please try again from the sidebar.');
+  stop!(); stop = undefined; expect(document.querySelector('.jb-toast')).toBeNull();
+  dom.window.history.replaceState({}, '', '/'); activeChat = { chatId: null, characterId: null }; start(); await flush();
+  (document.querySelector('.jb-recent-card') as HTMLButtonElement | null)?.click(); await flush();
+  expect(document.querySelector('.jb-toast')).toBeNull();
+});
