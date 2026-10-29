@@ -30,6 +30,12 @@ export function mountCharacterDelete(ctx: SpindleFrontendContext, root: HTMLElem
     busy = true; status.textContent = 'Deleting this saved copy…'; render();
     try {
       if (!operationId) {
+        let granted = await ctx.permissions.getGranted(); if (disposed) return;
+        if (!granted.includes('characters')) {
+          await ctx.permissions.request(['characters'], { reason: 'Delete the saved character copy you confirmed.' }); if (disposed) return;
+          granted = await ctx.permissions.getGranted(); if (disposed) return;
+          if (!granted.includes('characters')) throw new Error('Enable Janiverse’s Characters permission in Extensions to delete cards.');
+        }
         const value = record(await ctx.characters.get(character.id));
         if (disposed) return;
         if (value.id !== character.id || value.name !== character.name) throw new Error('This card changed. Reopen its profile before deleting it.');

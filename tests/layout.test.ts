@@ -230,6 +230,8 @@ test('My Chats expands read-only and opens profiles locally while keeping new ch
   expect(calls.at(-1)).toEqual({ ref: { kind: 'entity_action', id: 'character_chat' }, params: { characterId: 'char_0', mode: 'new' } });
   findButton('View character →', myChats).click(); await flush();
   expect(document.querySelector('.jb-character-profile h2')!.textContent).toBe('Current character');
+  const profile = document.querySelector('.jb-profile-window')!; expect(profile.getAttribute('aria-label')).toBe('Current character');
+  expect(profile.querySelector('.jb-delete-confirmation p')!.textContent).toContain('Delete “Current character”?');
   expect(calls).toHaveLength(1); expect(calls.some(call => call.ref.kind === 'route')).toBe(false);
   expect(native.outerHTML).toBe(nativeMarkup); stop!(); stop = undefined; expect(document.querySelector('.jb-my-chats')).toBeNull();
 });

@@ -140,3 +140,15 @@ test('header navigation closes the panel and preserves the captured chat for Mem
   await open(); button('Memory').click(); expect(panel()).toBeNull(); expect(navigation).toEqual(['memory:chat-1']); expect(writes()).toEqual([]);
   await open(); button('Settings').click(); expect(panel()).toBeNull(); expect(navigation).toEqual(['memory:chat-1', 'settings']); expect(writes()).toEqual([]);
 });
+
+test('a save in flight marks the panel saving and finishes its write before closing for a chat change', async () => {
+  await open(); change('Background opacity value', '50');
+  const transport = globalThis.fetch; let finish!: (value: Response) => void, signal: AbortSignal | null | undefined;
+  globalThis.fetch = (async (url: any, init: RequestInit = {}) => {
+    if (String(url) === '/api/v1/settings/wallpaper' && init.method === 'PUT') { signal = init.signal; return new Promise<Response>(resolve => { finish = resolve; }); }
+    return transport(url, init);
+  }) as typeof fetch;
+  button('Save').click(); await settle(); expect(panel().getAttribute('data-jb-saving')).toBe('true');
+  chatId = 'chat-2'; [...handlers].forEach(callback => callback()); expect(panel()).not.toBeNull(); expect(signal?.aborted).toBe(false);
+  finish(json({ value: {} })); await settle(); expect(panel()).toBeNull(); expect(handlers.size).toBe(0);
+});

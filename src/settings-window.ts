@@ -4,7 +4,7 @@ import { subscribeOptionalState } from './optional-state';
 export type SettingsSection = 'settings' | 'memory' | 'customize';
 type ModalOptions = Parameters<SpindleFrontendContext['ui']['showModal']>[0];
 type Child = { root: HTMLElement; handle: SpindleModalHandle; closed: boolean; dismiss(): void };
-type WindowState = { modal: SpindleModalHandle; content: HTMLElement; tabs: Map<SettingsSection, HTMLButtonElement>; collapse: HTMLButtonElement; frame?: HTMLElement; child?: Child; section: SettingsSection; scroll: Map<SettingsSection, number>; stopRestore?: () => void; collapsed: boolean; closed: boolean; chatId: string | null; pathname: string | null; previousFocus: HTMLElement | null };
+type WindowState = { modal: SpindleModalHandle; content: HTMLElement; tabs: Map<SettingsSection, HTMLButtonElement>; collapse: HTMLButtonElement; frame?: HTMLElement; child?: Child; section: SettingsSection; scroll: Map<SettingsSection, number>; stopRestore?: () => void; collapsed: boolean; closed: boolean; closePending: boolean; chatId: string | null; pathname: string | null; previousFocus: HTMLElement | null };
 let nextWindowId = 0;
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
@@ -16,7 +16,10 @@ export function createSettingsWindow(ctx: SpindleFrontendContext, options: { nav
   let disposed = false, current: WindowState | undefined;
   const contexts = new Map<SettingsSection, SpindleFrontendContext>();
 
+  // Editors mark native writes with data-jb-saving; closing waits so they can finish and report partial failures.
+  const saving = (window: WindowState) => !!window.child?.root.querySelector('[data-jb-saving="true"]') || window.child?.root.getAttribute('data-jb-saving') === 'true';
   function updateNavigation(window: WindowState) {
+    if (window.closePending && !saving(window)) { window.modal.dismiss(); return; }
     const busy = !!window.child?.root.querySelector('[aria-busy="true"]') || window.child?.root.getAttribute('aria-busy') === 'true';
     for (const [section, tab] of window.tabs) {
       tab.setAttribute('aria-selected', String(section === window.section)); tab.tabIndex = section === window.section ? 0 : -1;
@@ -30,7 +33,7 @@ export function createSettingsWindow(ctx: SpindleFrontendContext, options: { nav
     window.modal.root.classList.toggle('jb-settings-window-collapsed', value); window.frame?.classList.toggle('jb-settings-window-collapsed', value);
     window.collapse.textContent = value ? '+' : '−'; window.collapse.setAttribute('aria-label', value ? 'Expand settings' : 'Collapse settings'); window.collapse.setAttribute('aria-expanded', String(!value));
   }
-  function close() { current?.modal.dismiss(); }
+  function close() { if (current && saving(current)) current.closePending = true; else current?.modal.dismiss(); }
   function makeWindow(section: SettingsSection): WindowState {
     const previousFocus = document.activeElement as HTMLElement | null;
     const modal = ctx.ui.showModal({ title: 'Chat settings', width: 520, maxHeight: 960 });
@@ -48,7 +51,7 @@ export function createSettingsWindow(ctx: SpindleFrontendContext, options: { nav
     const collapse = element('button', 'jb-settings-window-icon', '−'); collapse.type = 'button'; collapse.setAttribute('aria-label', 'Collapse settings'); collapse.setAttribute('aria-expanded', 'true');
     const tabs = element('nav', 'jb-settings-window-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', 'Chat settings sections');
     const content = element('div', 'jb-settings-window-content'); content.id = `jb-settings-window-${++nextWindowId}`; content.setAttribute('role', 'tabpanel');
-    const window: WindowState = { modal, content, tabs: new Map(), collapse, frame: hasHostFrame ? frame : undefined, section, scroll: new Map(), collapsed: false, closed: false, chatId: ctx.getActiveChat()?.chatId ?? null, pathname: typeof location === 'undefined' ? null : location.pathname, previousFocus };
+    const window: WindowState = { modal, content, tabs: new Map(), collapse, frame: hasHostFrame ? frame : undefined, section, scroll: new Map(), collapsed: false, closed: false, closePending: false, chatId: ctx.getActiveChat()?.chatId ?? null, pathname: typeof location === 'undefined' ? null : location.pathname, previousFocus };
     for (const [label, key] of [['Settings', 'settings'], ['Memory', 'memory'], ['Customize', 'customize']] as const) {
       const tab = element('button', '', label); tab.type = 'button'; tab.id = `${content.id}-${key}`; tab.setAttribute('role', 'tab'); tab.setAttribute('aria-controls', content.id);
       tab.addEventListener('click', () => {
@@ -100,7 +103,7 @@ export function createSettingsWindow(ctx: SpindleFrontendContext, options: { nav
       setTitle(title: string) { if (!child.closed) root.setAttribute('aria-label', title); },
       onDismiss(handler: () => void) { if (!child.closed) listeners.add(handler); return () => listeners.delete(handler); },
     };
-    window.child = child; observer?.observe(root, { attributes: true, attributeFilter: ['aria-busy'], childList: true, subtree: true }); updateNavigation(window); window.tabs.get(section)?.focus({ preventScroll: true });
+    window.child = child; observer?.observe(root, { attributes: true, attributeFilter: ['aria-busy', 'data-jb-saving'], childList: true, subtree: true }); updateNavigation(window); window.tabs.get(section)?.focus({ preventScroll: true });
     // Editors share this window. Removing a long editor clamps scrollTop before
     // its replacement has loaded. Restore after layout, then leave scrolling
     // entirely to the user; never keep a scroll-restoration loop running.
@@ -144,6 +147,6 @@ export function createSettingsWindow(ctx: SpindleFrontendContext, options: { nav
     dismissEditor() { current?.child?.dismiss(); },
     syncRoute() { if (current && current.pathname !== (typeof location === 'undefined' ? null : location.pathname)) close(); },
     close,
-    destroy() { if (disposed) return; disposed = true; stopChat?.(); close(); contexts.clear(); },
+    destroy() { if (disposed) return; disposed = true; stopChat?.(); current?.modal.dismiss(); contexts.clear(); },
   };
 }

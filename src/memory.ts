@@ -111,6 +111,7 @@ export function createChatMemory(ctx: SpindleFrontendContext, options: MemoryOpt
       text.disabled = !enabled; depth.disabled = !enabled; role.disabled = !enabled; save.disabled = !enabled;
       cancel.disabled = saving;
       modal.root.setAttribute('aria-busy', String(saving));
+      modal.root.setAttribute('data-jb-saving', String(saving));
     };
     async function load() {
       if (!current()) return;

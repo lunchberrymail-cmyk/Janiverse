@@ -218,7 +218,7 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
       if (manager) manager.disabled = saving || loading || sourceLoading; if (illarin) illarin.disabled = saving || loading || sourceLoading;
       save.disabled = value || unconfirmedCreate; saveNew.disabled = value || unconfirmedCreate || useSavedOriginal();
       saveNew.textContent = pendingCreated ? 'Finish saving prompt' : 'Save as new prompt';
-      reloadButton.disabled = saving || sourceLoading; modal.root.setAttribute('aria-busy', String(saving || sourceLoading));
+      reloadButton.disabled = saving || sourceLoading; modal.root.setAttribute('aria-busy', String(saving || sourceLoading)); modal.root.setAttribute('data-jb-saving', String(saving));
     }
     function message(text: string, tone = '') { status.textContent = text; status.dataset.tone = tone; }
     modal.root.addEventListener('input', () => { if (status.dataset.tone === 'success') message(''); });

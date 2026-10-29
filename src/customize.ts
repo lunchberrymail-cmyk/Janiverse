@@ -19,7 +19,7 @@ export function createCustomize(ctx: SpindleFrontendContext, navigation: Navigat
     const mobile = document.defaultView?.matchMedia?.('(max-width: 767px)').matches === true;
     close?.();
     const abort = new AbortController(), streaming = createStreamingSettings(ctx);
-    let closed = false, busy = false, writing = false, collapsed = false, needsReload = false, resetText = false, snapshot: CustomizeSnapshot | undefined;
+    let closed = false, busy = false, writing = false, finishAfterWrite = false, collapsed = false, needsReload = false, resetText = false, snapshot: CustomizeSnapshot | undefined;
     let initialStreaming: boolean | undefined, canStream = false, pendingFile: File | undefined, removeBackground = false, previewUrl: string | undefined;
     const previousFocus = document.activeElement as HTMLElement | null;
     const current = () => !closed && !disposed && ctx.getActiveChat()?.chatId === chatId;
@@ -95,7 +95,7 @@ export function createCustomize(ctx: SpindleFrontendContext, navigation: Navigat
     const appearanceNotice = el('p', 'jb-customize-help'); appearanceNotice.hidden = true; text.append(appearanceNotice, el('p', 'jb-customize-help', 'Text appearance applies to messages across your chats. Your other Lumiverse screens keep their own sizing.'));
     const reload = button('Reload saved settings', () => { if (!busy) void load(); }, 'jb-customize-link jb-customize-reload'); content.append(reload);
     panel.append(header, content, footer); document.body.append(panel); close = finish;
-    const stopChat = ctx.state?.subscribe('chat.active', () => { if (ctx.getActiveChat()?.chatId !== chatId) finish(); });
+    const stopChat = ctx.state?.subscribe('chat.active', () => { if (ctx.getActiveChat()?.chatId !== chatId) { if (writing) finishAfterWrite = true; else finish(); } });
     const onEscape = (event: KeyboardEvent) => { if (event.key === 'Escape' && panel.contains(event.target as Node)) { event.preventDefault(); event.stopPropagation(); if (!writing) finish(); } }; panel.addEventListener('keydown', onEscape);
     function finish() { if (closed) return; closed = true; abort.abort(); streaming.dispose(); stopChat?.(); revokePreview(); panel.remove(); if (close === finish) close = undefined; if (previousFocus?.isConnected) previousFocus.focus(); }
     function revokePreview() { if (previewUrl) URL.revokeObjectURL(previewUrl); previewUrl = undefined; }
@@ -126,7 +126,7 @@ export function createCustomize(ctx: SpindleFrontendContext, navigation: Navigat
     }
     function valid() { return fontSize.valid() && opacity.valid() && blur.valid() && [...colors.values()].every(value => /^#[\da-f]{6}$/i.test(value.hex.value)); }
     function changes() { return !!snapshot && (resetText || !equal(appearance(), snapshot.appearance) || opacity.get() !== Math.round(snapshot.wallpaper.opacity * 100) || blur.get() !== snapshot.wallpaper.blur || !!pendingFile || removeBackground || (canStream && stream.checked !== initialStreaming)); }
-    function update() { for (const control of controls) control.disabled = busy || !snapshot; dismiss.disabled = writing; stream.disabled = busy || !canStream; settings.disabled = memory.disabled = busy; reload.disabled = busy; save.disabled = busy || needsReload || !snapshot || !valid() || !changes(); save.textContent = writing ? 'Saving…' : 'Save'; panel.setAttribute('aria-busy', String(busy)); renderBackground(); }
+    function update() { for (const control of controls) control.disabled = busy || !snapshot; dismiss.disabled = writing; stream.disabled = busy || !canStream; settings.disabled = memory.disabled = busy; reload.disabled = busy; save.disabled = busy || needsReload || !snapshot || !valid() || !changes(); save.textContent = writing ? 'Saving…' : 'Save'; panel.setAttribute('aria-busy', String(busy)); panel.setAttribute('data-jb-saving', String(writing)); renderBackground(); }
     async function load() {
       busy = true; update(); message('Loading saved customization…');
       const results = await Promise.allSettled([loadCustomize(ctx, chatId!, abort.signal, mobile), streaming.read(chatId!)]);
@@ -154,7 +154,7 @@ export function createCustomize(ctx: SpindleFrontendContext, navigation: Navigat
         if (canStream && stream.checked !== initialStreaming) { const result = await streaming.save(stream.checked); if (!current()) return; initialStreaming = result.enabled; }
         message('Saved. Your chat uses these Lumiverse settings.', 'success');
       } catch (error) { if (current()) { needsReload = true; message(`${error instanceof Error ? error.message : 'Could not save.'} Reload saved settings before trying again; some changes may already be saved.`, 'error'); } }
-      finally { if (current()) { busy = writing = false; update(); } }
+      finally { if (finishAfterWrite) finish(); else if (current()) { busy = writing = false; update(); } }
     }
     fillAppearance(defaultAppearance); preview(); void load(); dismiss.focus();
     return panel;

@@ -162,3 +162,18 @@ test('an unavailable optional chat selector does not abort settings startup or r
   }
   expect(permissionRequests).toBe(0); expect(subscriptions.size).toBe(0);
 });
+
+test('close, Escape and chat changes wait for a native save, then close once it finishes', async () => {
+  const child = editor('memory', 'Chat Memory'); let dismissed = 0; child.onDismiss(() => dismissed++);
+  const field = document.createElement('textarea'); child.root.append(field); child.root.setAttribute('data-jb-saving', 'true'); await settle();
+  action('Close settings').click(); field.focus(); field.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  activeChat = 'chat-2'; for (const notify of [...subscriptions]) notify(); await settle();
+  expect(dismissed).toBe(0); expect(hostCloses).toBe(0); expect(child.root.isConnected).toBe(true);
+  child.root.setAttribute('data-jb-saving', 'false'); await settle(); expect(dismissed).toBe(1); expect(hostCloses).toBe(1);
+});
+
+test('loading editors still close immediately, and destroy never waits for a save', async () => {
+  const loading = editor(); loading.root.setAttribute('aria-busy', 'true'); await settle(); action('Close settings').click(); await settle(); expect(hostCloses).toBe(1);
+  const saving = editor(); const form = document.createElement('form'); form.setAttribute('data-jb-saving', 'true'); saving.root.append(form); await settle();
+  window.destroy(); await settle(); expect(saving.root.isConnected).toBe(false); expect(hostCloses).toBe(2);
+});

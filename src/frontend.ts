@@ -385,7 +385,14 @@ export function setup(ctx: SpindleFrontendContext) {
   home.append(status, count, grid, paging); mounts[2].append(home);
   const myChats = createMyChats(ctx, {
     invoke,
-    openCharacter: id => openProfile(id),
+    openCharacter: id => {
+      // Card deletion confirms the saved name, so open with the real record rather than a placeholder title.
+      void ctx.characters.get(id).then(value => {
+        const character = payload(value);
+        if (disposed) return;
+        if (typeof character.id === 'string' && typeof character.name === 'string') preview(character as Character); else openProfile(id);
+      }).catch(() => { if (!disposed) openProfile(id); });
+    },
     startChat: characterId => invoke({ kind: 'entity_action', id: 'character_chat' }, { characterId, mode: 'new' }),
   });
   mounts[2].append(myChats.root);
