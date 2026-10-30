@@ -2,6 +2,7 @@ import type { SpindleFrontendContext, SpindleHostSurfaceRef, SpindleModalHandle 
 import uiCSS from './ui.css' with { type: 'text' };
 import themeCSS from './theme.css' with { type: 'text' };
 import layoutCSS from './layout.css' with { type: 'text' };
+import { watchThemeMessages } from './theme-messages';
 import settingsCSS from './settings.css' with { type: 'text' };
 import chatToolsCSS from './chat-tools.css' with { type: 'text' };
 import homeBannerCSS from './home-banner.css' with { type: 'text' };
@@ -198,7 +199,7 @@ export function setup(ctx: SpindleFrontendContext) {
     nativeWay: (target, close) => mountLumiverseWay(target, 'persona', wayActions, close),
   });
   cleanups.push(ctx.dom.addStyle(characterCreateCSS), ctx.dom.addStyle(personaCreateCSS), ctx.dom.addStyle(tutorialCSS), ctx.dom.addStyle(welcomeCSS), ctx.dom.addStyle(chatToolsCSS));
-  cleanups.push(ctx.dom.addStyle(themeCSS), ctx.dom.addStyle(layoutCSS), ctx.dom.addStyle(uiCSS), ctx.dom.addStyle(settingsCSS), ctx.dom.addStyle(homeBannerCSS), ctx.dom.addStyle(cardImportCSS), ctx.dom.addStyle(myChatsCSS), ctx.dom.addStyle(soundCloudCSS), ctx.dom.addStyle(customizeCSS));
+  cleanups.push(ctx.dom.addStyle(themeCSS), ctx.dom.addStyle(layoutCSS), ctx.dom.addStyle(uiCSS), ctx.dom.addStyle(settingsCSS), ctx.dom.addStyle(homeBannerCSS), ctx.dom.addStyle(cardImportCSS), ctx.dom.addStyle(myChatsCSS), ctx.dom.addStyle(soundCloudCSS), ctx.dom.addStyle(customizeCSS), watchThemeMessages());
   cleanups.push(ctx.dom.addStyle(visualCSS.replace('__JB_FRAUNCES__', frauncesFont).replace('__JB_JURA__', juraFont)));
   cleanups.push(ctx.dom.addStyle(characterProfileCSS));
   cleanups.push(ctx.dom.addStyle(guidedSetupCSS));
