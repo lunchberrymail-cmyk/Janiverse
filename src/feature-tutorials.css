@@ -69,3 +69,8 @@
 .jb-tutorial-companion .jb-tutorial-shot img{max-height:200px}
 .jb-tutorial-companion .jb-tutorial-image-expanded img{max-height:none}
 @media(max-width:600px){.jb-tutorial-companion{bottom:8px;left:8px;width:calc(100vw - 16px)}.jb-tutorial-companion button,.jb-tutorial-companion .jb-tutorial-minimize,.jb-tutorial-companion .jb-tutorial-close{min-height:44px}.jb-tutorial-companion .jb-tutorial-minimize,.jb-tutorial-companion .jb-tutorial-close{min-width:44px}}
+/* Guide text names on-screen controls as bold accent labels; a ring points at the real control. */
+.jb-ui-label{font-weight:700;color:#f786f4;letter-spacing:.01em}
+.jb-guide-ring{position:fixed;z-index:10001;box-sizing:border-box;border:2px solid #f786f4;border-radius:9px;pointer-events:none;box-shadow:0 0 0 3px #f786f438,0 0 14px #f786f480;animation:jb-guide-pulse 1.4s ease-in-out infinite}
+@keyframes jb-guide-pulse{0%,100%{box-shadow:0 0 0 2px #f786f430,0 0 10px #f786f466}50%{box-shadow:0 0 0 7px #f786f41a,0 0 20px #f786f4a6}}
+@media(prefers-reduced-motion:reduce){.jb-guide-ring{animation:none}}

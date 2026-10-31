@@ -2,6 +2,7 @@ import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
 import type { FeatureTutorialOptions, Scene } from './feature-tutorials';
 import { screenshotSource } from './feature-tutorials';
 import { screenshotAnnotations } from './tutorial-annotations';
+import { createGuidePointer, setGuideText } from './guide-text';
 import { record } from './setup-data';
 
 export const CARD_GUIDE_KEY = 'onboarding:card_guide_v2';
@@ -16,6 +17,7 @@ export function openImportTutorial(ctx: SpindleFrontendContext, scenes: readonly
   let closeWorkspace: (() => void) | undefined, writes = Promise.resolve();
   const previousFocus = document.activeElement as HTMLElement | null;
   const root = make('section', 'jb-api-guide jb-import-guide jb-api-guide-fallback'); root.dataset.feature = 'import'; root.setAttribute('role', 'complementary'); root.setAttribute('aria-label', 'Card import guide');
+  const pointer = createGuidePointer(root);
   const header = make('header', 'jb-api-guide-header'), count = make('span', 'jb-api-guide-progress');
   const minimize = make('button', 'jb-api-guide-icon', '−'), close = make('button', 'jb-api-guide-icon', '×');
   minimize.type = close.type = 'button'; minimize.setAttribute('aria-label', 'Minimize card guide'); minimize.setAttribute('aria-expanded', 'true'); close.setAttribute('aria-label', 'Close tutorial'); header.append(count, minimize, close);
@@ -37,7 +39,7 @@ export function openImportTutorial(ctx: SpindleFrontendContext, scenes: readonly
   }
   function render() {
     const scene = scenes[index]; root.dataset.scene = String(index + 1); root.dataset.screenshot = scene.screenshot; count.textContent = `Card guide · ${index + 1} / ${scenes.length}`; count.setAttribute('aria-label', `Scene ${index + 1} of ${scenes.length}`);
-    title.textContent = scene.title; instruction.textContent = scene.instruction; outcome.textContent = `Look for: ${scene.result}`;
+    title.textContent = scene.title; pointer.write(instruction, scene.instruction); setGuideText(outcome, `Look for: ${scene.result}`);
     picture.open = false; figure.replaceChildren(); const screenshot = options.screenshots?.[scene.screenshot], source = screenshot && screenshotSource(screenshot.src);
     if (screenshot && source) {
       const shot = make('div', 'jb-tutorial-shot'), image = make('img', ''); image.src = source; image.alt = screenshot.alt; image.decoding = 'async'; image.referrerPolicy = 'no-referrer'; if (screenshot.width && screenshot.height) { image.width = screenshot.width; image.height = screenshot.height; } shot.append(image); figure.append(shot); const legend = screenshot.callouts && screenshotAnnotations(shot, screenshot.callouts); if (legend) figure.append(legend);
@@ -46,7 +48,7 @@ export function openImportTutorial(ctx: SpindleFrontendContext, scenes: readonly
     controls(); reportProgress(); root.scrollTop = 0;
   }
   function choose(value: number) { if (disposed || opening || progress.busy) return; interacted = true; index = Math.max(0, Math.min(scenes.length - 1, value)); persist(); render(); }
-  function destroy() { if (disposed) return; disposed = true; root.remove(); if (previousFocus?.isConnected && !attached) previousFocus.focus({ preventScroll: true }); options.onClose?.(); }
+  function destroy() { if (disposed) return; disposed = true; pointer.clear(); root.remove(); if (previousFocus?.isConnected && !attached) previousFocus.focus({ preventScroll: true }); options.onClose?.(); }
   const attachment: ImportGuideAttachment = {
     root, dismiss: destroy, interact() { interacted = true; },
     mounted(close) { if (disposed) return; attached = true; closeWorkspace = close; root.classList.remove('jb-api-guide-fallback'); controls(); },

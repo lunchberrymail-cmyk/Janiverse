@@ -2,6 +2,7 @@ import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
 import type { FeatureTutorialOptions, Scene } from './feature-tutorials';
 import { screenshotSource } from './feature-tutorials';
 import { screenshotAnnotations } from './tutorial-annotations';
+import { createGuidePointer, setGuideText } from './guide-text';
 import { readOptionalState, subscribeOptionalState } from './optional-state';
 import { record, text } from './setup-data';
 
@@ -17,6 +18,7 @@ export function openConnectionTutorial(ctx: SpindleFrontendContext, scenes: read
   let testAbort: AbortController | undefined, writeQueue = Promise.resolve();
   const previousFocus = document.activeElement as HTMLElement | null;
   const root = make('section', 'jb-api-guide'); root.setAttribute('role', 'complementary'); root.setAttribute('aria-label', 'API connection guide'); root.dataset.feature = 'connections';
+  const pointer = createGuidePointer(root);
   const mount = (() => { try { return ctx.ui.mount('drawer_footer'); } catch { return undefined; } })();
   let floating = !mount;
   if (mount) { mount.classList.add('jb-api-guide-mount'); mount.append(root); }
@@ -102,7 +104,7 @@ export function openConnectionTutorial(ctx: SpindleFrontendContext, scenes: read
   function renderScene() {
     const scene = scenes[index]; root.dataset.scene = String(index + 1); root.dataset.screenshot = scene.screenshot;
     progress.textContent = `API guide · ${index + 1} / ${scenes.length}`; progress.setAttribute('aria-label', `Scene ${index + 1} of ${scenes.length}`);
-    heading.textContent = scene.title; instruction.textContent = scene.instruction; outcome.textContent = `Look for: ${scene.result}`;
+    heading.textContent = scene.title; pointer.write(instruction, scene.instruction); setGuideText(outcome, `Look for: ${scene.result}`);
     picture.open = false; figure.replaceChildren();
     const screenshot = options.screenshots?.[scene.screenshot], source = screenshot && screenshotSource(screenshot.src);
     if (screenshot && source) {
@@ -136,7 +138,7 @@ export function openConnectionTutorial(ctx: SpindleFrontendContext, scenes: read
     } catch { if (!disposed && generation === testEpoch) status.textContent = 'Couldn’t complete the test. Check your server connection and try again.'; }
     finally { if (!disposed && generation === testEpoch) { testing = false; testAbort = undefined; syncControls(); } }
   }
-  function destroy() { if (disposed) return; disposed = true; cancelTest(); cleanups.reverse().forEach(stop => stop()); root.remove(); mount?.remove(); if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true }); options.onClose?.(); }
+  function destroy() { if (disposed) return; disposed = true; pointer.clear(); cancelTest(); cleanups.reverse().forEach(stop => stop()); root.remove(); mount?.remove(); if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true }); options.onClose?.(); }
   close.addEventListener('click', destroy); finish.addEventListener('click', () => { if (!finish.disabled) destroy(); });
   back.addEventListener('click', () => chooseScene(index - 1)); next.addEventListener('click', () => chooseScene(index + 1));
   reopen.addEventListener('click', () => { void openConnections(); }); test.addEventListener('click', () => { void runTest(); });
