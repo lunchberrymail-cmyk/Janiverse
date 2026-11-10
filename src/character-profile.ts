@@ -93,7 +93,7 @@ export function mountCharacterProfile(ctx: SpindleFrontendContext, root: HTMLEle
       stopSoundtrackEditor = mountSoundtrackEditor(ctx, sidebar, character, () => soundtrack?.refresh());
       if (options.controls) sidebar.append(options.controls);
       const lorebooks = el('section', 'jb-profile-lorebooks'); sidebar.append(lorebooks);
-      stopLorebooks = mountProfileLorebooks(lorebooks, character.extensions);
+      stopLorebooks = mountProfileLorebooks(ctx, lorebooks, character.extensions);
       const details = el('section', 'jb-profile-details'); details.setAttribute('aria-label', 'Character definition');
       details.append(el('h2', 'jb-profile-definition-title', 'Character definition'), el('p', 'jb-profile-definition-help', 'The saved details and opening messages for this character.'));
       function field(label: string, values: Array<{ label: string; value: string }>, count?: number) {

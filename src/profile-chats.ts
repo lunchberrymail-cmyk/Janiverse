@@ -1,5 +1,5 @@
 import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
-import { uuid } from './uuid';
+import { requestHostUuid } from './uuid-client';
 
 type Chat = { id: string; name?: string; last_message_preview?: string; updated_at?: number; created_at?: number; message_count?: number; metadata?: Record<string, unknown> };
 const PAGE_SIZE = 8;
@@ -14,8 +14,10 @@ export function mountProfileChats(ctx: SpindleFrontendContext, root: HTMLElement
   let disposed = false, opened = false, loading = false, navigating = false, request = 0, offset = 0;
   let rows: Chat[] = [], abort: AbortController | undefined;
   const toggle = button('Continue old chat', () => { if (!disposed && !navigating) { opened = !opened; toggle.setAttribute('aria-expanded', String(opened)); panel.hidden = !opened; if (opened) void load(); else { request++; abort?.abort(); } } }, 'jb-button jb-profile-continue');
-  const panel = el('section', 'jb-profile-chat-picker'); panel.id = `jb-profile-chats-${uuid()}`; panel.hidden = true; panel.setAttribute('aria-label', 'Choose an old chat');
-  toggle.setAttribute('aria-controls', panel.id); toggle.setAttribute('aria-expanded', 'false');
+  const panel = el('section', 'jb-profile-chat-picker'); panel.hidden = true; panel.setAttribute('aria-label', 'Choose an old chat');
+  const uuidAbort = new AbortController();
+  void requestHostUuid(ctx, uuidAbort.signal).then(id => { if (!disposed) { panel.id = `jb-profile-chats-${id}`; toggle.setAttribute('aria-controls', panel.id); } }).catch(() => { /* The labelled panel remains usable without a generated ID. */ });
+  toggle.setAttribute('aria-expanded', 'false');
   const heading = el('h3', '', 'Choose an old chat');
   const tools = el('div', 'jb-profile-reader-tools');
   const search = el('input'); search.type = 'search'; search.placeholder = 'Search your chats…'; search.maxLength = 256; search.setAttribute('aria-label', 'Search old chats');
@@ -76,5 +78,5 @@ export function mountProfileChats(ctx: SpindleFrontendContext, root: HTMLElement
     finally { if (current(generation)) { navigating = false; search.disabled = sort.disabled = false; const message = status.textContent; render(); status.textContent = message === 'Opening chat…' ? 'Chat opened.' : message; } }
   }
   search.addEventListener('input', () => { offset = 0; render(); }); sort.addEventListener('change', () => { offset = 0; render(); });
-  return () => { disposed = true; request++; abort?.abort(); root.replaceChildren(); };
+  return () => { disposed = true; uuidAbort.abort(); request++; abort?.abort(); root.replaceChildren(); };
 }

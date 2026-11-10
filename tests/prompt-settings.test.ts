@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 import { createPromptSettings } from '../src/prompt-settings';
+import { withHostUuid } from './host-uuid-fixture';
 import { createCustomDefault } from '../src/custom-default';
 
 const originals = { document: globalThis.document, location: globalThis.location, fetch: globalThis.fetch };
@@ -114,6 +115,7 @@ beforeEach(() => {
       return { root, dismiss() { if (!closed) { closed = true; root.remove(); handlers.forEach(fn => fn()); } }, onDismiss(fn: () => void) { handlers.push(fn); return () => {}; } };
     } },
   };
+  ctx = withHostUuid(ctx);
   editor = createPromptSettings(ctx);
 });
 afterEach(() => { editor.destroy(); dom.window.close(); globalThis.fetch = originals.fetch; globalThis.document = originals.document; globalThis.location = originals.location; });

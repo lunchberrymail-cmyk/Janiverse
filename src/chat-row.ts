@@ -66,9 +66,12 @@ export function addChatRowActions(ctx: SpindleFrontendContext, row: HTMLElement,
       try {
         const granted = await ctx.permissions.getGranted(); if (!current()) return;
         if (!granted.includes('chats')) { enable.hidden = false; status.textContent = 'Enable Chats permission to save this change.'; return; }
+        const mutation = mode === 'rename' ? ctx.chats.update : ctx.chats.delete;
+        if (!mutation) { status.textContent = 'This host cannot change chats from extensions. Open the native chat list to continue.'; return; }
         submitted = true;
         if (mode === 'rename') {
-          const result = await ctx.chats.update(chat.id, { name });
+          const update = ctx.chats.update!;
+          const result = await update.call(ctx.chats, chat.id, { name });
           if (!current()) return;
           if (result?.id !== chat.id || typeof result.name !== 'string') throw new Error('Unexpected chat response');
           chat.name = result.name;
@@ -76,7 +79,12 @@ export function addChatRowActions(ctx: SpindleFrontendContext, row: HTMLElement,
           remove.setAttribute('aria-label', `Delete chat: ${chat.name || 'Untitled chat'}`);
           pending(false); close();
           options.renamed(result.name);
-        } else { await ctx.chats.delete(chat.id); if (current()) options.deleted(); }
+        } else {
+          const deleted = await ctx.chats.delete!.call(ctx.chats, chat.id);
+          // The current host resolves void on success; SDK 0.6.79 declares boolean.
+          if (deleted === false) throw new Error('Chat was not deleted');
+          if (current()) options.deleted();
+        }
       } catch {
         if (!current()) return;
         status.textContent = submitted ? 'Could not confirm the change. Refresh chats to check before trying again.' : 'Could not check Chats permission. Try again.';

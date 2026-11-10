@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 import { mountProfileChats } from '../src/profile-chats';
 import { linkedLorebookIds, mountProfileLorebooks } from '../src/profile-lorebooks';
+import { withHostUuid } from './host-uuid-fixture';
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 6));
 let dom: JSDOM, root: HTMLElement, cleanup: (() => void) | undefined, savedDocument: any, savedFetch: any;
@@ -23,7 +24,7 @@ test('only explicit native lorebook attachments are read, with canonical-array p
   expect(linkedLorebookIds({ world_book_ids: ['book-1', '', null, 'book-1', 'book/2'], world_book_id: 'ignored', jar_bridge: { book_id: 'external' } })).toEqual(['book-1', 'book/2']);
   expect(linkedLorebookIds({ world_book_ids: [], world_book_id: 'ignored' })).toEqual([]);
   expect(linkedLorebookIds({ world_book_id: 'legacy' })).toEqual(['legacy']);
-  cleanup = mountProfileLorebooks(root, { world_book_ids: ['book-1', 'book/2', 'book-1'] }); await flush();
+  cleanup = mountProfileLorebooks(withHostUuid({}) as any, root, { world_book_ids: ['book-1', 'book/2', 'book-1'] }); await flush();
   expect(requests.map(item => item.url.pathname)).toEqual(['/api/v1/world-books/book-1', '/api/v1/world-books/book%2F2']);
   expect(root.querySelectorAll('.jb-profile-book')).toHaveLength(2); expect(root.textContent).toContain('A world of stories.'); expect(root.querySelector('b')).toBeNull();
   expect(requests.every(item => item.init.credentials === 'same-origin' && !item.init.method)).toBe(true);
@@ -31,13 +32,13 @@ test('only explicit native lorebook attachments are read, with canonical-array p
 });
 
 test('missing attachments show an honest empty state without scanning the library', () => {
-  cleanup = mountProfileLorebooks(root, { jar_bridge: { lorebook_url: 'https://example.com/book' } });
+  cleanup = mountProfileLorebooks(withHostUuid({}) as any, root, { jar_bridge: { lorebook_url: 'https://example.com/book' } });
   expect(root.textContent).toContain('No lorebooks attached'); expect(requests).toHaveLength(0);
 });
 
 test('reading a linked book loads paginated entries lazily and treats entry content as inert text', async () => {
   result = async url => response(url.pathname.endsWith('/entries') ? { data: [entry(Number(url.searchParams.get('offset')) + 1)], total: 21 } : book());
-  cleanup = mountProfileLorebooks(root, { world_book_id: 'book-1' }); await flush();
+  cleanup = mountProfileLorebooks(withHostUuid({}) as any, root, { world_book_id: 'book-1' }); await flush();
   button('Read lorebook Voltara').click(); await flush();
   expect(requests[1].url.searchParams.get('limit')).toBe('20'); expect(requests[1].url.searchParams.get('offset')).toBe('0');
   expect(root.querySelector('.jb-profile-book-entry')!.textContent).toContain('<script>Inert content 1</script>'); expect(root.querySelector('script')).toBeNull();
@@ -52,7 +53,7 @@ test('reading a linked book loads paginated entries lazily and treats entry cont
 test('one unavailable book does not hide another attachment and both metadata and entry failures can retry', async () => {
   let failBook = true, failEntries = true;
   result = async url => url.pathname.endsWith('/entries') ? failEntries ? response({}, 503) : response({ data: [], total: 0 }) : url.pathname.endsWith('bad') && failBook ? response({}, 404) : response(book(url.pathname.split('/').at(-1)!));
-  cleanup = mountProfileLorebooks(root, { world_book_ids: ['bad', 'good'] }); await flush();
+  cleanup = mountProfileLorebooks(withHostUuid({}) as any, root, { world_book_ids: ['bad', 'good'] }); await flush();
   expect(root.textContent).toContain('Lorebook unavailable'); expect(root.querySelectorAll('.jb-profile-book:not(:disabled)')).toHaveLength(1);
   failBook = false; button('Retry lorebook').click(); await flush(); expect(root.querySelectorAll('.jb-profile-book:not(:disabled)')).toHaveLength(2);
   root.querySelector<HTMLButtonElement>('.jb-profile-book')!.click(); await flush(); expect(root.textContent).toContain('Could not load these entries');
@@ -62,7 +63,7 @@ test('one unavailable book does not hide another attachment and both metadata an
 test('closing a book ignores a late entry response and disposal aborts all active reads', async () => {
   let finish!: (value: unknown) => void;
   result = async url => url.pathname.endsWith('/entries') ? new Promise(resolve => { finish = resolve; }) : response(book());
-  cleanup = mountProfileLorebooks(root, { world_book_id: 'book-1' }); await flush();
+  cleanup = mountProfileLorebooks(withHostUuid({}) as any, root, { world_book_id: 'book-1' }); await flush();
   const card = button('Read lorebook Voltara'); card.click(); await flush(); const entrySignal = requests.at(-1)!.init.signal;
   card.click(); finish(response({ data: [entry(1)], total: 1 })); await flush();
   expect(entrySignal!.aborted).toBe(true); expect(root.querySelector('.jb-profile-book-entries')!.childNodes).toHaveLength(0);
@@ -71,7 +72,7 @@ test('closing a book ignores a late entry response and disposal aborts all activ
 
 test('mismatched lorebooks and entries never expose another book and disposed retries cannot issue reads', async () => {
   result = async () => response({ ...book('wrong'), description: 'Other book description' });
-  cleanup = mountProfileLorebooks(root, { world_book_id: 'book-1' }); await flush();
+  cleanup = mountProfileLorebooks(withHostUuid({}) as any, root, { world_book_id: 'book-1' }); await flush();
   expect(root.textContent).not.toContain('Other book description'); expect(root.textContent).toContain('Lorebook unavailable');
   result = async url => response(url.pathname.endsWith('/entries') ? { data: [{ ...entry(1), world_book_id: 'wrong' }], total: 1 } : book());
   button('Retry lorebook').click(); await flush(); button('Read lorebook Voltara').click(); await flush();

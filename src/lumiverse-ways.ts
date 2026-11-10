@@ -50,6 +50,7 @@ export function mountLumiverseWay(target: HTMLElement, id: string, actions: WayA
 
 /** Help's checklist of every Janiverse tool and its native home, remembered per account. */
 export function openLumiverseWays(ctx: SpindleFrontendContext, actions: WayActions): SpindleModalHandle {
+  const settings = ctx.settings;
   const modal = ctx.ui.showModal({ title: 'Use Lumiverse on its own', width: 640, maxHeight: 860 });
   modal.root.classList.add('jb-lumiverse-ways', 'jb-settings');
   let closed = false; modal.onDismiss(() => { closed = true; });
@@ -74,14 +75,14 @@ export function openLumiverseWays(ctx: SpindleFrontendContext, actions: WayActio
     box.addEventListener('change', () => {
       if (box.checked) learned.add(way.id); else learned.delete(way.id);
       render();
-      if (ctx.settings?.set) void Promise.resolve().then(() => ctx.settings.set(LEARNED_KEY, [...learned])).catch(() => { if (!closed) status.textContent = 'Could not save your progress. It still shows until you close this window.'; });
+      if (settings?.set) void Promise.resolve().then(() => settings.set(LEARNED_KEY, [...learned])).catch(() => { if (!closed) status.textContent = 'Could not save your progress. It still shows until you close this window.'; });
     });
     const controls = make('div', 'jb-lumiverse-way-controls');
     if (way.tutorial || way.ref) controls.append(showButton(way, actions, status, () => modal.dismiss()));
     controls.append(check); item.append(text, controls); list.append(item);
   }
   modal.root.append(intro, progress, list, done); render();
-  if (ctx.settings?.get) void Promise.resolve().then(() => ctx.settings.get<unknown>(LEARNED_KEY)).then(value => {
+  if (settings?.get) void Promise.resolve().then(() => settings.get<unknown>(LEARNED_KEY)).then(value => {
     if (closed || !Array.isArray(value)) return;
     for (const id of value) if (typeof id === 'string' && lumiverseWays.some(way => way.id === id)) learned.add(id);
     render();

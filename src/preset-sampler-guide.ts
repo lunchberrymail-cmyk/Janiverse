@@ -24,7 +24,7 @@ export function openPresetSamplerGuide(ctx: SpindleFrontendContext, options: Opt
   help.append(reopen);
   const nav = make('nav', 'jb-api-guide-nav'), back = make('button', '', 'Back'), next = make('button', 'jb-api-guide-primary'); back.type = next.type = 'button'; nav.setAttribute('aria-label', 'Sampler guide steps'); nav.append(back, next);
   body.append(title, instruction, make('p', 'jb-api-guide-result', 'Edits affect the original and other chats using it.'), status, nav, help); root.append(header, body);
-  let mount: HTMLElement | undefined;
+  let mount: Element | undefined;
   try { mount = ctx.ui.mount('drawer_footer'); mount.classList.add('jb-api-guide-mount'); mount.append(root); }
   catch { root.classList.add('jb-api-guide-fallback'); document.body.append(root); }
   function destroy() { if (disposed) return; disposed = true; pointer.clear(); root.remove(); mount?.remove(); options.onClose?.(); }

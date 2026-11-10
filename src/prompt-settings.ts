@@ -1,7 +1,7 @@
 import type { SpindleFrontendContext, SpindleModalHandle } from 'lumiverse-spindle-types';
 import { createNativePresetResolution, type Binding, type Scope } from './native-preset-scope';
 import { createCustomDefault } from './custom-default';
-import { uuid } from './uuid';
+import { requestHostUuid } from './uuid-client';
 
 type Json = Record<string, unknown>;
 type Preset = { id: string; name: string; provider: string; engine: string; parameters: Json; prompts: Json; metadata: Json; prompt_order: Json[]; cache_revision: number };
@@ -30,8 +30,8 @@ function node<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''
   const result = document.createElement(tag); result.className = cls; result.textContent = text; return result;
 }
 function string(value: unknown) { return typeof value === 'string' && value.trim() ? value : null; }
-function block(name: string, marker: string | null = null): Json {
-  return { id: uuid(), name, content: '', role: 'system', enabled: true, position: 'pre_history', depth: 0, marker, isLocked: !!marker, color: null, injectionTrigger: [], characterTagTrigger: [], group: null, categoryMode: null };
+async function block(ctx: SpindleFrontendContext, signal: AbortSignal, name: string, marker: string | null = null): Promise<Json> {
+  return { id: await requestHostUuid(ctx, signal), name, content: '', role: 'system', enabled: true, position: 'pre_history', depth: 0, marker, isLocked: !!marker, color: null, injectionTrigger: [], characterTagTrigger: [], group: null, categoryMode: null };
 }
 function isNativeDefault(preset: Preset) { return preset.provider === 'loom' && preset.metadata._lumiverse_preset_slug === defaultSlug && rec(preset.metadata[markerKey]).owner !== owner; }
 function validPreset(preset: Preset | null): preset is Preset { return !!preset && Array.isArray(preset.prompt_order) && !!preset.parameters && !!preset.prompts && !!preset.metadata; }
@@ -441,8 +441,9 @@ export function createPromptSettings(ctx: SpindleFrontendContext, options: Promp
         if (!useSavedOriginal()) next.name = name;
         let promptId = base.blockId;
         if (!promptId && (promptDirty || prompt.value)) {
-          const section = { ...block('Janiverse'), marker: 'category', categoryMode: 'checkbox', isLocked: false };
-          const added: Json = { ...block('Global prompt'), content: prompt.value };
+          const section = { ...await block(ctx, session.abort.signal, 'Janiverse'), marker: 'category', categoryMode: 'checkbox', isLocked: false };
+          const added: Json = { ...await block(ctx, session.abort.signal, 'Global prompt'), content: prompt.value };
+          if (!current()) return;
           // Leading category isolates the new instructions from any radio category in the source.
           next.prompt_order.unshift(section, added); promptId = String(added.id);
         } else if (promptId && promptDirty) {

@@ -1,4 +1,5 @@
-import { uuid } from './uuid';
+import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
+import { requestHostUuid } from './uuid-client';
 
 const text = (value: unknown) => typeof value === 'string' ? value : '';
 const plain = (value: unknown) => text(value).replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
@@ -14,7 +15,7 @@ export function linkedLorebookIds(extensions: unknown): string[] {
 }
 
 /** An attached-book reader; all requests are authenticated reads and stay local. */
-export function mountProfileLorebooks(root: HTMLElement, extensions: unknown) {
+export function mountProfileLorebooks(ctx: SpindleFrontendContext, root: HTMLElement, extensions: unknown) {
   let disposed = false; const abort = new AbortController(); const cleanups: Array<() => void> = [];
   root.setAttribute('aria-label', 'Attached lorebooks');
   root.append(el('h2', 'jb-profile-definition-title', 'Attached lorebooks'));
@@ -34,7 +35,8 @@ export function mountProfileLorebooks(root: HTMLElement, extensions: unknown) {
     card.append(top, description, meta);
     const status = el('p', 'jb-status'); status.setAttribute('role', 'status');
     const retryBook = button('Retry lorebook', () => { void loadBook(); }); retryBook.hidden = true;
-    const reader = el('section', 'jb-profile-book-reader'); reader.id = `jb-profile-book-${uuid()}`; reader.hidden = true; card.setAttribute('aria-controls', reader.id);
+    const reader = el('section', 'jb-profile-book-reader'); reader.hidden = true;
+    void requestHostUuid(ctx, abort.signal).then(id => { if (!disposed) { reader.id = `jb-profile-book-${id}`; card.setAttribute('aria-controls', reader.id); } }).catch(() => { /* The labelled reader remains usable without a generated ID. */ });
     const tools = el('form', 'jb-profile-reader-tools');
     const search = el('input'); search.type = 'search'; search.placeholder = 'Search entries…'; search.maxLength = 256; search.setAttribute('aria-label', 'Search lorebook entries');
     const submit = el('button', 'jb-button', 'Search'); submit.type = 'submit'; tools.append(search, submit);

@@ -10,3 +10,5 @@ const result = await Bun.build({
 });
 if (!result.success) { console.error(result.logs); process.exit(1); }
 for (const output of result.outputs) console.log(`${output.path.split(/[\\/]/).pop()} ${(output.size / 1024).toFixed(1)} KB`);
+const backend = await Bun.build({ entrypoints: ['src/backend.ts'], target: 'bun', outdir: 'dist', minify: true });
+if (!backend.success) { console.error(backend.logs); process.exit(1); }

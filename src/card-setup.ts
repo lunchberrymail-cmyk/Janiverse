@@ -15,7 +15,7 @@ const nativeSteps = [
 
 /** Teaches real entry points. No file selection, import requests or permission grants. */
 export function createCardSetup(ctx: SpindleFrontendContext, options: Options) {
-  let disposed = false, root: HTMLElement | undefined, mount: HTMLElement | undefined;
+  let disposed = false, root: HTMLElement | undefined, mount: Element | undefined;
   let pendingMenu = false, epoch = 0;
   let stopDrawer: (() => void) | undefined;
   function close() {

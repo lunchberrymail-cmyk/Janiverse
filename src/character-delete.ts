@@ -1,5 +1,5 @@
 import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
-import { uuid } from './uuid';
+import { requestHostUuid } from './uuid-client';
 
 const record = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, text = '', className = '') { const node = document.createElement(tag); node.textContent = text; node.className = className; return node; }
@@ -40,7 +40,8 @@ export function mountCharacterDelete(ctx: SpindleFrontendContext, root: HTMLElem
         const value = record(await ctx.characters.get(character.id));
         if (disposed) return;
         if (value.id !== character.id || value.name !== character.name) throw new Error('This card changed. Reopen its profile before deleting it.');
-        operationId = uuid();
+        operationId = await requestHostUuid(ctx, controller.signal);
+        if (disposed) return;
         try {
           const response = await fetch(`/api/v1/characters/${encodeURIComponent(character.id)}?operation_id=${encodeURIComponent(operationId)}`, { method: 'DELETE', credentials: 'same-origin', signal: controller.signal });
           if (disposed) return;

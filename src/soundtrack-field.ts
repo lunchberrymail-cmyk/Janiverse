@@ -1,17 +1,18 @@
 import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
 import { characterSoundCloudTrack, soundCloudTrackInput } from './soundcloud';
-import { uuid } from './uuid';
+import { requestHostUuid } from './uuid-client';
+import { saveLibrary } from './library-client';
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') { const node = document.createElement(tag); node.className = cls; node.textContent = text; return node; }
-function record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 
 /** Shared local-only input. Extracting a track never loads SoundCloud or pasted markup. */
-export function createSoundtrackField() {
+export function createSoundtrackField(ctx: SpindleFrontendContext, signal?: AbortSignal) {
   const root = el('div', 'jb-soundtrack-field');
-  const input = el('textarea', 'jb-settings-textarea'); input.name = 'soundcloud_track'; input.id = `jb-soundtrack-${uuid()}`; input.rows = 2; input.maxLength = 12_000;
+  const input = el('textarea', 'jb-settings-textarea'); input.name = 'soundcloud_track'; input.setAttribute('aria-label', 'SoundCloud track'); input.rows = 2; input.maxLength = 12_000;
   input.placeholder = 'SoundCloud track link or <iframe …></iframe>'; input.autocomplete = 'off'; input.spellcheck = false;
-  const label = el('label', 'jb-settings-label', 'SoundCloud track'); label.htmlFor = input.id;
-  const hint = el('p', 'jb-settings-help', 'Paste a public track link or its embed code. Single tracks only. Listeners choose Play; music never starts automatically.'); hint.id = `${input.id}-help`; input.setAttribute('aria-describedby', hint.id);
+  const label = el('label', 'jb-settings-label', 'SoundCloud track');
+  const hint = el('p', 'jb-settings-help', 'Paste a public track link or its embed code. Single tracks only. Listeners choose Play; music never starts automatically.');
+  void requestHostUuid(ctx, signal).then(id => { if (signal?.aborted) return; input.id = `jb-soundtrack-${id}`; label.htmlFor = input.id; hint.id = `${input.id}-help`; input.setAttribute('aria-describedby', hint.id); }).catch(() => { /* The input keeps its explicit accessible name without a generated ID. */ });
   const extract = el('button', 'jb-button', 'Extract track'); extract.type = 'button';
   const status = el('p', 'jb-settings-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   const help = el('details', 'jb-soundtrack-help'); help.append(el('summary', '', 'Where do I find the embed code?'), el('p', 'jb-settings-help', 'On SoundCloud, open the track → Share → Embed → copy the iframe code. Your soundtrack is saved with the character and plays in its profile and chats.'));
@@ -31,7 +32,7 @@ export function mountSoundtrackEditor(ctx: SpindleFrontendContext, root: HTMLEle
   let disposed = false, busy = false, saved = characterSoundCloudTrack(character), attemptedPermission = false;
   const panel = el('details', 'jb-soundtrack-editor');
   const title = el('summary');
-  const field = createSoundtrackField(); field.input.value = saved ?? '';
+  const field = createSoundtrackField(ctx, controller.signal); field.input.value = saved ?? '';
   const fields = el('fieldset', 'jb-soundtrack-fields');
   const actions = el('div', 'jb-soundtrack-actions');
   const save = el('button', 'jb-button jb-primary', 'Save soundtrack'); save.type = 'button';
@@ -56,16 +57,9 @@ export function mountSoundtrackEditor(ctx: SpindleFrontendContext, root: HTMLEle
     let sent = false;
     try {
       if (!await permission(!attemptedPermission) || disposed) return;
-      // Read just before writing so imports, lorebooks, avatars and other extension metadata survive.
-      const fresh = record(await ctx.characters.get(id)); if (disposed) return;
-      if (fresh.id !== id) throw new Error('Character unavailable');
-      const extensions = record(fresh.extensions);
-      const next = { ...extensions, janiverse: { ...record(extensions.janiverse), soundcloud_track_id: track } };
       sent = true;
-      const response = await fetch(`/api/v1/characters/${encodeURIComponent(id)}`, { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ extensions: next }), signal: controller.signal });
+      const result = await saveLibrary(ctx, { operation: 'soundtrack.save', characterId: id, track }, controller.signal);
       if (disposed) return;
-      if (!response.ok) throw new Error('Save failed');
-      const result = record(await response.json()); if (disposed) return;
       if (result.id !== id || characterSoundCloudTrack(result) !== track) throw new Error('Unconfirmed save');
       saved = track; field.input.value = track ?? ''; field.input.removeAttribute('aria-invalid');
       status.textContent = track ? 'Soundtrack saved. Use Play in this profile or chat.' : 'Soundtrack removed.';

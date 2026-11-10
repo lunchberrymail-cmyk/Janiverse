@@ -2,12 +2,14 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 import { characterSoundCloudTrack, soundCloudTrackInput } from '../src/soundcloud';
 import { createSoundtrackField, mountSoundtrackEditor } from '../src/soundtrack-field';
+import { withHostUuid } from './host-uuid-fixture';
+import { withHostLibrary } from './host-library-fixture';
 
 const settle = async () => { for (let i = 0; i < 60; i++) await Promise.resolve(); };
 const embed = '<iframe width="100%" height="166" allow="autoplay" src="https://w.soundcloud.com/player/?url=https%3A//api.soundcloud.com/tracks/123&amp;auto_play=true&amp;visual=true"></iframe>';
 const original = { document: globalThis.document, fetch: globalThis.fetch };
 let dom: JSDOM, cleanup: (() => void) | undefined, ctx: any, character: any, grants: string[], permissionCalls: number, refreshed: number;
-let writes: Array<{ url: string; init: RequestInit }>, respond: (init: RequestInit) => Promise<Response>;
+let writes: any[], respond: (request: any) => Promise<any>;
 const input = () => document.querySelector<HTMLTextAreaElement>('[name="soundcloud_track"]')!;
 const button = (text: string) => [...document.querySelectorAll('button')].find(node => node.textContent === text)!;
 function mount() { cleanup = mountSoundtrackEditor(ctx, document.body, character, () => { refreshed++; }); }
@@ -15,9 +17,9 @@ beforeEach(() => {
   dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost:7860/' }); globalThis.document = dom.window.document;
   character = { id: 'card/1', extensions: { jar_bridge: { soundcloud_track_id: '41', creator_name: 'Author' }, world_book_ids: ['book'], janiverse: { other: true } } };
   writes = []; grants = ['characters']; permissionCalls = 0; refreshed = 0;
-  respond = async init => { character = { ...character, ...JSON.parse(String(init.body)) }; return Response.json(character); };
-  globalThis.fetch = (async (url: any, init: RequestInit = {}) => { writes.push({ url: String(url), init }); return respond(init); }) as typeof fetch;
-  ctx = { characters: { get: async () => character }, permissions: { getGranted: async () => [...grants], request: async () => { permissionCalls++; } } };
+  respond = async request => { character = { ...character, extensions: { ...character.extensions, janiverse: { ...character.extensions.janiverse, soundcloud_track_id: request.track } } }; return character; };
+  globalThis.fetch = (() => { throw new Error('UI must use the host transport'); }) as typeof fetch;
+  ctx = withHostLibrary(withHostUuid({ permissions: { getGranted: async () => [...grants], request: async () => { permissionCalls++; } } }), async request => { writes.push(request); return respond(request); });
 });
 afterEach(() => { cleanup?.(); cleanup = undefined; dom.window.close(); globalThis.document = original.document; globalThis.fetch = original.fetch; });
 
@@ -34,7 +36,7 @@ test('rejects untrusted embed origins, private tracks, ambiguous sources and pla
 });
 
 test('local extraction discards markup and explains playback without saving or loading media', () => {
-  const field = createSoundtrackField(); document.body.append(field.root); input().value = embed;
+  const field = createSoundtrackField(ctx); document.body.append(field.root); input().value = embed;
   button('Extract track').click(); expect(input().value).toBe('https://api.soundcloud.com/tracks/123');
   expect(field.root.textContent).toContain('music never starts automatically');
   expect(document.querySelector('iframe,script')).toBeNull(); expect(writes).toEqual([]); expect(permissionCalls).toBe(0);
@@ -44,8 +46,8 @@ test('saving overrides imported music and preserves fresh lorebooks, attribution
   mount(); input().value = embed;
   character.extensions.late_extension = { saved: 'after opening' };
   const save = button('Save soundtrack'); save.click(); save.click(); await settle();
-  expect(writes).toHaveLength(1); expect(writes[0].url).toBe('/api/v1/characters/card%2F1'); expect(writes[0].init.method).toBe('PUT'); expect(writes[0].init.credentials).toBe('same-origin');
-  expect(JSON.parse(String(writes[0].init.body))).toEqual({ extensions: { jar_bridge: { soundcloud_track_id: '41', creator_name: 'Author' }, world_book_ids: ['book'], late_extension: { saved: 'after opening' }, janiverse: { other: true, soundcloud_track_id: 'https://api.soundcloud.com/tracks/123' } } });
+  expect(writes).toHaveLength(1); expect(writes[0]).toMatchObject({ operation: 'soundtrack.save', characterId: 'card/1', track: 'https://api.soundcloud.com/tracks/123' });
+  expect(character.extensions).toEqual({ jar_bridge: { soundcloud_track_id: '41', creator_name: 'Author' }, world_book_ids: ['book'], late_extension: { saved: 'after opening' }, janiverse: { other: true, soundcloud_track_id: 'https://api.soundcloud.com/tracks/123' } });
   expect(characterSoundCloudTrack(character)).toBe('https://api.soundcloud.com/tracks/123'); expect(refreshed).toBe(1);
   expect(document.body.textContent).toContain('Soundtrack saved'); expect(document.querySelector('iframe,script')).toBeNull();
 });
@@ -66,10 +68,10 @@ test('invalid input never requests permission; denied permission keeps the draft
   grants = ['characters']; button('Save soundtrack').click(); await settle(); expect(writes).toHaveLength(1);
 });
 
-test('unconfirmed saves retain the draft and dismissal prevents a late read from writing', async () => {
+test('unconfirmed saves retain the draft and dismissal ignores late host replies', async () => {
   respond = async () => { throw new Error('lost response'); }; mount(); input().value = embed; button('Save soundtrack').click(); await settle();
   expect(document.body.textContent).toContain('could not be confirmed'); expect(input().value).toBe(embed); expect(refreshed).toBe(0);
-  let release!: (value: unknown) => void; ctx.characters.get = () => new Promise(resolve => { release = resolve; });
+  let release!: (value: unknown) => void; respond = () => new Promise(resolve => { release = resolve; });
   button('Save soundtrack').click(); await settle(); cleanup!(); release(character); await settle();
-  expect(writes).toHaveLength(1); expect(document.body.children).toHaveLength(0);
+  expect(writes).toHaveLength(2); expect(document.body.children).toHaveLength(0); expect(refreshed).toBe(0);
 });

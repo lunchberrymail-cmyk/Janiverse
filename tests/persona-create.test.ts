@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 import { consumePersonaSetupHandoff, createPersonaCreate, reloadForPersonaSetup } from '../src/persona-create';
+import { withHostLibrary, mockSaveReply } from './host-library-fixture';
 
 const originals = { document: globalThis.document, fetch: globalThis.fetch };
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -8,7 +9,7 @@ const json = (body: unknown, status = 201) => new Response(JSON.stringify(body),
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
 let dom: any, ctx: any, creator: ReturnType<typeof createPersonaCreate>, roots: HTMLElement[], dismiss: () => void;
 let grants: string[], checks: number, permissionRequests: string[][], permissionResult: () => Promise<string[]>;
-let requests: Array<{ url: string; init: RequestInit }>, respond: () => Promise<Response>;
+let requests: any[], respond: () => Promise<Response>;
 let opened: number, finished: number, nativeResult: () => Promise<boolean>, finishAction: () => void;
 const root = () => roots.at(-1)!;
 const control = (name: string) => root().querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${name}"]`)!;
@@ -30,6 +31,7 @@ beforeEach(() => {
       return { root: node, dismiss, onDismiss(fn: () => void) { handlers.push(fn); return () => {}; } };
     } },
   };
+  ctx = withHostLibrary(ctx, async request => { requests.push(request); return mockSaveReply(await respond()); });
   creator = createPersonaCreate(ctx, { openPersonas: () => { opened++; return nativeResult(); }, finishSetup: () => finishAction() }); creator.open();
 });
 afterEach(() => { creator.destroy(); dom.window.close(); globalThis.document = originals.document; globalThis.fetch = originals.fetch; });
@@ -56,8 +58,8 @@ test('Create saves one normal persona without activating it or changing default 
   draft(); control('name').value = ' Mira '; control('description').value = '  My description\n{{user}} is a traveler.  ';
   submit(); await settle();
   expect(requests).toHaveLength(1);
-  const request = requests[0]; expect(request.url).toBe('/api/v1/personas'); expect(request.init.method).toBe('POST'); expect(request.init.credentials).toBe('same-origin'); expect(request.init.headers).toEqual({ 'Content-Type': 'application/json' });
-  expect(JSON.parse(String(request.init.body))).toEqual({ name: 'Mira', description: '  My description\n{{user}} is a traveler.  ' });
+  const request = requests[0]; expect(request.operation).toBe('persona.create');
+  expect(request.input).toEqual({ name: 'Mira', description: '  My description\n{{user}} is a traveler.  ' });
   expect(root().querySelector('form')!.hidden).toBe(true); expect(root().textContent).toContain('Select Mira in Personas');
   expect(finished + opened).toBe(0); submit(); await settle(); expect(requests).toHaveLength(1);
   button('Reload and open Personas').click(); expect(finished).toBe(1); expect(requests).toHaveLength(1);
@@ -66,7 +68,7 @@ test('Create saves one normal persona without activating it or changing default 
 test('a name is required, description is optional, and validation happens before permissions', async () => {
   submit(); await settle(); expect(control('name').getAttribute('aria-invalid')).toBe('true'); expect(checks).toBe(0); expect(requests).toEqual([]);
   control('name').value = 'Alex'; submit(); await settle();
-  expect(JSON.parse(String(requests[0].init.body))).toEqual({ name: 'Alex', description: '' });
+  expect(requests[0].input).toEqual({ name: 'Alex', description: '' });
 });
 
 test('the separate sticky footer submits its associated form and hides after saving', async () => {
@@ -123,10 +125,10 @@ test('dismissal during permission checking prevents writes and old controls cann
   expect(requests).toEqual([]); expect(finished + opened).toBe(0); expect(root().isConnected).toBe(false);
 });
 
-test('dismissal aborts an in-flight save and late results cannot open or replace anything', async () => {
+test('dismissal stops waiting for an in-flight save and late results cannot open or replace anything', async () => {
   draft(); const pending = deferred<Response>(); respond = () => pending.promise;
   submit(); await settle(); const oldRoot = root(); dismiss(); creator.open(); const replacement = root();
-  expect(requests[0].init.signal!.aborted).toBe(true);
+  expect(oldRoot.isConnected).toBe(false);
   pending.resolve(json({ id: 'late-save' })); await settle();
   expect(oldRoot.isConnected).toBe(false); expect(replacement.isConnected).toBe(true); expect(replacement.querySelector('form')!.hidden).toBe(false); expect(opened + finished).toBe(0);
 });

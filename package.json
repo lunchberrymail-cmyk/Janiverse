@@ -6,10 +6,13 @@
   "engines": { "bun": ">=1.4.4" },
   "repository": { "type": "git", "url": "https://github.com/lunchberrymail-cmyk/Janiverse.git" },
   "scripts": {
+    "typecheck": "tsc --project tsconfig.json",
     "build": "bun scripts/build.ts",
     "test": "bun run build && bun test tests"
   },
   "devDependencies": {
-    "jsdom": "29.1.1"
+    "jsdom": "29.1.1",
+    "lumiverse-spindle-types": "0.6.79",
+    "typescript": "7.0.2"
   }
 }

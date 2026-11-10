@@ -1,4 +1,5 @@
 import type { SpindleFrontendContext, SpindleModalHandle } from 'lumiverse-spindle-types';
+import { saveLibrary, LibrarySaveError } from './library-client';
 
 type Options = { openPersonas: () => Promise<boolean>; finishSetup: () => void; nativeWay?: (target: HTMLElement, close: () => void) => void };
 type Session = { modal: SpindleModalHandle; abort: AbortController; closed: boolean };
@@ -137,20 +138,16 @@ export function createPersonaCreate(ctx: SpindleFrontendContext, options: Option
       try {
         if (!await permission(!permissionAttempted) || !await permission() || !current()) return;
         sent = true; message('Saving your persona…');
-        const response = await fetch('/api/v1/personas', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input), signal: session.abort.signal });
+        const result = await saveLibrary(ctx, { operation: 'persona.create', input }, session.abort.signal);
         if (!current()) return;
-        if (!response.ok) {
-          if ([400, 401, 403, 404, 422].includes(response.status)) { message('Your persona could not be saved. Check your name and Personas permission, then try again.', 'error'); return; }
-          throw new Error('Unconfirmed save');
-        }
-        const result = await response.json(); if (!current()) return;
         if (!result || typeof result.id !== 'string' || !result.id) throw new Error('Unconfirmed save');
         saved = true; message('');
         next.textContent = `Select ${input.name} in Personas to chat as them. You can add a portrait or make them your default there.`;
         sync(); savedTitle.focus();
-      } catch {
+      } catch (error) {
         if (!current()) return;
-        if (sent) { uncertain = true; message('The save result could not be confirmed. Reload and check Personas before creating this persona again.', 'warning'); }
+        if (error instanceof LibrarySaveError && !error.uncertain) message('Your persona could not be saved. Check your name and Personas permission, then try again.', 'error');
+        else if (sent) { uncertain = true; message('The save result could not be confirmed. Reload and check Personas before creating this persona again.', 'warning'); }
         else message('Your persona could not be saved. Your draft is still here.', 'error');
       } finally { if (current()) { busy = false; sync(); } }
     }

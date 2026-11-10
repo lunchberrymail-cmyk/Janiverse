@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 import { mountCharacterDelete } from '../src/character-delete';
+import { withHostUuid } from './host-uuid-fixture';
 let dom: JSDOM, root: HTMLElement, stop: () => void, completed: number;
 let granted: string[], permissionRequests: string[][];
 let calls: Array<{url:string;method:string}>, response: (url: string, options: RequestInit) => Promise<any>, read: () => Promise<unknown>;
@@ -13,7 +14,7 @@ beforeEach(() => {
  read=async()=>({id:'copy-2',name:'Duplicate'}); granted=['characters']; permissionRequests=[];
  response=async(url)=>({ok:true,status:200,json:async()=>operation(url)});
  globalThis.fetch=(async(url, options={})=>{calls.push({url:String(url),method:options.method??'GET'}); return response(String(url),options);}) as typeof fetch;
- stop=mountCharacterDelete({characters:{get:()=>read()},permissions:{getGranted:async()=>[...granted],request:async(names:string[])=>{permissionRequests.push(names);return [...granted];}}} as any,root,{id:'copy-2',name:'Duplicate'},()=>{completed++;});
+ stop=mountCharacterDelete(withHostUuid({characters:{get:()=>read()},permissions:{getGranted:async()=>[...granted],request:async(names:string[])=>{permissionRequests.push(names);return [...granted];}}}) as any,root,{id:'copy-2',name:'Duplicate'},()=>{completed++;});
 });
 afterEach(()=>{stop();dom.window.close();globalThis.document=oldDocument;globalThis.fetch=oldFetch;});
 test('opening and cancelling the selected copy confirmation never deletes anything',async()=>{

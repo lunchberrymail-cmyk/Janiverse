@@ -12,6 +12,7 @@ const make = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, value 
 
 /** A non-modal companion in the public drawer footer. Only Test performs a provider request. */
 export function openConnectionTutorial(ctx: SpindleFrontendContext, scenes: readonly Scene[], options: FeatureTutorialOptions) {
+  const settings = ctx.settings;
   let disposed = false, index = 0, interacted = false, minimized = false, targetId = '', opening = false;
   let profiles: Profile[] = [], baseline: Set<string> | undefined, readable = false, activeId = '', optionsKey = '';
   let testing = false, testEpoch = 0, passed: { id: string; revision: string } | undefined;
@@ -54,8 +55,8 @@ export function openConnectionTutorial(ctx: SpindleFrontendContext, scenes: read
 
   function persist() {
     const value = { step: index, connectionId: targetId };
-    if (!ctx.settings?.set) return;
-    writeQueue = writeQueue.then(() => ctx.settings.set(CONNECTION_GUIDE_KEY, value)).catch(() => { if (!disposed) preferenceStatus.textContent = 'Your place could not be saved. The guide still works in this session.'; });
+    if (!settings?.set) return;
+    writeQueue = writeQueue.then(() => settings.set(CONNECTION_GUIDE_KEY, value)).catch(() => { if (!disposed) preferenceStatus.textContent = 'Your place could not be saved. The guide still works in this session.'; });
   }
   function selected() { return profiles.find(profile => profile.id === targetId); }
   function verified(profile = selected()) { return !!profile && passed?.id === profile.id && passed.revision === profile.revision; }
@@ -110,7 +111,7 @@ export function openConnectionTutorial(ctx: SpindleFrontendContext, scenes: read
     if (screenshot && source) {
       const shot = make('div', 'jb-tutorial-shot'), image = make('img', ''); image.src = source; image.alt = screenshot.alt; image.decoding = 'async'; image.referrerPolicy = 'no-referrer';
       if (screenshot.width && screenshot.height) { image.width = screenshot.width; image.height = screenshot.height; }
-      shot.append(image); const legend = screenshot.callouts && screenshotAnnotations(shot, screenshot.callouts); figure.append(shot); if (legend) figure.append(legend);
+      shot.append(image); const legend = screenshot.callouts && screenshotAnnotations(ctx, shot, screenshot.callouts); figure.append(shot); if (legend) figure.append(legend);
       image.addEventListener('error', () => { if (!disposed && figure.contains(image)) figure.replaceChildren(make('p', '', 'Screenshot unavailable. Follow the instruction above.')); });
     } else figure.append(make('p', '', 'Follow the instruction above in Connections.'));
     syncControls(); root.scrollTop = 0;
@@ -150,7 +151,7 @@ export function openConnectionTutorial(ctx: SpindleFrontendContext, scenes: read
   document.addEventListener('pointerdown', nativeInteraction, true); document.addEventListener('keydown', nativeInteraction, true);
   const cleanups = [subscribeOptionalState(ctx, 'connections.profiles', () => syncProfiles(true)), subscribeOptionalState(ctx, 'connections.active', () => syncProfiles()), subscribeOptionalState(ctx, 'ui.drawer', syncVisibility), () => { document.removeEventListener('pointerdown', nativeInteraction, true); document.removeEventListener('keydown', nativeInteraction, true); }];
   syncProfiles(); renderScene(); syncVisibility();
-  if (ctx.settings?.get) void Promise.resolve().then(() => ctx.settings.get(CONNECTION_GUIDE_KEY)).then(value => {
+  if (settings?.get) void Promise.resolve().then(() => settings.get(CONNECTION_GUIDE_KEY)).then(value => {
     if (disposed || interacted) return; const saved = record(value);
     if (typeof saved.step === 'number' && Number.isInteger(saved.step) && saved.step >= 0 && saved.step < scenes.length) index = saved.step;
     targetId = text(saved.connectionId); syncProfiles(); renderScene();

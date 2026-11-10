@@ -428,6 +428,7 @@ export function setup(ctx: SpindleFrontendContext) {
   // that controller can still write to Home's shared scroll container. The
   // host readiness seam unmounts it and restores it when we release ownership.
   try {
+    // @ts-expect-error SDK 0.6.79 omits this legacy compatibility mount declared by the host's mount-points.ts.
     const nativeChats = ctx.ui.mount('landing_chats');
     nativeChats.setAttribute('data-recent-chats-ready', 'true');
     mounts.push(nativeChats);

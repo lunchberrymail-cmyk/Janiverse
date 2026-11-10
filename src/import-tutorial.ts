@@ -12,6 +12,7 @@ const make = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, value 
 
 /** Lives in the ordinary importer; it observes results, never selects or submits files. */
 export function openImportTutorial(ctx: SpindleFrontendContext, scenes: readonly Scene[], options: FeatureTutorialOptions) {
+  const settings = ctx.settings;
   let disposed = false, opening = false, index = 0, interacted = false, minimized = false, attached = false;
   let progress: ImportProgress = { queued: 0, saved: 0, failed: 0, uncertain: 0, busy: false };
   let closeWorkspace: (() => void) | undefined, writes = Promise.resolve();
@@ -32,7 +33,7 @@ export function openImportTutorial(ctx: SpindleFrontendContext, scenes: readonly
   const preference = make('p', 'jb-api-guide-preference'); preference.setAttribute('role', 'status');
   body.append(title, instruction, outcome, status, reopen, picture, nav, help, preference); root.append(header, body); document.body.append(root);
 
-  function persist() { const value = { step: index }; if (ctx.settings?.set) writes = writes.then(() => ctx.settings.set(CARD_GUIDE_KEY, value)).catch(() => { if (!disposed) preference.textContent = 'Your place could not be saved. The guide still works here.'; }); }
+  function persist() { const value = { step: index }; if (settings?.set) writes = writes.then(() => settings.set(CARD_GUIDE_KEY, value)).catch(() => { if (!disposed) preference.textContent = 'Your place could not be saved. The guide still works here.'; }); }
   function controls() { back.disabled = index === 0 || opening || progress.busy; next.hidden = index === scenes.length - 1; next.disabled = opening || progress.busy; finish.hidden = index !== scenes.length - 1; finish.disabled = progress.saved === 0 || progress.busy; history.disabled = opening || progress.busy; restart.disabled = opening || progress.busy; reopen.hidden = attached; reopen.disabled = opening; }
   function reportProgress() {
     status.textContent = progress.busy ? 'Importing… Please wait for the result in the queue.' : progress.uncertain ? 'An import could not be confirmed. Check the library before retrying.' : progress.failed ? 'Some cards need attention. Read their queue messages before retrying.' : progress.saved ? `${progress.saved} card${progress.saved === 1 ? '' : 's'} saved in this session. Choose Open character on its queue row.` : index === scenes.length - 1 ? 'No saved card is confirmed in this session. If you imported it earlier, find it on Home and close this guide; do not import another copy.' : index > 0 && progress.queued === 0 ? 'Queue is empty. Choose your card if you haven’t imported it yet. Already saved? Find it on Home.' : '';
@@ -42,7 +43,7 @@ export function openImportTutorial(ctx: SpindleFrontendContext, scenes: readonly
     title.textContent = scene.title; pointer.write(instruction, scene.instruction); setGuideText(outcome, `Look for: ${scene.result}`);
     picture.open = false; figure.replaceChildren(); const screenshot = options.screenshots?.[scene.screenshot], source = screenshot && screenshotSource(screenshot.src);
     if (screenshot && source) {
-      const shot = make('div', 'jb-tutorial-shot'), image = make('img', ''); image.src = source; image.alt = screenshot.alt; image.decoding = 'async'; image.referrerPolicy = 'no-referrer'; if (screenshot.width && screenshot.height) { image.width = screenshot.width; image.height = screenshot.height; } shot.append(image); figure.append(shot); const legend = screenshot.callouts && screenshotAnnotations(shot, screenshot.callouts); if (legend) figure.append(legend);
+      const shot = make('div', 'jb-tutorial-shot'), image = make('img', ''); image.src = source; image.alt = screenshot.alt; image.decoding = 'async'; image.referrerPolicy = 'no-referrer'; if (screenshot.width && screenshot.height) { image.width = screenshot.width; image.height = screenshot.height; } shot.append(image); figure.append(shot); const legend = screenshot.callouts && screenshotAnnotations(ctx, shot, screenshot.callouts); if (legend) figure.append(legend);
       image.addEventListener('error', () => { if (!disposed && figure.contains(image)) figure.replaceChildren(make('p', '', 'Screenshot unavailable. Follow the instruction above.')); });
     } else figure.append(make('p', '', 'Follow the instruction above in the importer.'));
     controls(); reportProgress(); root.scrollTop = 0;
@@ -72,7 +73,7 @@ export function openImportTutorial(ctx: SpindleFrontendContext, scenes: readonly
   root.addEventListener('keydown', event => { if (event.key === 'Escape') { event.stopPropagation(); destroy(); } });
   const touch = () => { interacted = true; }; root.addEventListener('pointerdown', touch, true); root.addEventListener('keydown', touch, true);
   render();
-  if (ctx.settings?.get) void Promise.resolve().then(() => ctx.settings.get(CARD_GUIDE_KEY)).then(value => { if (disposed || interacted) return; const saved = record(value); if (typeof saved.step === 'number' && Number.isInteger(saved.step) && saved.step >= 0 && saved.step < scenes.length) { index = saved.step; render(); } }).catch(() => { if (!disposed) preference.textContent = 'Your saved place could not be read. You can still follow the guide.'; });
+  if (settings?.get) void Promise.resolve().then(() => settings.get(CARD_GUIDE_KEY)).then(value => { if (disposed || interacted) return; const saved = record(value); if (typeof saved.step === 'number' && Number.isInteger(saved.step) && saved.step >= 0 && saved.step < scenes.length) { index = saved.step; render(); } }).catch(() => { if (!disposed) preference.textContent = 'Your saved place could not be read. You can still follow the guide.'; });
   void Promise.resolve().then(() => { if (!disposed) return open(); });
   return { root, destroy };
 }

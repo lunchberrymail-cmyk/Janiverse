@@ -1,11 +1,13 @@
-import type { SpindleFrontendContext, SpindleModalHandle } from 'lumiverse-spindle-types';
+import type { SpindleFrontendContext, SpindleModalHandle, CharacterCreateDTO } from 'lumiverse-spindle-types';
+import { saveLibrary, LibrarySaveError } from './library-client';
+import { savePortraitUpload, PortraitUploadError } from './portrait-upload';
+import { portraitLimit } from './library-protocol';
 import { icon } from './icons';
 import { createSoundtrackField } from './soundtrack-field';
 
 type Options = { onCreated?: (id: string) => void; openCharacter?: (id: string) => void; nativeWay?: (target: HTMLElement, close: () => void) => void };
 type Session = { modal: SpindleModalHandle; abort: AbortController; closed: boolean; previewUrl?: string };
 type NativeCharacter = { id: string; name?: string };
-const portraitLimit = 10 * 1024 * 1024 - 64 * 1024; // Leave room for multipart framing in the host's 10 MiB request cap.
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') { const node = document.createElement(tag); node.className = className; node.textContent = text; return node; }
 function record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 
@@ -69,7 +71,7 @@ export function createCharacterCreate(ctx: SpindleFrontendContext, options: Opti
     fileInput.addEventListener('change', () => { selectPortrait(fileInput.files?.[0]); fileInput.value = ''; });
     const bio = field('creator_notes', 'Bio', 'Shown on your character card as the creator’s note. Introduce the character and the story to your readers.', true); bio.input.placeholder = 'A short introduction, story hook, or a note for the people chatting with your character…'; bio.input.classList.add('jb-character-bio');
     const tags = field('tags', 'Tags', 'Optional. Separate tags with commas.'); tags.input.placeholder = 'fantasy, original character, adventure'; tags.input.maxLength = 1000;
-    const soundtrack = createSoundtrackField();
+    const soundtrack = createSoundtrackField(ctx, session.abort.signal);
     const soundtrackPanel = el('details', 'jb-soundtrack-editor'); soundtrackPanel.append(el('summary', '', 'Attach a song (optional)'), soundtrack.root);
     const definition = field('description', 'Personality', 'Describe who they are, how they speak, and how they behave. This guides the AI.', true, true); definition.input.placeholder = 'Name, appearance, personality, background, relationships, speaking style…'; definition.input.classList.add('jb-character-definition');
     const messages = el('section', 'jb-character-initial-messages'); const messagesLabel = el('div', 'jb-settings-label', 'Initial messages'); messagesLabel.id = `${prefix}-messages-label`; messagesLabel.append(el('small', '', 'Required'));
@@ -155,13 +157,16 @@ export function createCharacterCreate(ctx: SpindleFrontendContext, options: Opti
       portraitPending = true; if (!await permission()) return;
       if (!current()) return;
       message('Character created. Saving portrait…');
-      const body = new FormData(); body.append('avatar', portrait);
       try {
-        const response = await fetch(`/api/v1/characters/${encodeURIComponent(created.id)}/avatar`, { method: 'POST', credentials: 'same-origin', body, signal: session.abort.signal });
+          await savePortraitUpload(ctx, created.id, portrait, session.abort.signal);
         if (!current()) return;
-        if (!response.ok) { portraitFailed(); if (response.status === 413) message('Character created. This portrait exceeds the server’s upload limit. Open the character to choose a smaller picture.', 'warning'); return; }
         portraitPending = false; message('Character created and ready to chat.', 'success');
-      } catch { if (current()) portraitFailed(); }
+        } catch (error) {
+          if (current()) {
+            portraitFailed();
+            if (error instanceof PortraitUploadError && error.status === 413) message('Character created. This portrait exceeds the server’s upload limit. Open the character to choose a smaller picture.', 'warning');
+          }
+        }
     }
     async function retryImage() {
       if (!current() || busy || !created || !portrait || !portraitPending) return;
@@ -173,30 +178,26 @@ export function createCharacterCreate(ctx: SpindleFrontendContext, options: Opti
       if (!current() || busy || created || uncertain || !validate()) return;
       busy = true; sync(); let sent = false;
       // Snapshot the draft before awaiting permissions; the visible form is now locked.
-      const input = {
+      const input: CharacterCreateDTO = {
         name: name.input.value.trim(), creator_notes: bio.input.value, description: definition.input.value, first_mes: greeting.input.value,
         scenario: scenario.input.value, mes_example: examples.input.value, creator: creator.input.value.trim(), alternate_greetings: greetingItems.slice(1).map(item => item.field.input.value),
-        tags: [...new Set(tags.input.value.split(',').map(value => value.trim()).filter(Boolean))], library_scope: 'mine',
+        tags: [...new Set(tags.input.value.split(',').map(value => value.trim()).filter(Boolean))],
         extensions: { ...(chatName.input.value.trim() ? { alternate_character_name: chatName.input.value.trim() } : {}), ...(soundtrack.getTrack() ? { janiverse: { soundcloud_track_id: soundtrack.getTrack() } } : {}) },
       };
       try {
         if (!await permission(!attemptedPermission) || !await permission() || !current()) return;
         sent = true; message('Creating your character…');
-        const response = await fetch('/api/v1/characters', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input), signal: session.abort.signal });
+        const result = await saveLibrary(ctx, { operation: 'character.create', input }, session.abort.signal);
         if (!current()) return;
-        if (!response.ok) {
-          if ([400, 401, 403, 404, 422].includes(response.status)) { message('Lumiverse could not save this character. Check your fields and Characters permission, then try again.', 'error'); return; }
-          uncertain = true; message('The save result could not be confirmed. Check your library before creating this character again.', 'warning'); return;
-        }
-        const result = record(await response.json()); if (!current()) return;
         if (typeof result.id !== 'string' || !result.id) { uncertain = true; message('The save result could not be confirmed. Check your library before creating this character again.', 'warning'); return; }
         created = { id: result.id, name: typeof result.name === 'string' ? result.name : input.name };
         message('Character created and ready to chat.', 'success');
         if (portrait) await savePortrait();
         notify();
-      } catch {
+      } catch (error) {
         if (!current()) return;
         if (created) { portraitFailed(); notify(); }
+        else if (error instanceof LibrarySaveError && !error.uncertain) message('Lumiverse could not save this character. Check your fields and Characters permission, then try again.', 'error');
         else if (sent) { uncertain = true; message('The save result could not be confirmed. Check your library before creating this character again.', 'warning'); }
         else message('Your character could not be saved. Your draft is still here.', 'error');
       } finally { if (current()) { busy = false; sync(); } }

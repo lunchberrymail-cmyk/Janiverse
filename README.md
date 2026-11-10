@@ -1,6 +1,8 @@
 # Janiverse
 
-A JanitorAI-inspired interface extension for **Lumiverse 1.2.5 or later**. Browse character cards, find your chats, and use familiar API, prompt, memory, and appearance controls while saving through Lumiverse's normal system.
+A JanitorAI-inspired interface extension for **Lumiverse 1.3.0 or later**. Browse character cards, find your chats, and use familiar API, prompt, memory, and appearance controls.
+
+This local build requires the host's `uuid-v1` and `frontend-session-routing-v1` capabilities. See [the platform audit](PLATFORM-AUDIT.md) for verified interfaces, validation, and remaining unsupported or unverified paths; the entire extension is not yet certified to use only supported interfaces. Run `bun run typecheck` to check production source against the pinned Spindle SDK.
 
 Janiverse uses extension slots and styles. Your characters, chats, connections, presets, and wallpapers stay in Lumiverse; the extension does not replace its source or chat engine.
 

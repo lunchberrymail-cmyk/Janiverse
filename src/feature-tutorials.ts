@@ -183,6 +183,7 @@ function validHighlight(value: TutorialHighlight | undefined): value is Tutorial
 
 /** API and card guides open their workspaces; other guides use explicit shortcuts. */
 export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: TutorialFeature, options: FeatureTutorialOptions) {
+  const settings = ctx.settings;
   if (feature === 'connections') return openConnectionTutorial(ctx, featureTutorials.connections.scenes, options);
   if (feature === 'import') return openImportTutorial(ctx, featureTutorials.import.scenes, options);
   const tutorial = featureTutorials[feature], previousFocus = document.activeElement as HTMLElement | null;
@@ -195,7 +196,7 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
   let writes = Promise.resolve();
   const pointer = createGuidePointer(root);
   const placeKey = feature === 'history' ? HISTORY_GUIDE_KEY : `onboarding:guide_${feature}_v1`;
-  function persist(step = index) { if (ctx.settings?.set) writes = writes.then(() => ctx.settings.set(placeKey, { step })).catch(() => {}); }
+  function persist(step = index) { if (settings?.set) writes = writes.then(() => settings.set(placeKey, { step })).catch(() => {}); }
   function finish() { if (disposed) return; disposed = true; pointer.clear(); root.removeEventListener('keydown', keydown); if (!modal) root.remove(); if (restoreFocus && previousFocus?.isConnected) previousFocus.focus({ preventScroll: true }); options.onClose?.(); }
   function dismiss() { if (modal) modal.dismiss(); else finish(); }
   const header = make('header', 'jb-tutorial-header');
@@ -260,7 +261,7 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
       Object.assign(highlight.style, { left: `${region.x}%`, top: `${region.y}%`, width: `${region.width}%`, height: `${region.height}%` }); shot.append(highlight);
       callouts ??= [{ label: screenshot.caption ?? plainGuideText(exact.instruction ?? current.instruction), x: region.x > 50 ? Math.min(94, region.x + region.width + 8) : Math.max(6, region.x - 8), y: Math.max(8, Math.min(92, region.y - 8)), targetX: region.x + region.width / 2, targetY: region.y + region.height / 2 }];
     }
-    const legend = callouts && screenshotAnnotations(shot, callouts);
+    const legend = callouts && screenshotAnnotations(ctx, shot, callouts);
     viewport.append(shot); const caption = make('figcaption', '', screenshot.caption ?? screenshot.alt);
     const enlarge = make('button', 'jb-tutorial-image-toggle', 'Enlarge screenshot'); enlarge.type = 'button'; enlarge.setAttribute('aria-pressed', 'false');
     enlarge.addEventListener('click', () => { if (disposed) return; const expanded = viewport.classList.toggle('jb-tutorial-image-expanded'); enlarge.textContent = expanded ? 'Fit screenshot' : 'Enlarge screenshot'; enlarge.setAttribute('aria-pressed', String(expanded)); });
@@ -301,6 +302,6 @@ export function openFeatureTutorial(ctx: SpindleFrontendContext, feature: Tutori
   root.addEventListener('keydown', keydown);
   modal?.onDismiss(finish);
   render(); close.focus({ preventScroll: true });
-  if (ctx.settings?.get) void Promise.resolve().then(() => ctx.settings.get(placeKey)).then(value => { if (disposed || interacted) return; const saved = record(value); if (typeof saved.step === 'number' && Number.isInteger(saved.step) && saved.step >= 0 && saved.step < tutorial.scenes.length) { index = saved.step; render(); } }).catch(() => {});
+  if (settings?.get) void Promise.resolve().then(() => settings.get(placeKey)).then(value => { if (disposed || interacted) return; const saved = record(value); if (typeof saved.step === 'number' && Number.isInteger(saved.step) && saved.step >= 0 && saved.step < tutorial.scenes.length) { index = saved.step; render(); } }).catch(() => {});
   return { root, destroy() { if (!disposed) dismiss(); } };
 }

@@ -8,5 +8,6 @@
   "description": "A JanitorAI-inspired interface with native-saving settings, character imports, and optional feature discovery.",
   "permissions": ["chats", "generation", "presets", "personas", "characters"],
   "entry_frontend": "dist/frontend.js",
-  "minimum_lumiverse_version": "1.2.5"
+  "entry_backend": "dist/backend.js",
+  "minimum_lumiverse_version": "1.3.0"
 }
