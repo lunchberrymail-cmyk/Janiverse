@@ -30,6 +30,15 @@ function fakeApi() {
   const api = (frame: HTMLIFrameElement) => { const engine = new FakeEngine(frame); engines.push(engine); return engine; };
   api.Events = { READY: 'ready', PLAY: 'play', PAUSE: 'pause', FINISH: 'finish', ERROR: 'error' }; return api;
 }
+/** Records window.open calls with a closable fake window. */
+function openWindows() {
+  const opened: { url: string; name: string; features: string; window: { opener: unknown; closed: boolean; close(): void } }[] = [];
+  (dom.window as any).open = (url: string, name: string, features: string) => {
+    const window = { opener: dom.window as unknown, closed: false, close() { this.closed = true; } };
+    opened.push({ url, name, features, window }); return window;
+  };
+  return opened;
+}
 function setApi(value: typeof factory | undefined) { (dom.window as any).SC = value ? { Widget: value } : undefined; }
 function setup() {
   player = createSoundCloud({ getActiveChat: () => ({ ...current }), characters: { get(id: string) { reads.push(id); return read(id); } },
@@ -82,7 +91,9 @@ describe('host frame policy', () => {
     policy("child-src https://w.soundcloud.com"); expect(soundCloudFrameAllowed()).toBe(true); const second = document.createElement('meta'); second.httpEquiv = 'Content-Security-Policy'; second.content = "frame-src 'self'"; document.head.append(second);
     expect(soundCloudFrameAllowed()).toBe(false); second.httpEquiv = 'Content-Security-Policy-Report-Only'; expect(soundCloudFrameAllowed()).toBe(true); second.remove(); node('meta').remove(); setup(); await settle(); await loadEngine();
     const violation = new dom.window.Event('securitypolicyviolation'); Object.defineProperties(violation, { blockedURI: { value: 'https://w.soundcloud.com/player/' }, effectiveDirective: { value: 'frame-src' }, disposition: { value: 'enforce' } }); document.dispatchEvent(violation);
-    expect(document.querySelector('iframe')).toBeNull(); expect(node<HTMLButtonElement>('.jb-soundcloud-play').disabled).toBe(true); expect(node('.jb-soundcloud-status').textContent).toContain('blocked'); expect(node<HTMLAnchorElement>('.jb-soundcloud-open').href).toContain('soundcloud.com');
+    expect(document.querySelector('iframe')).toBeNull(); expect(node<HTMLButtonElement>('.jb-soundcloud-play').disabled).toBe(false);
+    expect(node('.jb-soundcloud-status').textContent).toContain('small window'); expect(node<HTMLButtonElement>('.jb-soundcloud-show').hidden).toBe(true);
+    expect(node<HTMLAnchorElement>('.jb-soundcloud-open').href).toContain('soundcloud.com');
   });
 });
 
@@ -190,11 +201,10 @@ describe('direct playback inside the chat', () => {
     node<HTMLButtonElement>('.jb-soundcloud-play').click(); expect(frame.hidden).toBe(false); expect(node('iframe')).toBe(frame); expect(document.querySelectorAll('iframe')).toHaveLength(1);
     node<HTMLButtonElement>('.jb-soundcloud-close').click(); expect(document.querySelector('iframe')).toBeNull();
   });
-  test('blocked Android host reports the required Lumiverse update without attempting another frame', async () => {
-    Object.defineProperty(dom.window.navigator, 'userAgent', { value: 'Android; wv' }); setup(); await settle();
-    node<HTMLButtonElement>('.jb-soundcloud-show').click(); node<HTMLButtonElement>('.jb-soundcloud-play').click(); await settle();
-    expect(document.querySelector('iframe,script')).toBeNull(); expect(node('.jb-soundcloud-status').textContent).toContain('updating Janiverse alone');
-    expect(node<HTMLMetaElement>('meta').content).toBe(blockedPolicy);
+  test('a blocked Android host opens the official player window instead of another frame', async () => {
+    Object.defineProperty(dom.window.navigator, 'userAgent', { value: 'Android; wv' }); const opened = openWindows(); setup(); await settle();
+    expect(node<HTMLButtonElement>('.jb-soundcloud-show').hidden).toBe(true); node<HTMLButtonElement>('.jb-soundcloud-play').click(); await settle();
+    expect(document.querySelector('iframe,script')).toBeNull(); expect(opened).toHaveLength(1); expect(node<HTMLMetaElement>('meta').content).toBe(blockedPolicy);
   });
 });
 
@@ -207,9 +217,23 @@ describe('native lifecycle isolation', () => {
     const engine = await loadEngine(); expect(engine.commands).toEqual(['play']); expect(current).toEqual({ chatId: null, characterId: null });
     player.destroy(); player = undefined; expect(engine.frame.isConnected).toBe(false); expect(engine.listeners.size).toBe(0);
   });
-  test('blocked frame policy does not load a controller or attempt audio', async () => {
-    setApi(undefined); setup(); await settle(); node<HTMLButtonElement>('.jb-soundcloud-play').click(); expect(document.querySelector('script,iframe')).toBeNull(); expect(node<HTMLMetaElement>('meta').content).toBe(blockedPolicy); expect(node('.jb-soundcloud-status').textContent).toContain('blocked');
-    policy(allowedPolicy); player!.refresh(); await settle(); expect(node<HTMLButtonElement>('.jb-soundcloud-play').disabled).toBe(false); expect(node<HTMLParagraphElement>('.jb-soundcloud-status').hidden).toBe(true);
+  test('a blocked frame policy plays in SoundCloud’s own small window, which Stop and leaving the chat close', async () => {
+    setApi(undefined); const opened = openWindows(); setup(); await settle();
+    const play = node<HTMLButtonElement>('.jb-soundcloud-play'), stop = node<HTMLButtonElement>('.jb-soundcloud-close');
+    expect(play.disabled).toBe(false); expect(play.title).toContain('small window'); expect(node<HTMLParagraphElement>('.jb-soundcloud-status').hidden).toBe(true); expect(stop.hidden).toBe(true);
+    play.click();
+    expect(document.querySelector('script,iframe')).toBeNull(); expect(node<HTMLMetaElement>('meta').content).toBe(blockedPolicy);
+    expect(opened).toHaveLength(1); const url = new URL(opened[0].url);
+    expect(url.origin).toBe('https://w.soundcloud.com'); expect(url.searchParams.get('auto_play')).toBe('true'); expect(opened[0].name).toBe('janiverse-soundcloud'); expect(opened[0].features).toContain('popup');
+    expect(opened[0].window.opener).toBeNull(); expect(node('.jb-soundcloud-status').textContent).toContain('small SoundCloud window'); expect(stop.hidden).toBe(false);
+    stop.click(); expect(opened[0].window.closed).toBe(true); expect(stop.hidden).toBe(true);
+    play.click(); expect(opened).toHaveLength(2); current = { chatId: 'chat-2', characterId: 'character-2' }; emit('CHAT_CHANGED'); await settle(); expect(opened[1].window.closed).toBe(true);
+    policy(allowedPolicy); player!.refresh(); await settle(); expect(node<HTMLButtonElement>('.jb-soundcloud-show').hidden).toBe(false); expect(node<HTMLParagraphElement>('.jb-soundcloud-status').hidden).toBe(true);
+  });
+  test('a refused window points to the SoundCloud link', async () => {
+    setApi(undefined); (dom.window as any).open = () => null; setup(); await settle();
+    node<HTMLButtonElement>('.jb-soundcloud-play').click();
+    expect(node('.jb-soundcloud-status').textContent).toContain('blocked SoundCloud’s window'); expect(node<HTMLButtonElement>('.jb-soundcloud-close').hidden).toBe(true);
   });
   test('same-chat refresh retains audio; changed or invalid soundtracks unload it', async () => {
     policy(allowedPolicy); setup(); await settle(); const engine = await loadEngine(); emit('CHAT_CHANGED'); await settle(); expect(node('iframe')).toBe(engine.frame); expect(engine.commands).toEqual(['play']);
